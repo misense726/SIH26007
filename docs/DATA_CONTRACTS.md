@@ -13,12 +13,14 @@ Every telemetry payload includes a source mode:
 `WorldState` contains:
 
 - a schema version, generation timestamp, and monotonic sequence;
-- one `VehiclePose`;
+- a primary vehicle identifier and a list of `VehiclePose` values;
+- one `ReferenceMap` with typed semantic features;
 - normalized `RangeReading` values;
 - `EnvironmentState`;
 - `LiveObject` values;
 - `EmergencyState`;
 - per-sensor `SensorHealth`.
+- the safe corridor and spatial point collections used by later milestones.
 
 The HTTP endpoint `/api/world` and WebSocket endpoint `/ws/telemetry` serialize the same model.
 
@@ -30,4 +32,3 @@ The HTTP endpoint `/api/world` and WebSocket endpoint `/ws/telemetry` serialize 
 - temperature: degrees Celsius;
 - angles: degrees;
 - timestamps: Unix milliseconds.
-

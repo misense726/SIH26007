@@ -33,7 +33,7 @@ def test_contract_rejects_unknown_fields() -> None:
 def test_default_world_is_explicitly_simulated() -> None:
     state = WorldState()
     assert state.mode is DataMode.SIMULATED
-    assert state.vehicle.mode is DataMode.SIMULATED
+    assert state.primary_vehicle().mode is DataMode.SIMULATED
 
 
 def test_health_status_world_and_websocket() -> None:
@@ -49,11 +49,11 @@ def test_health_status_world_and_websocket() -> None:
 
         world = client.get("/api/world")
         assert world.status_code == 200
-        assert world.json()["vehicle"]["vehicle_id"] == "DUMPER_01"
+        assert world.json()["vehicles"][0]["vehicle_id"] == "DUMPER_01"
 
         with client.websocket_connect("/ws/telemetry") as socket:
             telemetry = socket.receive_json()
             assert telemetry["schema_version"] == "1.0"
             assert telemetry["mode"] == "SIMULATED"
             assert len(telemetry["ranges"]) == 6
-
+            assert telemetry["reference_map"]["map_id"] == "FOGSEN_TEST_ROUTE_01"

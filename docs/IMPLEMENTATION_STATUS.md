@@ -32,3 +32,40 @@ Current limits:
 - dashboards are still the foundation view;
 - telemetry is simulated;
 - no camera frames, hardware serial, relay, occupancy map, or record/replay yet.
+
+## M1: canonical world model
+
+Status: complete and launch-verified on 2026-08-24.
+
+Implemented:
+
+- one backend-owned `WorldState` for the reference map, fleet-ready poses, ranges, environment, live objects, health, safe corridor, emergency state, and spatial points;
+- immutable snapshots from the concurrent world store;
+- typed semantic map features;
+- `GET /api/map` and validated `PUT /api/map`;
+- the same world snapshot for HTTP and WebSocket clients.
+
+## M2: base digital twin
+
+Status: complete and launch-verified on 2026-08-24.
+
+Implemented:
+
+- manually defined mine-style route with road, berms, centerline, hazard, speed zone, static obstacle, start, and destination;
+- deterministic polyline motion in top-down coordinates;
+- documented heading convention;
+- live SVG reference-twin renderer with the moving dumper;
+- map and route tests.
+
+Verification before launch:
+
+- backend: 8 tests passed;
+- frontend: 1 test passed;
+- TypeScript and Vite production build passed.
+
+Launch verification:
+
+- the browser received map `FOGSEN_TEST_ROUTE_01` from the WebSocket world snapshot;
+- ten semantic features rendered in the top-down twin;
+- the simulated dumper moved along the route with live x/y and heading updates;
+- the view stayed explicitly labelled `SIMULATED`.

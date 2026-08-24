@@ -4,7 +4,7 @@ import asyncio
 
 from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 
-from backend.app.models import SystemStatus, WorldState
+from backend.app.models import ReferenceMap, SystemStatus, WorldState
 
 
 api_router = APIRouter(prefix="/api")
@@ -30,6 +30,17 @@ async def world(request: Request) -> WorldState:
     return await request.app.state.world_store.snapshot()
 
 
+@api_router.get("/map", response_model=ReferenceMap)
+async def reference_map(request: Request) -> ReferenceMap:
+    return request.app.state.simulator.reference_map
+
+
+@api_router.put("/map", response_model=ReferenceMap)
+async def replace_reference_map(request: Request, reference_map: ReferenceMap) -> ReferenceMap:
+    await request.app.state.simulator.set_reference_map(reference_map)
+    return request.app.state.simulator.reference_map
+
+
 async def telemetry_socket(websocket: WebSocket) -> None:
     await websocket.accept()
     last_sequence = -1
@@ -42,4 +53,3 @@ async def telemetry_socket(websocket: WebSocket) -> None:
             await asyncio.sleep(0.04)
     except WebSocketDisconnect:
         return
-

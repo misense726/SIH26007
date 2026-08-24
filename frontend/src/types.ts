@@ -2,6 +2,43 @@ export type DataMode = "LIVE" | "SIMULATED" | "REPLAY";
 export type VisibilityState = "GOOD" | "MODERATE" | "LOW" | "VERY_LOW";
 export type EmergencyLevel = "SAFE" | "WARNING" | "CRITICAL" | "EMERGENCY_STOP";
 export type SensorStatus = "HEALTHY" | "DEGRADED" | "STALE" | "OFFLINE";
+export type MapFeatureType =
+  | "ROAD"
+  | "CENTERLINE"
+  | "BERM"
+  | "HAZARD_ZONE"
+  | "ROUTE"
+  | "INTERSECTION"
+  | "STATIC_OBSTACLE"
+  | "SPEED_ZONE"
+  | "START"
+  | "DESTINATION";
+export type GeometryType = "POINT" | "POLYLINE" | "POLYGON";
+export type CorridorState = "GREEN" | "YELLOW" | "RED" | "GREY";
+
+export interface Point2D {
+  x_m: number;
+  y_m: number;
+}
+
+export interface MapFeature {
+  feature_id: string;
+  feature_type: MapFeatureType;
+  geometry_type: GeometryType;
+  points: Point2D[];
+  label: string;
+  properties: Record<string, string | number | boolean>;
+}
+
+export interface ReferenceMap {
+  map_id: string;
+  name: string;
+  version: number;
+  created_at_ms: number;
+  coordinate_frame: "LOCAL_CARTESIAN_METRES";
+  source: "MANUAL" | "SURVEYED" | "IMPORTED";
+  features: MapFeature[];
+}
 
 export interface VehiclePose {
   timestamp_ms: number;
@@ -53,7 +90,9 @@ export interface WorldState {
   generated_at_ms: number;
   sequence: number;
   mode: DataMode;
-  vehicle: VehiclePose;
+  primary_vehicle_id: string;
+  vehicles: VehiclePose[];
+  reference_map: ReferenceMap | null;
   ranges: RangeReading[];
   environment: EnvironmentState;
   live_objects: Array<{
@@ -68,5 +107,19 @@ export interface WorldState {
   }>;
   emergency: EmergencyState;
   sensor_health: SensorHealth[];
+  safe_corridor: {
+    state: CorridorState;
+    polygon: Point2D[];
+    exclusions: MapFeature[];
+    confidence: number;
+    reason: string;
+  };
+  spatial_points: Array<{
+    x_m: number;
+    y_m: number;
+    height_hint_m: number;
+    source_sensor_id: string;
+    quality: number;
+    timestamp_ms: number;
+  }>;
 }
-

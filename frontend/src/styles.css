@@ -277,6 +277,169 @@ h2 {
   margin-top: 18px;
 }
 
+.twin-foundation {
+  display: grid;
+  grid-template-columns: minmax(260px, 0.72fr) minmax(0, 1.28fr);
+  gap: 28px;
+  margin-top: 18px;
+  padding: 24px;
+  border: 1px solid rgba(139, 177, 158, 0.16);
+  border-radius: 22px;
+  background: rgba(10, 24, 19, 0.78);
+}
+
+.twin-copy {
+  align-self: center;
+}
+
+.twin-copy > h2 {
+  margin: 8px 0 10px;
+  font-size: clamp(1.45rem, 3vw, 2.2rem);
+}
+
+.twin-copy > p:not(.eyebrow) {
+  max-width: 44ch;
+  color: #91a69c;
+  font-size: 0.82rem;
+  line-height: 1.65;
+}
+
+.twin-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 24px 0 0;
+  overflow: hidden;
+  border: 1px solid #21352d;
+  border-radius: 12px;
+  background: #21352d;
+}
+
+.twin-facts div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  background: #0a1813;
+}
+
+.twin-facts dt {
+  color: #6f887c;
+  font-size: 0.65rem;
+}
+
+.twin-facts dd {
+  overflow: hidden;
+  margin: 0;
+  font-family: "DM Mono", monospace;
+  font-size: 0.67rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.twin-map-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 14px;
+  align-items: center;
+  min-height: 360px;
+  border: 1px solid rgba(139, 177, 158, 0.12);
+  border-radius: 16px;
+  background: #07120e;
+}
+
+.twin-map {
+  width: 100%;
+  height: 345px;
+}
+
+.map-feature {
+  vector-effect: non-scaling-stroke;
+}
+
+.map-road {
+  fill: #1e332a;
+  stroke: #446255;
+  stroke-width: 1.3;
+}
+
+.map-centerline {
+  fill: none;
+  stroke: rgba(228, 239, 233, 0.42);
+  stroke-dasharray: 5 5;
+  stroke-width: 1.2;
+}
+
+.map-route {
+  fill: none;
+  stroke: #b4f061;
+  stroke-width: 2.4;
+}
+
+.map-berm {
+  fill: none;
+  stroke: #8b7454;
+  stroke-width: 3.5;
+}
+
+.map-hazard-zone {
+  fill: rgba(232, 87, 72, 0.35);
+  stroke: #f07064;
+  stroke-width: 1.2;
+}
+
+.map-speed-zone {
+  fill: rgba(237, 183, 79, 0.08);
+  stroke: rgba(237, 183, 79, 0.55);
+  stroke-dasharray: 3 3;
+}
+
+.map-static-obstacle circle {
+  fill: #edb74f;
+}
+
+.map-start circle {
+  fill: #67d7c2;
+}
+
+.map-destination circle {
+  fill: #b4f061;
+}
+
+.map-vehicle path {
+  fill: #dfffae;
+}
+
+.map-vehicle circle {
+  fill: none;
+  stroke: rgba(180, 240, 97, 0.36);
+}
+
+.map-legend {
+  display: grid;
+  gap: 14px;
+  padding-right: 16px;
+  color: #82998f;
+  font-size: 0.63rem;
+}
+
+.map-legend span {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.map-legend i {
+  display: inline-block;
+  width: 12px;
+  height: 3px;
+  border-radius: 2px;
+}
+
+.legend-road { background: #446255; }
+.legend-route { background: #b4f061; }
+.legend-hazard { background: #f07064; }
+.legend-vehicle { background: #dfffae; }
+
 .telemetry-strip article {
   display: grid;
   min-height: 126px;
@@ -320,6 +483,10 @@ footer {
   .telemetry-strip {
     grid-template-columns: repeat(2, 1fr);
   }
+
+  .twin-foundation {
+    grid-template-columns: 1fr;
+  }
 }
 
 @media (max-width: 560px) {
@@ -344,4 +511,3 @@ footer {
     min-height: 310px;
   }
 }
-

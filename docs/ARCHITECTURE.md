@@ -14,7 +14,12 @@ The V1 internal frame uses metres. Vehicle positive X points right and positive 
 
 `FoundationSimulator` publishes a ten-hertz `SIMULATED` heartbeat. It exercises all six range sensor identifiers and the WebSocket path without pretending that hardware is attached. Later milestones replace its simple motion with the full simulator while preserving the contracts.
 
+## Canonical map and pose
+
+`WorldState` now owns the manually defined reference map, a multi-vehicle-ready pose list, sensor state, live objects, environment state, corridor state, emergency state, and spatial points. `maps/test_route.json` contains the road, centerline, two berms, route, hazard, speed zone, static obstacle, start, and destination.
+
+The simulator samples the route polyline by travelled distance. It calculates heading clockwise from world positive Y and publishes the moving dumper inside the same state snapshot as the map.
+
 ## Safety boundary
 
 Camera enhancement, BMP280, and simulated radar cannot trigger emergency stop by themselves. The eventual V1 motor-cut decision uses deterministic range, speed, direction, freshness, and confidence checks.
-

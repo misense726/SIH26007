@@ -5,16 +5,20 @@ export const defaultWorldState: WorldState = {
   generated_at_ms: 0,
   sequence: 0,
   mode: "SIMULATED",
-  vehicle: {
-    timestamp_ms: 0,
-    vehicle_id: "DUMPER_01",
-    x_m: 0,
-    y_m: 0,
-    heading_deg: 0,
-    speed_mps: 0,
-    position_confidence: 0,
-    mode: "SIMULATED",
-  },
+  primary_vehicle_id: "DUMPER_01",
+  vehicles: [
+    {
+      timestamp_ms: 0,
+      vehicle_id: "DUMPER_01",
+      x_m: 0,
+      y_m: 0,
+      heading_deg: 0,
+      speed_mps: 0,
+      position_confidence: 0,
+      mode: "SIMULATED",
+    },
+  ],
+  reference_map: null,
   ranges: [],
   environment: {
     timestamp_ms: 0,
@@ -33,5 +37,12 @@ export const defaultWorldState: WorldState = {
     motor_cut: false,
   },
   sensor_health: [],
+  safe_corridor: {
+    state: "GREY",
+    polygon: [],
+    exclusions: [],
+    confidence: 0,
+    reason: "No telemetry received",
+  },
+  spatial_points: [],
 };
-

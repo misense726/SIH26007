@@ -38,8 +38,81 @@ class SensorStatus(StrEnum):
     OFFLINE = "OFFLINE"
 
 
+class MapFeatureType(StrEnum):
+    ROAD = "ROAD"
+    CENTERLINE = "CENTERLINE"
+    BERM = "BERM"
+    HAZARD_ZONE = "HAZARD_ZONE"
+    ROUTE = "ROUTE"
+    INTERSECTION = "INTERSECTION"
+    STATIC_OBSTACLE = "STATIC_OBSTACLE"
+    SPEED_ZONE = "SPEED_ZONE"
+    START = "START"
+    DESTINATION = "DESTINATION"
+
+
+class GeometryType(StrEnum):
+    POINT = "POINT"
+    POLYLINE = "POLYLINE"
+    POLYGON = "POLYGON"
+
+
+class CorridorState(StrEnum):
+    GREEN = "GREEN"
+    YELLOW = "YELLOW"
+    RED = "RED"
+    GREY = "GREY"
+
+
 class TelemetryModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
+
+
+class Point2D(TelemetryModel):
+    x_m: float
+    y_m: float
+
+
+class MapFeature(TelemetryModel):
+    feature_id: str
+    feature_type: MapFeatureType
+    geometry_type: GeometryType
+    points: list[Point2D] = Field(min_length=1)
+    label: str
+    properties: dict[str, str | float | int | bool] = Field(default_factory=dict)
+
+
+class ReferenceMap(TelemetryModel):
+    map_id: str
+    name: str
+    version: int = Field(default=1, ge=1)
+    created_at_ms: int = Field(default_factory=now_ms, ge=0)
+    coordinate_frame: Literal["LOCAL_CARTESIAN_METRES"] = "LOCAL_CARTESIAN_METRES"
+    source: Literal["MANUAL", "SURVEYED", "IMPORTED"] = "MANUAL"
+    features: list[MapFeature] = Field(default_factory=list)
+
+    def feature(self, feature_type: MapFeatureType) -> MapFeature | None:
+        return next(
+            (feature for feature in self.features if feature.feature_type is feature_type),
+            None,
+        )
+
+
+class SafeCorridor(TelemetryModel):
+    state: CorridorState = CorridorState.GREY
+    polygon: list[Point2D] = Field(default_factory=list)
+    exclusions: list[MapFeature] = Field(default_factory=list)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+    reason: str = "Not yet evaluated"
+
+
+class SpatialPoint(TelemetryModel):
+    x_m: float
+    y_m: float
+    height_hint_m: float = Field(default=0.0, ge=0.0)
+    source_sensor_id: str
+    quality: float = Field(default=1.0, ge=0.0, le=1.0)
+    timestamp_ms: int = Field(default_factory=now_ms, ge=0)
 
 
 class VehiclePose(TelemetryModel):
@@ -103,12 +176,22 @@ class WorldState(TelemetryModel):
     generated_at_ms: int = Field(default_factory=now_ms, ge=0)
     sequence: int = Field(default=0, ge=0)
     mode: DataMode = DataMode.SIMULATED
-    vehicle: VehiclePose = Field(default_factory=VehiclePose)
+    primary_vehicle_id: str = "DUMPER_01"
+    vehicles: list[VehiclePose] = Field(default_factory=lambda: [VehiclePose()])
+    reference_map: ReferenceMap | None = None
     ranges: list[RangeReading] = Field(default_factory=list)
     environment: EnvironmentState = Field(default_factory=EnvironmentState)
     live_objects: list[LiveObject] = Field(default_factory=list)
     emergency: EmergencyState = Field(default_factory=EmergencyState)
     sensor_health: list[SensorHealth] = Field(default_factory=list)
+    safe_corridor: SafeCorridor = Field(default_factory=SafeCorridor)
+    spatial_points: list[SpatialPoint] = Field(default_factory=list)
+
+    def primary_vehicle(self) -> VehiclePose:
+        for vehicle in self.vehicles:
+            if vehicle.vehicle_id == self.primary_vehicle_id:
+                return vehicle
+        raise ValueError(f"Primary vehicle is missing: {self.primary_vehicle_id}")
 
 
 class SystemStatus(TelemetryModel):
@@ -119,4 +202,3 @@ class SystemStatus(TelemetryModel):
     websocket_path: str = "/ws/telemetry"
     telemetry_hz: float = 10.0
     world_sequence: int = 0
-

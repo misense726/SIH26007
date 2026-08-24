@@ -1,5 +1,7 @@
 import { useMemo } from "react";
 import { useTelemetry } from "./state/useTelemetry";
+import { defaultWorldState } from "./state/defaultState";
+import { TwinMap } from "./twin/TwinMap";
 import "./styles.css";
 
 function formatNumber(value: number, digits = 1): string {
@@ -8,6 +10,9 @@ function formatNumber(value: number, digits = 1): string {
 
 export default function App() {
   const { world, connection } = useTelemetry();
+  const vehicle =
+    world.vehicles.find((candidate) => candidate.vehicle_id === world.primary_vehicle_id) ??
+    defaultWorldState.vehicles[0];
   const nearestRange = useMemo(
     () =>
       world.ranges.length > 0
@@ -57,24 +62,24 @@ export default function App() {
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Active vehicle</p>
-              <h2>{world.vehicle.vehicle_id}</h2>
+              <h2>{vehicle.vehicle_id}</h2>
             </div>
             <span className="sequence">#{world.sequence}</span>
           </div>
           <div className="speed-readout">
-            <strong>{formatNumber(world.vehicle.speed_mps * 3.6, 1)}</strong>
+            <strong>{formatNumber(vehicle.speed_mps * 3.6, 1)}</strong>
             <span>km/h</span>
           </div>
           <dl className="metric-list">
             <div>
               <dt>Position</dt>
               <dd>
-                {formatNumber(world.vehicle.x_m)} / {formatNumber(world.vehicle.y_m)} m
+                {formatNumber(vehicle.x_m)} / {formatNumber(vehicle.y_m)} m
               </dd>
             </div>
             <div>
               <dt>Heading</dt>
-              <dd>{formatNumber(world.vehicle.heading_deg, 0)}°</dd>
+              <dd>{formatNumber(vehicle.heading_deg, 0)}°</dd>
             </div>
             <div>
               <dt>Nearest range</dt>
@@ -86,6 +91,24 @@ export default function App() {
             </div>
           </dl>
         </aside>
+      </section>
+
+      <section className="twin-foundation" aria-label="Base digital twin">
+        <div className="twin-copy">
+          <p className="eyebrow">Backend-owned reference twin</p>
+          <h2>{world.reference_map?.name ?? "Waiting for reference map"}</h2>
+          <p>
+            The moving dumper pose and the route come from the same world snapshot used by
+            every FogSen view.
+          </p>
+          <dl className="twin-facts">
+            <div><dt>Map</dt><dd>{world.reference_map?.map_id ?? "--"}</dd></div>
+            <div><dt>Features</dt><dd>{world.reference_map?.features.length ?? 0}</dd></div>
+            <div><dt>Frame</dt><dd>Local Cartesian</dd></div>
+            <div><dt>Corridor</dt><dd>{world.safe_corridor.state}</dd></div>
+          </dl>
+        </div>
+        <TwinMap world={world} />
       </section>
 
       <section className="telemetry-strip">
@@ -123,4 +146,3 @@ export default function App() {
     </main>
   );
 }
-

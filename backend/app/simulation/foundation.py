@@ -3,17 +3,23 @@ from __future__ import annotations
 import asyncio
 import math
 from contextlib import suppress
+from pathlib import Path
 
 from backend.app.models import (
     DataMode,
     EnvironmentState,
+    MapFeatureType,
     RangeReading,
+    ReferenceMap,
+    SafeCorridor,
     SensorHealth,
     VehiclePose,
     VisibilityState,
     WorldState,
 )
 from backend.app.models.telemetry import now_ms
+from backend.app.twin.map_store import load_reference_map, save_reference_map
+from backend.app.twin.route import PolylineRoute
 from backend.app.twin.world_store import WorldStore
 
 
@@ -29,9 +35,23 @@ class FoundationSimulator:
         "right_side",
     )
 
-    def __init__(self, store: WorldStore, telemetry_hz: float = 10.0) -> None:
+    def __init__(
+        self,
+        store: WorldStore,
+        telemetry_hz: float = 10.0,
+        map_path: str | Path = "maps/test_route.json",
+        route_speed_mps: float = 1.15,
+    ) -> None:
         self._store = store
         self._interval_s = 1.0 / telemetry_hz
+        self._map_path = Path(map_path)
+        self._reference_map = load_reference_map(self._map_path)
+        route_feature = self._reference_map.feature(MapFeatureType.ROUTE)
+        if route_feature is None:
+            raise ValueError("Reference map does not contain a ROUTE feature")
+        self._route = PolylineRoute(route_feature.points)
+        self._route_speed_mps = route_speed_mps
+        self._route_distance_m = 0.0
         self._task: asyncio.Task[None] | None = None
         self._running = False
         self._phase = 0.0
@@ -39,6 +59,20 @@ class FoundationSimulator:
     @property
     def running(self) -> bool:
         return self._running
+
+    @property
+    def reference_map(self) -> ReferenceMap:
+        return self._reference_map.model_copy(deep=True)
+
+    async def set_reference_map(self, reference_map: ReferenceMap) -> None:
+        route_feature = reference_map.feature(MapFeatureType.ROUTE)
+        if route_feature is None:
+            raise ValueError("Reference map does not contain a ROUTE feature")
+        route = PolylineRoute(route_feature.points)
+        save_reference_map(reference_map, self._map_path)
+        self._reference_map = reference_map.model_copy(deep=True)
+        self._route = route
+        self._route_distance_m = 0.0
 
     async def start(self) -> None:
         if self._task is not None:
@@ -58,8 +92,9 @@ class FoundationSimulator:
     async def tick(self) -> WorldState:
         timestamp = now_ms()
         self._phase = (self._phase + self._interval_s) % 60.0
-        heading = (self._phase * 4.0) % 360.0
-        speed = 0.8 + 0.12 * math.sin(self._phase * 0.8)
+        speed = self._route_speed_mps
+        self._route_distance_m += speed * self._interval_s
+        route_sample = self._route.sample(self._route_distance_m)
         range_base = 2.25 + 0.18 * math.sin(self._phase)
         ranges = [
             RangeReading(
@@ -80,14 +115,17 @@ class FoundationSimulator:
             generated_at_ms=timestamp,
             sequence=current.sequence + 1,
             mode=DataMode.SIMULATED,
-            vehicle=VehiclePose(
-                timestamp_ms=timestamp,
-                x_m=1.0 + 0.2 * math.sin(self._phase * 0.2),
-                y_m=1.0 + self._phase * 0.03,
-                heading_deg=heading,
-                speed_mps=speed,
-                position_confidence=0.98,
-            ),
+            vehicles=[
+                VehiclePose(
+                    timestamp_ms=timestamp,
+                    x_m=route_sample.x_m,
+                    y_m=route_sample.y_m,
+                    heading_deg=route_sample.heading_deg,
+                    speed_mps=speed,
+                    position_confidence=0.98,
+                )
+            ],
+            reference_map=self._reference_map,
             ranges=ranges,
             environment=EnvironmentState(
                 timestamp_ms=timestamp,
@@ -98,6 +136,9 @@ class FoundationSimulator:
                 visibility_state=VisibilityState.GOOD,
             ),
             sensor_health=health,
+            safe_corridor=SafeCorridor(
+                reason="Road loaded; corridor evaluation begins in M11",
+            ),
         )
         return await self._store.replace(state)
 
@@ -107,4 +148,3 @@ class FoundationSimulator:
             await self.tick()
             elapsed = asyncio.get_running_loop().time() - started
             await asyncio.sleep(max(0.0, self._interval_s - elapsed))
-
