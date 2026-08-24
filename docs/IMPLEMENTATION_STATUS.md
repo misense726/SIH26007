@@ -69,3 +69,36 @@ Launch verification:
 - ten semantic features rendered in the top-down twin;
 - the simulated dumper moved along the route with live x/y and heading updates;
 - the view stayed explicitly labelled `SIMULATED`.
+
+## M3: driver dashboard base
+
+Status: complete and launch-verified on 2026-08-24.
+
+Implemented:
+
+- camera-first driver layout with an honest unavailable state;
+- visibility-responsive synthetic road and corridor overlay;
+- vehicle-centred 360-degree ToF proximity widget;
+- speed, heading, nearest obstacle, visibility, corridor, and stop-state instruments;
+- route guidance that never tells the driver to proceed while the corridor is grey or red;
+- responsive mobile layout.
+
+## M4: supervisor dashboard base
+
+Status: complete and launch-verified on 2026-08-24.
+
+Implemented:
+
+- shared fleet map from the canonical world state;
+- one card per vehicle from the fleet-ready pose list;
+- x/y, heading, speed, approximate relative altitude, pressure, temperature, visibility, obstacle distance, emergency state, and sensor health;
+- fleet summary and safety alert log;
+- separate information density from the driver view.
+
+Verification:
+
+- backend: 9 tests passed, including a multiple-dumper contract test;
+- frontend: 5 tests passed, including primary-vehicle selection and ToF projection;
+- TypeScript and Vite production build passed;
+- browser checks passed for driver, supervisor, and 390-pixel mobile layouts;
+- visible-copy audit found no implementation notes or em dashes.

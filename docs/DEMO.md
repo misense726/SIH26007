@@ -9,5 +9,6 @@ M0 demonstrates the repository foundation:
 5. watch the telemetry sequence, pose, speed, six ranges, and environment values update;
 6. confirm every visible source label says `SIMULATED`.
 
-The complete SIH route, obstacle, safe-corridor, emergency-stop, record, and replay sequence will be added milestone by milestone.
+Use the header control to switch between the driver and supervisor dashboards. The driver view keeps camera awareness, range proximity, speed, and route guidance prominent. The supervisor view shows the shared fleet map, conditions, sensor health, and alerts.
 
+Obstacle, evaluated safe-corridor, emergency-stop, record, and replay steps are added in later milestones.

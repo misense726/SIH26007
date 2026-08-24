@@ -6,7 +6,7 @@ The current repository starts in `SIMULATED` mode. It does not claim that protot
 
 ## What runs now
 
-The M0 foundation includes:
+The simulated foundation includes:
 
 - FastAPI health, status, and world-state endpoints;
 - a WebSocket telemetry stream;
@@ -14,6 +14,9 @@ The M0 foundation includes:
 - configuration for the vehicle, six ToFs, calibration, safety, and the demo;
 - provider interfaces for simulated, replay, and future live hardware;
 - a React and TypeScript dashboard connected to backend telemetry;
+- a manually defined semantic mine route with a moving dumper;
+- a camera-first driver dashboard with synthetic corridor and 360-degree ToF awareness;
+- a separate supervisor fleet map with environment, sensor health, and alerts;
 - backend and frontend tests.
 
 See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for the milestone record.
@@ -89,4 +92,3 @@ scripts/     Local launch and validation helpers
 ```
 
 Read `PROJECT_CONTEXT.md` before changing the frozen V1 architecture. Contributors and coding agents must also follow `AGENTS.md`.
-

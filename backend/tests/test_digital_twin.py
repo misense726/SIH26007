@@ -4,7 +4,7 @@ import math
 
 import pytest
 
-from backend.app.models import MapFeatureType, Point2D
+from backend.app.models import MapFeatureType, Point2D, VehiclePose, WorldState
 from backend.app.simulation.foundation import FoundationSimulator
 from backend.app.twin.map_store import load_reference_map
 from backend.app.twin.route import PolylineRoute
@@ -60,3 +60,14 @@ async def test_world_store_copies_nested_reference_map() -> None:
     assert untouched.reference_map is not None
     assert untouched.reference_map.name == state.reference_map.name
 
+
+def test_world_model_supports_multiple_dumpers() -> None:
+    world = WorldState(
+        primary_vehicle_id="DUMPER_02",
+        vehicles=[
+            VehiclePose(vehicle_id="DUMPER_01"),
+            VehiclePose(vehicle_id="DUMPER_02", x_m=4.0),
+        ],
+    )
+    assert world.primary_vehicle().x_m == 4.0
+    assert len(world.model_dump()["vehicles"]) == 2
