@@ -1,0 +1,45 @@
+from __future__ import annotations
+
+import asyncio
+
+from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
+
+from backend.app.models import SystemStatus, WorldState
+
+
+api_router = APIRouter(prefix="/api")
+
+
+@api_router.get("/health")
+async def health() -> dict[str, str]:
+    return {"status": "ok", "service": "fogsen-backend"}
+
+
+@api_router.get("/status", response_model=SystemStatus)
+async def status(request: Request) -> SystemStatus:
+    snapshot = await request.app.state.world_store.snapshot()
+    return SystemStatus(
+        telemetry_hz=request.app.state.settings.telemetry_hz,
+        world_sequence=snapshot.sequence,
+        mode=snapshot.mode,
+    )
+
+
+@api_router.get("/world", response_model=WorldState)
+async def world(request: Request) -> WorldState:
+    return await request.app.state.world_store.snapshot()
+
+
+async def telemetry_socket(websocket: WebSocket) -> None:
+    await websocket.accept()
+    last_sequence = -1
+    try:
+        while True:
+            snapshot = await websocket.app.state.world_store.snapshot()
+            if snapshot.sequence != last_sequence:
+                await websocket.send_text(snapshot.model_dump_json())
+                last_sequence = snapshot.sequence
+            await asyncio.sleep(0.04)
+    except WebSocketDisconnect:
+        return
+

@@ -1,0 +1,41 @@
+[build-system]
+requires = ["hatchling>=1.27"]
+build-backend = "hatchling.build"
+
+[project]
+name = "fogsen"
+version = "0.1.0"
+description = "FogSen low-visibility mine vehicle digital twin proof of concept"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.115,<1",
+  "numpy>=2,<3",
+  "pydantic>=2.10,<3",
+  "PyYAML>=6,<7",
+  "uvicorn[standard]>=0.34,<1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "httpx>=0.28,<1",
+  "pytest>=8,<10",
+  "pytest-asyncio>=0.25,<2",
+]
+hardware = [
+  "opencv-python>=4.11,<5",
+  "pyserial>=3.5,<4",
+]
+
+[project.scripts]
+fogsen = "backend.app.main:run"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend"]
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["."]
+addopts = "-q"
+asyncio_mode = "auto"
+

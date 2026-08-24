@@ -1,0 +1,21 @@
+vehicle:
+  id: DUMPER_01
+  display_name: Dumper 01
+  length_m: 1.2
+  width_m: 0.68
+  wheel_circumference_m: 0.22
+  magnets_per_wheel: 2
+  wheel_spacing_m: 0.56
+  max_demo_speed_mps: 2.5
+
+frames:
+  vehicle:
+    x_axis: right
+    y_axis: forward
+  world:
+    type: local_cartesian
+    units: metres
+  heading:
+    zero_axis: world_positive_y
+    positive_direction: clockwise
+

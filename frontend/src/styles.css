@@ -1,0 +1,347 @@
+@import url("https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=Manrope:wght@400;500;600;700&display=swap");
+
+:root {
+  font-family: "Manrope", sans-serif;
+  color: #e8f2ed;
+  background: #06100d;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-width: 320px;
+  min-height: 100vh;
+  background:
+    radial-gradient(circle at 82% -10%, rgba(76, 190, 130, 0.13), transparent 34rem),
+    linear-gradient(135deg, #07130f, #050a09 72%);
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.app-shell {
+  width: min(1440px, 100%);
+  min-height: 100vh;
+  margin: 0 auto;
+  padding: 28px clamp(18px, 4vw, 54px) 24px;
+}
+
+.topbar,
+.panel-heading,
+.status-row,
+.brand-lockup {
+  display: flex;
+  align-items: center;
+}
+
+.topbar {
+  justify-content: space-between;
+  margin-bottom: 28px;
+}
+
+.brand-lockup,
+.status-row {
+  gap: 14px;
+}
+
+.brand-mark {
+  display: grid;
+  width: 48px;
+  height: 48px;
+  place-items: center;
+  color: #07110e;
+  background: #b4f061;
+  border-radius: 13px;
+  font-family: "DM Mono", monospace;
+  font-weight: 600;
+  box-shadow: 0 0 30px rgba(180, 240, 97, 0.18);
+}
+
+h1,
+h2,
+p {
+  margin: 0;
+}
+
+h1 {
+  font-size: clamp(1.25rem, 2.5vw, 1.75rem);
+  letter-spacing: -0.045em;
+}
+
+h2 {
+  margin-top: 3px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+}
+
+.eyebrow {
+  color: #82998f;
+  font-family: "DM Mono", monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+}
+
+.connection,
+.mode-pill,
+.feed-label,
+.sequence {
+  border: 1px solid #263b32;
+  border-radius: 999px;
+  padding: 7px 10px;
+  font-family: "DM Mono", monospace;
+  font-size: 0.68rem;
+  letter-spacing: 0.05em;
+}
+
+.connection::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin-right: 7px;
+  border-radius: 50%;
+  background: #f4a950;
+  content: "";
+}
+
+.connection-connected::before {
+  background: #89e57f;
+  box-shadow: 0 0 9px rgba(137, 229, 127, 0.8);
+}
+
+.connection-disconnected::before {
+  background: #f36666;
+}
+
+.mode-pill,
+.feed-label {
+  color: #07110e;
+  border-color: #b4f061;
+  background: #b4f061;
+  font-weight: 700;
+}
+
+.hero-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.75fr) minmax(280px, 0.72fr);
+  gap: 18px;
+}
+
+.camera-card,
+.vehicle-card,
+.telemetry-strip article {
+  border: 1px solid rgba(139, 177, 158, 0.16);
+  background: rgba(10, 24, 19, 0.78);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.16);
+}
+
+.camera-card,
+.vehicle-card {
+  border-radius: 22px;
+  padding: 18px;
+}
+
+.panel-heading {
+  justify-content: space-between;
+  min-height: 42px;
+  margin-bottom: 15px;
+}
+
+.feed-label {
+  padding: 5px 9px;
+  font-size: 0.61rem;
+}
+
+.sequence {
+  color: #82998f;
+  border: 0;
+}
+
+.camera-placeholder {
+  position: relative;
+  display: grid;
+  min-height: 440px;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(179, 219, 199, 0.12);
+  border-radius: 15px;
+  background:
+    linear-gradient(rgba(146, 169, 157, 0.15), rgba(19, 38, 30, 0.6)),
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.015) 0 1px, transparent 1px 4px),
+    #15251f;
+}
+
+.camera-placeholder::after {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at center 70%, transparent, rgba(4, 11, 8, 0.55));
+  content: "";
+}
+
+.camera-placeholder p {
+  z-index: 2;
+  color: rgba(227, 240, 234, 0.7);
+  font-size: 0.84rem;
+}
+
+.road {
+  position: absolute;
+  bottom: -20%;
+  width: 2px;
+  height: 115%;
+  background: linear-gradient(transparent, rgba(180, 240, 97, 0.8));
+  transform-origin: bottom;
+}
+
+.road-left {
+  left: 21%;
+  transform: rotate(17deg);
+}
+
+.road-right {
+  right: 21%;
+  transform: rotate(-17deg);
+}
+
+.center-guide {
+  position: absolute;
+  bottom: -12%;
+  width: 1px;
+  height: 74%;
+  border-left: 2px dashed rgba(255, 255, 255, 0.35);
+}
+
+.vehicle-card {
+  display: flex;
+  flex-direction: column;
+}
+
+.speed-readout {
+  display: flex;
+  align-items: flex-end;
+  gap: 10px;
+  padding: 28px 0 25px;
+  border-bottom: 1px solid #21352d;
+}
+
+.speed-readout strong {
+  font-family: "DM Mono", monospace;
+  font-size: clamp(3.6rem, 8vw, 6rem);
+  font-weight: 400;
+  line-height: 0.82;
+  letter-spacing: -0.09em;
+}
+
+.speed-readout span {
+  padding-bottom: 4px;
+  color: #82998f;
+  font-size: 0.78rem;
+}
+
+.metric-list {
+  display: grid;
+  margin: 0;
+  padding-top: 15px;
+}
+
+.metric-list div {
+  display: flex;
+  justify-content: space-between;
+  padding: 13px 0;
+  border-bottom: 1px solid rgba(49, 76, 64, 0.45);
+}
+
+.metric-list dt {
+  color: #82998f;
+  font-size: 0.76rem;
+}
+
+.metric-list dd {
+  margin: 0;
+  font-family: "DM Mono", monospace;
+  font-size: 0.78rem;
+}
+
+.telemetry-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.telemetry-strip article {
+  display: grid;
+  min-height: 126px;
+  align-content: space-between;
+  border-radius: 16px;
+  padding: 16px;
+}
+
+.telemetry-strip span,
+.telemetry-strip small {
+  color: #82998f;
+  font-size: 0.7rem;
+}
+
+.telemetry-strip strong {
+  font-family: "DM Mono", monospace;
+  font-size: 1.1rem;
+  font-weight: 500;
+}
+
+.emergency-safe {
+  color: #a7e779;
+}
+
+footer {
+  margin-top: 24px;
+  color: #61776d;
+  font-size: 0.68rem;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .hero-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .camera-placeholder {
+    min-height: 360px;
+  }
+
+  .telemetry-strip {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 560px) {
+  .app-shell {
+    padding: 18px 12px;
+  }
+
+  .topbar {
+    align-items: flex-start;
+  }
+
+  .brand-mark,
+  .connection {
+    display: none;
+  }
+
+  .telemetry-strip {
+    grid-template-columns: 1fr;
+  }
+
+  .camera-placeholder {
+    min-height: 310px;
+  }
+}
+

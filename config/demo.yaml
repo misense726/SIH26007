@@ -1,0 +1,11 @@
+demo:
+  telemetry_hz: 10
+  route_speed_mps: 1.15
+  loop_route: true
+  default_visibility_score: 0.88
+  mode: SIMULATED
+  map_file: maps/test_route.json
+  obstacle_enabled: true
+  obstacle_position_m: [7.0, 7.4]
+  record_directory: recordings
+

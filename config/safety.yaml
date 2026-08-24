@@ -1,0 +1,15 @@
+safety:
+  road_margin_m: 0.35
+  obstacle_inflation_m: 0.45
+  warning_time_s: 2.2
+  critical_time_s: 1.25
+  emergency_time_s: 0.65
+  stationary_warning_m: 0.75
+  stationary_critical_m: 0.45
+  stationary_emergency_m: 0.22
+  reaction_time_s: 0.55
+  braking_deceleration_mps2: 1.8
+  confidence_floor: 0.55
+  stale_sensor_ms: 750
+  emergency_persistence_ms: 350
+
