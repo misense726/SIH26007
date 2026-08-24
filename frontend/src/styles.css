@@ -17,7 +17,6 @@
   --red: #f36f64;
   --mono: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
 }
-
 * {
   box-sizing: border-box;
 }
@@ -1132,4 +1131,3 @@ footer {
     gap: 8px;
   }
 }
-

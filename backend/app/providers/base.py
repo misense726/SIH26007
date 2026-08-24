@@ -23,6 +23,15 @@ class CameraSample:
 
 
 @dataclass(frozen=True, slots=True)
+class IMUSample:
+    timestamp_ms: int
+    heading_deg: float
+    yaw_rate_dps: float
+    acceleration_mps2: float
+    confidence: float
+
+
+@dataclass(frozen=True, slots=True)
 class RadarDetection:
     timestamp_ms: int
     detection_id: str
@@ -50,6 +59,12 @@ class OdometryProvider(ABC):
         """Return cumulative wheel travel."""
 
 
+class IMUProvider(ABC):
+    @abstractmethod
+    async def read_imu(self) -> IMUSample:
+        """Return normalized heading, turn rate, and longitudinal acceleration."""
+
+
 class CameraProvider(ABC):
     @abstractmethod
     async def read_camera(self) -> CameraSample:
@@ -72,4 +87,3 @@ class EmergencyStopOutput(ABC):
     @abstractmethod
     async def set_motor_cut(self, active: bool, reason: str) -> None:
         """Request or release the hardware-abstracted motor cut."""
-

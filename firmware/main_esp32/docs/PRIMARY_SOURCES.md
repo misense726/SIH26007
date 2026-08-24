@@ -1,0 +1,9 @@
+# Primary sources used
+
+- [Espressif Arduino UART API](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/serial.html) documents the `HardwareSerial::begin` overload with explicit RX and TX pins, receive-buffer setup, and the separate UART controllers used for FRONT and REAR.
+- [Espressif Arduino I2C API](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/i2c.html) documents explicit SDA and SCL configuration and `Wire.setTimeOut`. MAIN uses GPIO21 and GPIO22 with a 20 ms timeout.
+- [Espressif Arduino GPIO API](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/gpio.html) documents GPIO modes, `attachInterrupt`, and ISR handlers. The Hall ISRs only increment protected counters.
+- [Adafruit MPU6050 header](https://github.com/adafruit/Adafruit_MPU6050/blob/master/Adafruit_MPU6050.h) defines `begin`, range and bandwidth configuration, and `getEvent`. Adafruit events provide acceleration in SI units and gyro values in radians per second, so MAIN converts gyro values to degrees per second for the FogSen contract.
+- [Adafruit BMP280 header](https://github.com/adafruit/Adafruit_BMP280_Library/blob/master/Adafruit_BMP280.h) defines both I2C addresses, sampling configuration, pressure and temperature reads, and the altitude calculation API. MAIN calculates altitude relative to an averaged local pressure baseline and labels it approximate.
+- [ArduinoJson documentation](https://arduinojson.org/v6/api/json/deserializejson/) documents bounded-buffer deserialization and errors. MAIN uses a fixed line buffer and `StaticJsonDocument`, then validates identity, types, ranges, and sequence before accepting a packet.
+- [PlatformIO ESP32 Dev Module board page](https://docs.platformio.org/en/stable/boards/espressif32/esp32dev.html) defines the `esp32dev` board identifier used in `platformio.ini`.

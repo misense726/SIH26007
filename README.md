@@ -2,7 +2,11 @@
 
 FogSen is a proof of concept for mine-vehicle operation in fog and low visibility. It builds one backend-owned world model from vehicle pose, range sensing, environment data, and safety state. The driver and supervisor interfaces render that same state.
 
-The current repository starts in `SIMULATED` mode. It does not claim that prototype ToF sensors are industrial LiDAR, that BMP280 produces precise altitude, or that a relay motor cut is production braking.
+The dashboard starts in `SIMULATED` mode. The repository also includes
+compile-verified wired firmware for MAIN, FRONT, and REAR plus a laptop serial
+monitor. It does not claim that prototype ToF sensors are industrial LiDAR,
+that BMP280 produces precise altitude, or that a relay motor cut is production
+braking.
 
 ## What runs now
 
@@ -18,6 +22,8 @@ The simulated foundation includes:
 - a camera-first driver dashboard with synthetic corridor and 360-degree ToF awareness;
 - a separate supervisor fleet map with environment, sensor health, and alerts;
 - backend and frontend tests.
+- wired firmware for one ESP32 DevKit and two XIAO ESP32-C6 nodes;
+- a validated MAIN-to-laptop USB serial protocol with no wireless dependency.
 
 See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for the milestone record.
 
@@ -26,6 +32,9 @@ See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for the miles
 - Python 3.11 or newer;
 - Node.js 20 or newer;
 - npm 10 or newer.
+
+Firmware work also requires Arduino CLI. `scripts/setup-firmware.ps1` installs
+the pinned ESP32 core and libraries once Arduino CLI is on `PATH`.
 
 No cloud service is required.
 
@@ -65,6 +74,26 @@ Backend checks:
 - `ws://127.0.0.1:8000/ws/telemetry`
 - `http://127.0.0.1:8000/docs`
 
+## Wired firmware
+
+Set up and compile all three controllers:
+
+```powershell
+.\scripts\setup-firmware.ps1
+.\scripts\verify-firmware.ps1
+```
+
+After flashing MAIN and connecting its USB cable, validate live packets without
+starting the dashboard:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install pyserial
+.\.venv\Scripts\python.exe -m backend.app.serial_monitor --port COM8 --send STATUS
+```
+
+Replace `COM8` with the port shown by `arduino-cli board list`. Full wiring,
+power, upload, and bench-test instructions are in `firmware/README.md`.
+
 ## Test
 
 ```powershell
@@ -84,7 +113,7 @@ FogSen uses metres and seconds internally. In the vehicle frame, positive X poin
 backend/     FastAPI, canonical world model, providers, simulation, and tests
 config/      Vehicle, sensors, safety thresholds, and demo settings
 docs/        Architecture, contracts, hardware, calibration, and demo notes
-firmware/    ESP32 integration, added after the simulated chain is working
+firmware/    MAIN, FRONT, and REAR wired ESP32 firmware and build notes
 frontend/    Driver and supervisor React application
 maps/        Saved reference twins
 recordings/  JSONL record and replay files

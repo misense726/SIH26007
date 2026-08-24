@@ -64,6 +64,26 @@ class CorridorState(StrEnum):
     GREY = "GREY"
 
 
+class LiveObjectType(StrEnum):
+    UNKNOWN_OBSTACLE = "UNKNOWN_OBSTACLE"
+    MAP_MISMATCH = "MAP_MISMATCH"
+    PROXIMITY = "PROXIMITY"
+
+
+class ObjectSource(StrEnum):
+    TOF = "TOF"
+    RADAR = "RADAR"
+    CAMERA = "CAMERA"
+    FUSED = "FUSED"
+
+
+class SimulationScenario(StrEnum):
+    NORMAL = "NORMAL"
+    FOG = "FOG"
+    OBSTACLE = "OBSTACLE"
+    EMERGENCY = "EMERGENCY"
+
+
 class TelemetryModel(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -115,6 +135,22 @@ class SpatialPoint(TelemetryModel):
     timestamp_ms: int = Field(default_factory=now_ms, ge=0)
 
 
+class GridCell(TelemetryModel):
+    column: int = Field(ge=0)
+    row: int = Field(ge=0)
+    hit_count: int = Field(default=1, ge=1)
+    height_hint_m: float = Field(default=0.8, ge=0.0)
+
+
+class OccupancyState(TelemetryModel):
+    resolution_m: float = Field(default=0.25, gt=0.0)
+    origin: Point2D = Field(default_factory=lambda: Point2D(x_m=0.0, y_m=0.0))
+    width: int = Field(default=80, ge=1)
+    height: int = Field(default=128, ge=1)
+    occupied_cells: list[GridCell] = Field(default_factory=list)
+    updated_at_ms: int = Field(default_factory=now_ms, ge=0)
+
+
 class VehiclePose(TelemetryModel):
     timestamp_ms: int = Field(default_factory=now_ms, ge=0)
     vehicle_id: str = "DUMPER_01"
@@ -132,6 +168,50 @@ class RangeReading(TelemetryModel):
     angle_deg: float = 0.0
     range_m: float = Field(ge=0.0)
     quality: float = Field(default=1.0, ge=0.0, le=1.0)
+    max_range_m: float = Field(default=4.0, gt=0.0)
+    is_valid: bool = True
+    mode: DataMode = DataMode.SIMULATED
+
+
+class MotionState(TelemetryModel):
+    timestamp_ms: int = Field(default_factory=now_ms, ge=0)
+    left_hall_ticks: int = Field(default=0, ge=0)
+    right_hall_ticks: int = Field(default=0, ge=0)
+    left_distance_m: float = Field(default=0.0, ge=0.0)
+    right_distance_m: float = Field(default=0.0, ge=0.0)
+    imu_heading_deg: float = Field(default=0.0, ge=0.0, lt=360.0)
+    imu_yaw_rate_dps: float = 0.0
+    aruco_visible: bool = True
+    localization_confidence: float = Field(default=1.0, ge=0.0, le=1.0)
+    provider_confidence: dict[str, float] = Field(default_factory=dict)
+    mode: DataMode = DataMode.SIMULATED
+
+
+class VisibilityMetrics(TelemetryModel):
+    contrast: float = Field(default=0.0, ge=0.0, le=1.0)
+    edge_density: float = Field(default=0.0, ge=0.0, le=1.0)
+    brightness: float = Field(default=0.0, ge=0.0, le=1.0)
+    entropy: float = Field(default=0.0, ge=0.0, le=1.0)
+    haze_proxy: float = Field(default=1.0, ge=0.0, le=1.0)
+
+
+class CameraState(TelemetryModel):
+    timestamp_ms: int = Field(default_factory=now_ms, ge=0)
+    raw_frame_id: str | None = None
+    enhanced_frame_id: str | None = None
+    raw_available: bool = False
+    enhancement_available: bool = False
+    metrics: VisibilityMetrics = Field(default_factory=VisibilityMetrics)
+    mode: DataMode = DataMode.SIMULATED
+
+
+class RadarObject(TelemetryModel):
+    timestamp_ms: int = Field(default_factory=now_ms, ge=0)
+    detection_id: str
+    range_m: float = Field(ge=0.0)
+    bearing_deg: float
+    relative_velocity_mps: float = 0.0
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     mode: DataMode = DataMode.SIMULATED
 
 
@@ -150,9 +230,9 @@ class LiveObject(TelemetryModel):
     object_id: str
     x_m: float
     y_m: float
-    object_type: str = "UNKNOWN"
+    object_type: LiveObjectType = LiveObjectType.UNKNOWN_OBSTACLE
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
-    source: str = "TOF"
+    source: ObjectSource = ObjectSource.TOF
     mode: DataMode = DataMode.SIMULATED
 
 
@@ -160,7 +240,10 @@ class EmergencyState(TelemetryModel):
     state: EmergencyLevel = EmergencyLevel.SAFE
     reason: str | None = None
     nearest_obstacle_m: float | None = Field(default=None, ge=0.0)
+    critical_distance_m: float | None = Field(default=None, ge=0.0)
+    confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     motor_cut: bool = False
+    latched_at_ms: int | None = Field(default=None, ge=0)
 
 
 class SensorHealth(TelemetryModel):
@@ -169,6 +252,31 @@ class SensorHealth(TelemetryModel):
     last_update_ms: int = Field(default_factory=now_ms, ge=0)
     confidence: float = Field(default=1.0, ge=0.0, le=1.0)
     detail: str | None = None
+
+
+class AlertEvent(TelemetryModel):
+    event_id: str
+    timestamp_ms: int = Field(default_factory=now_ms, ge=0)
+    severity: Literal["INFO", "WARNING", "CRITICAL"]
+    title: str
+    detail: str
+    vehicle_id: str = "DUMPER_01"
+
+
+class RecordingState(TelemetryModel):
+    recording: bool = False
+    recording_filename: str | None = None
+    replaying: bool = False
+    replay_filename: str | None = None
+
+
+class SimulationState(TelemetryModel):
+    running: bool = True
+    scenario: SimulationScenario = SimulationScenario.NORMAL
+    speed_scale: float = Field(default=1.0, ge=0.0, le=3.0)
+    obstacle_enabled: bool = False
+    front_scanner_angle_deg: float = 0.0
+    rear_scanner_angle_deg: float = 0.0
 
 
 class WorldState(TelemetryModel):
@@ -180,12 +288,19 @@ class WorldState(TelemetryModel):
     vehicles: list[VehiclePose] = Field(default_factory=lambda: [VehiclePose()])
     reference_map: ReferenceMap | None = None
     ranges: list[RangeReading] = Field(default_factory=list)
+    motion: MotionState = Field(default_factory=MotionState)
+    camera: CameraState = Field(default_factory=CameraState)
     environment: EnvironmentState = Field(default_factory=EnvironmentState)
     live_objects: list[LiveObject] = Field(default_factory=list)
+    radar_objects: list[RadarObject] = Field(default_factory=list)
     emergency: EmergencyState = Field(default_factory=EmergencyState)
     sensor_health: list[SensorHealth] = Field(default_factory=list)
     safe_corridor: SafeCorridor = Field(default_factory=SafeCorridor)
     spatial_points: list[SpatialPoint] = Field(default_factory=list)
+    occupancy: OccupancyState = Field(default_factory=OccupancyState)
+    alerts: list[AlertEvent] = Field(default_factory=list)
+    recording: RecordingState = Field(default_factory=RecordingState)
+    simulation: SimulationState = Field(default_factory=SimulationState)
 
     def primary_vehicle(self) -> VehiclePose:
         for vehicle in self.vehicles:
@@ -202,3 +317,5 @@ class SystemStatus(TelemetryModel):
     websocket_path: str = "/ws/telemetry"
     telemetry_hz: float = 10.0
     world_sequence: int = 0
+    recording: bool = False
+    replaying: bool = False

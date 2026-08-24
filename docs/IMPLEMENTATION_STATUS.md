@@ -102,3 +102,32 @@ Verification:
 - TypeScript and Vite production build passed;
 - browser checks passed for driver, supervisor, and 390-pixel mobile layouts;
 - visible-copy audit found no implementation notes or em dashes.
+
+## Wired three-controller firmware
+
+Status: compile-verified on 2026-08-24; physical bench verification pending.
+
+Implemented:
+
+- MAIN firmware for a normal ESP32 DevKit/WROOM target;
+- FRONT and REAR firmware for XIAO ESP32-C6 targets;
+- two independent 115200-baud hardware UART links with 500 ms stale detection;
+- sequential TCA9548A ToF acquisition and discrete servo scans;
+- MPU6050, BMP280, Hall odometry, local safety state machine, and relay cut;
+- missing-sensor retries, bounded parsers, health masks, and unknown-range
+  handling;
+- wired USB laptop parser, command sender, and serial monitor;
+- no wireless or cloud dependency;
+- removal of the legacy `firmware/esp32` project.
+
+Verification:
+
+- MAIN: 328,380 bytes flash, 35,612 bytes globals, no compiler warnings;
+- FRONT: 309,618 bytes flash, 15,860 bytes globals;
+- REAR: 309,626 bytes flash, 15,860 bytes globals;
+- 19 firmware and wired protocol contract tests passed;
+- the three compile targets pass through `scripts/verify-firmware.ps1`.
+
+The current machine had no USB-connected ESP32 boards. Upload, live UART,
+sensor, servo, Hall, relay, and prolonged power tests remain on the bench
+checklist in `firmware/README.md`.

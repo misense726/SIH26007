@@ -3,6 +3,7 @@ from backend.app.providers.base import (
     CameraProvider,
     EmergencyStopOutput,
     EnvironmentProvider,
+    IMUProvider,
     OdometryProvider,
     RadarProvider,
     RangeSensorProvider,
@@ -13,8 +14,8 @@ __all__ = [
     "CameraProvider",
     "EmergencyStopOutput",
     "EnvironmentProvider",
+    "IMUProvider",
     "OdometryProvider",
     "RadarProvider",
     "RangeSensorProvider",
 ]
-
