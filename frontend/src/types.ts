@@ -15,6 +15,7 @@ export type MapFeatureType =
   | "DESTINATION";
 export type GeometryType = "POINT" | "POLYLINE" | "POLYGON";
 export type CorridorState = "GREEN" | "YELLOW" | "RED" | "GREY";
+export type SimulationScenario = "NORMAL" | "FOG" | "OBSTACLE" | "EMERGENCY";
 
 export interface Point2D {
   x_m: number;
@@ -57,6 +58,40 @@ export interface RangeReading {
   angle_deg: number;
   range_m: number;
   quality: number;
+  max_range_m: number;
+  is_valid: boolean;
+  mode: DataMode;
+}
+
+export interface MotionState {
+  timestamp_ms: number;
+  left_hall_ticks: number;
+  right_hall_ticks: number;
+  left_distance_m: number;
+  right_distance_m: number;
+  imu_heading_deg: number;
+  imu_yaw_rate_dps: number;
+  aruco_visible: boolean;
+  localization_confidence: number;
+  provider_confidence: Record<string, number>;
+  mode: DataMode;
+}
+
+export interface VisibilityMetrics {
+  contrast: number;
+  edge_density: number;
+  brightness: number;
+  entropy: number;
+  haze_proxy: number;
+}
+
+export interface CameraState {
+  timestamp_ms: number;
+  raw_frame_id: string | null;
+  enhanced_frame_id: string | null;
+  raw_available: boolean;
+  enhancement_available: boolean;
+  metrics: VisibilityMetrics;
   mode: DataMode;
 }
 
@@ -74,7 +109,10 @@ export interface EmergencyState {
   state: EmergencyLevel;
   reason: string | null;
   nearest_obstacle_m: number | null;
+  critical_distance_m: number | null;
+  confidence: number;
   motor_cut: boolean;
+  latched_at_ms: number | null;
 }
 
 export interface SensorHealth {
@@ -83,6 +121,51 @@ export interface SensorHealth {
   last_update_ms: number;
   confidence: number;
   detail: string | null;
+}
+
+export interface RadarObject {
+  timestamp_ms: number;
+  detection_id: string;
+  range_m: number;
+  bearing_deg: number;
+  relative_velocity_mps: number;
+  confidence: number;
+  mode: DataMode;
+}
+
+export interface AlertEvent {
+  event_id: string;
+  timestamp_ms: number;
+  severity: "INFO" | "WARNING" | "CRITICAL";
+  title: string;
+  detail: string;
+  vehicle_id: string;
+}
+
+export interface RecordingState {
+  recording: boolean;
+  recording_filename: string | null;
+  replaying: boolean;
+  replay_filename: string | null;
+}
+
+export interface SimulationState {
+  running: boolean;
+  scenario: SimulationScenario;
+  speed_scale: number;
+  obstacle_enabled: boolean;
+  visibility_score: number;
+  front_scanner_angle_deg: number;
+  rear_scanner_angle_deg: number;
+}
+
+export interface SimulationControlRequest {
+  scenario?: SimulationScenario;
+  running?: boolean;
+  speed_scale?: number;
+  obstacle_enabled?: boolean;
+  visibility_score?: number;
+  reset?: boolean;
 }
 
 export interface WorldState {
@@ -94,6 +177,8 @@ export interface WorldState {
   vehicles: VehiclePose[];
   reference_map: ReferenceMap | null;
   ranges: RangeReading[];
+  motion: MotionState;
+  camera: CameraState;
   environment: EnvironmentState;
   live_objects: Array<{
     timestamp_ms: number;
@@ -105,6 +190,7 @@ export interface WorldState {
     source: string;
     mode: DataMode;
   }>;
+  radar_objects: RadarObject[];
   emergency: EmergencyState;
   sensor_health: SensorHealth[];
   safe_corridor: {
@@ -122,4 +208,20 @@ export interface WorldState {
     quality: number;
     timestamp_ms: number;
   }>;
+  occupancy: {
+    resolution_m: number;
+    origin: Point2D;
+    width: number;
+    height: number;
+    occupied_cells: Array<{
+      column: number;
+      row: number;
+      hit_count: number;
+      height_hint_m: number;
+    }>;
+    updated_at_ms: number;
+  };
+  alerts: AlertEvent[];
+  recording: RecordingState;
+  simulation: SimulationState;
 }

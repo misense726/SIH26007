@@ -27,7 +27,7 @@ class PolylineRoute:
         self.total_length_m = sum(self.segment_lengths)
 
     def sample(self, distance_m: float) -> RouteSample:
-        remaining = distance_m % self.total_length_m
+        remaining = max(0.0, min(distance_m, self.total_length_m))
         for index, segment_length in enumerate(self.segment_lengths):
             if remaining <= segment_length or index == len(self.segment_lengths) - 1:
                 start = self.points[index]

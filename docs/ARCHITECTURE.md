@@ -10,9 +10,17 @@ providers -> normalized contracts -> canonical world model -> HTTP/WebSocket
 
 The V1 internal frame uses metres. Vehicle positive X points right and positive Y points forward. The world frame is fixed local Cartesian. Heading increases clockwise from world positive Y.
 
-## M0 runtime
+## Simulation runtime
 
-`FoundationSimulator` publishes a ten-hertz `SIMULATED` heartbeat. It exercises all six range sensor identifiers and the WebSocket path without pretending that hardware is attached. Later milestones replace its simple motion with the full simulator while preserving the contracts.
+`FullSimulator` publishes the canonical `WorldState` at ten hertz. It drives the
+six configured ToFs, route motion, Hall odometry, IMU, scheduled ArUco availability,
+BMP280 environment values, camera visibility, occupancy, live-object detection,
+safe corridor, and deterministic emergency-stop output through the same provider
+contracts reserved for live and replay data.
+
+NORMAL, FOG, OBSTACLE, and EMERGENCY are fixed scenario presets. The simulation
+clock and sensor variation advance by telemetry tick, so identical controls produce
+the same values. Every simulated source remains labelled `SIMULATED`.
 
 ## Canonical map and pose
 
@@ -22,4 +30,4 @@ The simulator samples the route polyline by travelled distance. It calculates he
 
 ## Safety boundary
 
-Camera enhancement, BMP280, and simulated radar cannot trigger emergency stop by themselves. The eventual V1 motor-cut decision uses deterministic range, speed, direction, freshness, and confidence checks.
+Camera enhancement, BMP280, and simulated radar cannot trigger emergency stop by themselves. The V1 simulation uses deterministic range, speed, freshness, and confidence checks. A triggered simulated motor cut stays latched until an explicit scenario change or reset. The physical relay remains a separate bench-verified output.

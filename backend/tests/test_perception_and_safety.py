@@ -113,6 +113,18 @@ def test_emergency_stop_requires_persistent_deterministic_range() -> None:
     assert second.state == "EMERGENCY_STOP"
     assert second.motor_cut is True
 
+    clear_reading = reading.model_copy(
+        update={"timestamp_ms": 1500, "range_m": reading.max_range_m}
+    )
+    still_latched = controller.evaluate(1500, 0.0, [clear_reading])
+    assert still_latched.state == "EMERGENCY_STOP"
+    assert still_latched.motor_cut is True
+
+    controller.reset()
+    cleared = controller.evaluate(1600, 0.0, [clear_reading])
+    assert cleared.state == "SAFE"
+    assert cleared.motor_cut is False
+
 
 def test_missing_front_range_is_not_reported_safe() -> None:
     controller = EmergencyController(safety_parameters())

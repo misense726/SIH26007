@@ -21,7 +21,8 @@ The simulated foundation includes:
 - a manually defined semantic mine route with a moving dumper;
 - a camera-first driver dashboard with synthetic corridor and 360-degree ToF awareness;
 - a separate supervisor fleet map with environment, sensor health, and alerts;
-- backend and frontend tests.
+- deterministic normal, fog, obstacle, and emergency scenarios with bounded sensor values;
+- backend and frontend tests;
 - wired firmware for one ESP32 DevKit and two XIAO ESP32-C6 nodes;
 - a validated MAIN-to-laptop USB serial protocol with no wireless dependency.
 
@@ -32,6 +33,9 @@ See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for the miles
 - Python 3.11 or newer;
 - Node.js 20 or newer;
 - npm 10 or newer.
+
+Docker Desktop is optional. When available, Docker Compose runs the backend and
+production frontend without installing Python or Node dependencies on the host.
 
 Firmware work also requires Arduino CLI. `scripts/setup-firmware.ps1` installs
 the pinned ESP32 core and libraries once Arduino CLI is on `PATH`.
@@ -65,6 +69,18 @@ npm run dev
 ```
 
 Open `http://127.0.0.1:5173`.
+
+## Run with Docker
+
+From the repository root:
+
+```powershell
+docker compose up -d --build --wait
+```
+
+Open `http://127.0.0.1:8080`. The frontend container proxies `/api` and `/ws` to
+the backend container. See [docs/DOCKER.md](docs/DOCKER.md) for health and log
+commands.
 
 Backend checks:
 

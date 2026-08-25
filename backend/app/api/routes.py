@@ -4,7 +4,13 @@ import asyncio
 
 from fastapi import APIRouter, Request, WebSocket, WebSocketDisconnect
 
-from backend.app.models import ReferenceMap, SystemStatus, WorldState
+from backend.app.models import (
+    ReferenceMap,
+    SimulationControlRequest,
+    SimulationState,
+    SystemStatus,
+    WorldState,
+)
 
 
 api_router = APIRouter(prefix="/api")
@@ -28,6 +34,22 @@ async def status(request: Request) -> SystemStatus:
 @api_router.get("/world", response_model=WorldState)
 async def world(request: Request) -> WorldState:
     return await request.app.state.world_store.snapshot()
+
+
+@api_router.get("/simulation", response_model=SimulationState)
+async def simulation(request: Request) -> SimulationState:
+    return request.app.state.simulator.simulation_state()
+
+
+@api_router.post("/simulation/control", response_model=SimulationState)
+async def control_simulation(
+    request: Request,
+    control: SimulationControlRequest,
+) -> SimulationState:
+    state = await request.app.state.simulator.apply_control_and_tick(
+        **control.model_dump()
+    )
+    return state.simulation
 
 
 @api_router.get("/map", response_model=ReferenceMap)

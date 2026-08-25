@@ -19,6 +19,8 @@ describe("world selectors", () => {
     const base = {
       timestamp_ms: 1,
       angle_deg: 0,
+      max_range_m: 4,
+      is_valid: true,
       mode: "SIMULATED" as const,
     };
     expect(
@@ -30,4 +32,3 @@ describe("world selectors", () => {
     ).toBe(1.4);
   });
 });
-

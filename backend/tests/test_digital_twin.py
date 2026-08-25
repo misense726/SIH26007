@@ -33,6 +33,16 @@ def test_route_heading_uses_clockwise_degrees_from_positive_y() -> None:
     assert sample.heading_deg == pytest.approx(45.0)
 
 
+def test_open_route_clamps_before_start_and_at_destination() -> None:
+    route = PolylineRoute([Point2D(x_m=0, y_m=0), Point2D(x_m=0, y_m=2)])
+
+    before_start = route.sample(-1.0)
+    past_destination = route.sample(3.0)
+
+    assert (before_start.x_m, before_start.y_m) == pytest.approx((0.0, 0.0))
+    assert (past_destination.x_m, past_destination.y_m) == pytest.approx((0.0, 2.0))
+
+
 @pytest.mark.asyncio
 async def test_simulated_vehicle_moves_on_the_canonical_route() -> None:
     store = WorldStore()

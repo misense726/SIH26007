@@ -10,7 +10,7 @@ from backend.app import __version__
 from backend.app.api.routes import api_router, telemetry_socket
 from backend.app.config import RuntimeSettings, runtime_settings
 from backend.app.config import project_config
-from backend.app.simulation.foundation import FoundationSimulator
+from backend.app.simulation.engine import FullSimulator
 from backend.app.twin.world_store import WorldStore
 
 
@@ -21,12 +21,10 @@ def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
     async def lifespan(app: FastAPI):
         app.state.settings = active_settings
         app.state.world_store = WorldStore()
-        demo = project_config()["demo"]["demo"]
-        app.state.simulator = FoundationSimulator(
+        app.state.simulator = FullSimulator(
             app.state.world_store,
+            config=project_config(),
             telemetry_hz=active_settings.telemetry_hz,
-            map_path=demo["map_file"],
-            route_speed_mps=float(demo["route_speed_mps"]),
         )
         await app.state.simulator.start()
         try:

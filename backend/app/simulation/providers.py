@@ -34,7 +34,6 @@ from backend.app.providers.base import (
 from backend.app.visibility.metrics import (
     synthetic_visibility_frame,
     visibility_metrics,
-    visibility_score,
     visibility_state,
 )
 
@@ -42,6 +41,7 @@ from backend.app.visibility.metrics import (
 @dataclass(slots=True)
 class SimulatedScene:
     timestamp_ms: int
+    elapsed_s: float
     pose: VehiclePose
     speed_mps: float
     route_distance_m: float
@@ -108,7 +108,7 @@ class SimulatedRangeSensorProvider(RangeSensorProvider):
             hit = cast_ray(origin, world_bearing, maximum, self._segments, dynamic_circles)
             fog_penalty = max(0.0, 0.35 - scene.visibility_target) * 0.18
             quality = max(0.7, 0.97 - fog_penalty)
-            noise = 0.004 * math.sin((scene.timestamp_ms + index * 137) / 181.0)
+            noise = 0.004 * math.sin(scene.elapsed_s * 4.7 + index * 1.37)
             readings.append(
                 RangeReading(
                     timestamp_ms=first_timestamp + index * self._stagger_ms,
@@ -132,7 +132,7 @@ class SimulatedAbsolutePositionProvider(AbsolutePositionProvider):
         scene = self._scene()
         if not scene.aruco_visible:
             raise LookupError("Simulated ArUco marker is not visible")
-        phase = scene.timestamp_ms / 1000.0
+        phase = scene.elapsed_s
         return scene.pose.model_copy(
             update={
                 "x_m": scene.pose.x_m + 0.008 * math.sin(phase * 0.9),
@@ -173,7 +173,7 @@ class SimulatedIMUProvider(IMUProvider):
         scene = self._scene()
         return IMUSample(
             timestamp_ms=scene.timestamp_ms,
-            heading_deg=(scene.pose.heading_deg + 0.3 * math.sin(scene.timestamp_ms / 700.0)) % 360,
+            heading_deg=(scene.pose.heading_deg + 0.3 * math.sin(scene.elapsed_s / 0.7)) % 360,
             yaw_rate_dps=scene.yaw_rate_dps,
             acceleration_mps2=0.0,
             confidence=0.93,
@@ -189,29 +189,39 @@ class SimulatedCameraProvider(CameraProvider):
         scene = self._scene()
         frame = synthetic_visibility_frame(scene.visibility_target)
         self.last_metrics = visibility_metrics(frame)
-        score = visibility_score(self.last_metrics)
         frame_id = f"sim-camera-{scene.timestamp_ms}"
         return CameraSample(
             timestamp_ms=scene.timestamp_ms,
             frame_id=frame_id,
             source_uri=None,
-            visibility_score=score,
+            visibility_score=scene.visibility_target,
         )
 
 
 class SimulatedEnvironmentProvider(EnvironmentProvider):
-    def __init__(self, scene: SceneGetter) -> None:
+    def __init__(self, scene: SceneGetter, config: dict) -> None:
         self._scene = scene
+        self._baseline_temperature_c = float(config["baseline_temperature_c"])
+        self._temperature_variation_c = float(config["temperature_variation_c"])
+        self._baseline_pressure_hpa = float(config["baseline_pressure_hpa"])
+        self._relative_altitude_variation_m = float(
+            config["relative_altitude_variation_m"]
+        )
 
     async def read_environment(self) -> EnvironmentState:
         scene = self._scene()
-        phase = scene.timestamp_ms / 1000.0
+        phase = scene.elapsed_s
         score = scene.visibility_target
+        relative_altitude_m = self._relative_altitude_variation_m * math.sin(phase / 19.0)
+        pressure_hpa = self._baseline_pressure_hpa * (
+            1.0 - relative_altitude_m / 44330.0
+        ) ** 5.255
         return EnvironmentState(
             timestamp_ms=scene.timestamp_ms,
-            temperature_c=26.2 + math.sin(phase / 17.0) * 0.5,
-            pressure_hpa=1007.8 + math.sin(phase / 23.0) * 0.35,
-            relative_altitude_m=math.sin(phase / 19.0) * 0.28,
+            temperature_c=self._baseline_temperature_c
+            + math.sin(phase / 17.0) * self._temperature_variation_c,
+            pressure_hpa=pressure_hpa,
+            relative_altitude_m=relative_altitude_m,
             visibility_score=score,
             visibility_state=visibility_state(score),
             mode=DataMode.SIMULATED,

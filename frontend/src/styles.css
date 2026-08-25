@@ -88,7 +88,7 @@ h3 {
   z-index: 10;
   justify-content: space-between;
   min-height: 58px;
-  margin-bottom: 24px;
+  margin-bottom: 14px;
 }
 
 .brand-lockup {
@@ -154,6 +154,116 @@ h3 {
   min-width: 220px;
   justify-content: flex-end;
   gap: 9px;
+}
+
+.simulation-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 18px;
+  padding: 9px 10px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(7, 18, 14, 0.82);
+}
+
+.simulation-control-heading {
+  display: flex;
+  min-width: 155px;
+  align-items: center;
+  gap: 10px;
+}
+
+.simulation-control-heading strong {
+  font-family: var(--mono);
+  font-size: 0.7rem;
+  font-weight: 500;
+}
+
+.simulation-label {
+  padding: 6px 8px;
+  border: 1px solid var(--green);
+  border-radius: 999px;
+  color: #07110e;
+  background: var(--green);
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+}
+
+.scenario-buttons {
+  display: grid;
+  flex: 1;
+  grid-template-columns: repeat(4, minmax(72px, 1fr));
+  gap: 5px;
+}
+
+.scenario-buttons button,
+.simulation-actions button {
+  min-height: 34px;
+  border: 1px solid var(--line-strong);
+  border-radius: 8px;
+  color: #9fb2a9;
+  background: rgba(111, 150, 130, 0.05);
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 600;
+}
+
+.scenario-buttons button:hover,
+.simulation-actions button:hover {
+  color: #e5f0eb;
+  background: rgba(111, 150, 130, 0.12);
+}
+
+.scenario-buttons button.active {
+  color: #07110e;
+  border-color: var(--green);
+  background: var(--green);
+}
+
+.scenario-buttons .scenario-fog.active {
+  border-color: var(--teal);
+  background: var(--teal);
+}
+
+.scenario-buttons .scenario-obstacle.active {
+  border-color: var(--amber);
+  background: var(--amber);
+}
+
+.scenario-buttons .scenario-emergency.active {
+  color: #210704;
+  border-color: var(--red);
+  background: var(--red);
+}
+
+.scenario-buttons button:disabled,
+.simulation-actions button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.simulation-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.simulation-actions button {
+  padding: 0 12px;
+  white-space: nowrap;
+}
+
+.simulation-request-status {
+  min-width: 70px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.57rem;
+  text-align: right;
+}
+
+.simulation-request-status.status-error {
+  color: var(--red);
 }
 
 .connection,
@@ -1051,6 +1161,24 @@ footer {
     flex: 1;
   }
 
+  .simulation-controls {
+    align-items: stretch;
+    flex-wrap: wrap;
+  }
+
+  .simulation-control-heading {
+    flex: 1;
+  }
+
+  .scenario-buttons {
+    order: 3;
+    flex-basis: 100%;
+  }
+
+  .simulation-request-status {
+    display: none;
+  }
+
   .driver-instruments,
   .driver-lower-grid,
   .supervisor-lower-grid {
@@ -1089,6 +1217,27 @@ footer {
   .brand-mark,
   .connection {
     display: none;
+  }
+
+  .simulation-controls {
+    gap: 9px;
+    padding: 9px;
+  }
+
+  .simulation-control-heading {
+    min-width: 125px;
+  }
+
+  .scenario-buttons {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .simulation-actions {
+    margin-left: auto;
+  }
+
+  .simulation-actions button {
+    padding: 0 9px;
   }
 
   .camera-awareness,

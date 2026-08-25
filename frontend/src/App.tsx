@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { ConnectionPill, ModePill } from "./components/StatusPill";
 import { DriverDashboard } from "./driver/DriverDashboard";
+import { SimulationControls } from "./simulation/SimulationControls";
 import { useTelemetry } from "./state/useTelemetry";
 import { SupervisorDashboard } from "./supervisor/SupervisorDashboard";
 import "./styles.css";
@@ -46,6 +47,8 @@ export default function App() {
           <ModePill mode={world.mode} />
         </div>
       </header>
+
+      {world.mode === "SIMULATED" && <SimulationControls simulation={world.simulation} />}
 
       {view === "DRIVER" ? (
         <DriverDashboard world={world} />

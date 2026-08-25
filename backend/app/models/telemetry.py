@@ -275,8 +275,18 @@ class SimulationState(TelemetryModel):
     scenario: SimulationScenario = SimulationScenario.NORMAL
     speed_scale: float = Field(default=1.0, ge=0.0, le=3.0)
     obstacle_enabled: bool = False
+    visibility_score: float = Field(default=0.88, ge=0.0, le=1.0)
     front_scanner_angle_deg: float = 0.0
     rear_scanner_angle_deg: float = 0.0
+
+
+class SimulationControlRequest(TelemetryModel):
+    scenario: SimulationScenario | None = None
+    running: bool | None = None
+    speed_scale: float | None = Field(default=None, ge=0.0, le=3.0)
+    obstacle_enabled: bool | None = None
+    visibility_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    reset: bool = False
 
 
 class WorldState(TelemetryModel):

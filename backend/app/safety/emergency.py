@@ -52,9 +52,11 @@ class EmergencyController:
     def __init__(self, parameters: SafetyParameters) -> None:
         self.parameters = parameters
         self._emergency_candidate_since_ms: int | None = None
+        self._latched_at_ms: int | None = None
 
     def reset(self) -> None:
         self._emergency_candidate_since_ms = None
+        self._latched_at_ms = None
 
     def distances(self, speed_mps: float) -> SafetyDistances:
         braking_distance = speed_mps**2 / (2.0 * self.parameters.braking_deceleration_mps2)
@@ -92,6 +94,27 @@ class EmergencyController:
             and reading.quality >= self.parameters.confidence_floor
             and timestamp_ms - reading.timestamp_ms <= self.parameters.stale_sensor_ms
         ]
+        detected = [
+            reading for reading in valid if reading.range_m < reading.max_range_m - 0.01
+        ]
+        nearest = (
+            min(reading.range_m for reading in detected)
+            if detected
+            else max((reading.max_range_m for reading in valid), default=None)
+        )
+        confidence = min((reading.quality for reading in valid), default=0.0)
+
+        if self._latched_at_ms is not None:
+            return EmergencyState(
+                state=EmergencyLevel.EMERGENCY_STOP,
+                reason="Emergency stop remains latched until reset",
+                nearest_obstacle_m=nearest,
+                critical_distance_m=distances.critical_m,
+                confidence=confidence,
+                motor_cut=True,
+                latched_at_ms=self._latched_at_ms,
+            )
+
         if not valid:
             self._emergency_candidate_since_ms = None
             return EmergencyState(
@@ -101,20 +124,13 @@ class EmergencyController:
                 confidence=0.0,
             )
 
-        detected = [
-            reading for reading in valid if reading.range_m < reading.max_range_m - 0.01
-        ]
-        nearest = (
-            min(reading.range_m for reading in detected)
-            if detected
-            else max(reading.max_range_m for reading in valid)
-        )
-        confidence = min(reading.quality for reading in valid)
+        assert nearest is not None
         if nearest <= distances.emergency_m:
             if self._emergency_candidate_since_ms is None:
                 self._emergency_candidate_since_ms = timestamp_ms
             persisted = timestamp_ms - self._emergency_candidate_since_ms
             if persisted >= self.parameters.emergency_persistence_ms:
+                self._latched_at_ms = self._emergency_candidate_since_ms
                 return EmergencyState(
                     state=EmergencyLevel.EMERGENCY_STOP,
                     reason="Forward obstacle is inside the deterministic stop threshold",
@@ -122,7 +138,7 @@ class EmergencyController:
                     critical_distance_m=distances.critical_m,
                     confidence=confidence,
                     motor_cut=True,
-                    latched_at_ms=self._emergency_candidate_since_ms,
+                    latched_at_ms=self._latched_at_ms,
                 )
             return EmergencyState(
                 state=EmergencyLevel.CRITICAL,

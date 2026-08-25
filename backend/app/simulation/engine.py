@@ -57,36 +57,49 @@ class FullSimulator:
         self._store = store
         self._config = config
         self._interval_s = 1.0 / telemetry_hz
+        self._control_lock = asyncio.Lock()
         self._task: asyncio.Task[None] | None = None
         self._running = False
         self._movement_running = True
-        self._speed_scale = 1.0
+        demo = config["demo"]["demo"]
+        self._default_scenario = SimulationScenario(demo["default_scenario"])
+        self._speed_scale = float(demo["default_speed_scale"])
         self._route_distance_m = 0.0
+        self._tick_index = 0
+        self._elapsed_s = 0.0
+        self._timestamp_ms = now_ms()
         self._scanner_angle_deg = -80.0
         self._scanner_direction = 1.0
-        self._last_heading_deg = 0.0
-        self._visibility_target = float(config["demo"]["demo"]["default_visibility_score"])
-        demo = config["demo"]["demo"]
-        self._obstacle_enabled = bool(demo["obstacle_enabled"])
+        scenario_values = demo["scenarios"][self._default_scenario.value]
+        self._visibility_target = float(scenario_values["visibility_score"])
+        self._obstacle_enabled = bool(scenario_values["obstacle_enabled"])
         self._obstacle_position = Point2D(
             x_m=float(demo["obstacle_position_m"][0]),
             y_m=float(demo["obstacle_position_m"][1]),
         )
         self._default_obstacle_position = self._obstacle_position.model_copy()
-        self._obstacle_radius_m = 0.38
-        self._scenario = (
-            SimulationScenario.OBSTACLE if self._obstacle_enabled else SimulationScenario.NORMAL
-        )
+        self._obstacle_radius_m = float(demo["obstacle_radius_m"])
+        self._active_obstacle_radius_m = self._obstacle_radius_m
+        self._scenario = self._default_scenario
+        self._scenario_values = demo["scenarios"]
+        dropout = demo["aruco_dropout"]
+        self._aruco_dropout_period_ticks = int(dropout["period_ticks"])
+        self._aruco_dropout_start_tick = int(dropout["start_tick"])
+        self._aruco_dropout_duration_ticks = int(dropout["duration_ticks"])
         self._alerts: list[AlertEvent] = []
         self._last_emergency_level = EmergencyLevel.SAFE
         self._map_path = Path(demo["map_file"])
         self._reference_map = load_reference_map(self._map_path)
         self._route_speed_mps = float(demo["route_speed_mps"])
+        self._max_demo_speed_mps = float(
+            config["vehicle"]["vehicle"]["max_demo_speed_mps"]
+        )
         self._recording_state = RecordingState()
 
         initial_route = self._build_route(self._reference_map)
         self._route = initial_route
         initial_sample = self._route.sample(0.0)
+        self._last_heading_deg = initial_sample.heading_deg
         initial_pose = VehiclePose(
             x_m=initial_sample.x_m,
             y_m=initial_sample.y_m,
@@ -94,7 +107,8 @@ class FullSimulator:
             speed_mps=0.0,
         )
         self._scene = SimulatedScene(
-            timestamp_ms=now_ms(),
+            timestamp_ms=self._timestamp_ms,
+            elapsed_s=0.0,
             pose=initial_pose,
             speed_mps=0.0,
             route_distance_m=0.0,
@@ -102,7 +116,7 @@ class FullSimulator:
             visibility_target=self._visibility_target,
             obstacle_enabled=self._obstacle_enabled,
             obstacle_position=self._obstacle_position,
-            obstacle_radius_m=self._obstacle_radius_m,
+            obstacle_radius_m=self._active_obstacle_radius_m,
             front_scanner_angle_deg=self._scanner_angle_deg,
             rear_scanner_angle_deg=-self._scanner_angle_deg,
         )
@@ -132,7 +146,10 @@ class FullSimulator:
         )
         self.imu_provider = SimulatedIMUProvider(lambda: self._scene)
         self.camera_provider = SimulatedCameraProvider(lambda: self._scene)
-        self.environment_provider = SimulatedEnvironmentProvider(lambda: self._scene)
+        self.environment_provider = SimulatedEnvironmentProvider(
+            lambda: self._scene,
+            self._config["demo"]["demo"]["environment"],
+        )
         self.radar_provider = SimulatedRadarProvider(lambda: self._scene)
         self.emergency_output = SimulatedEmergencyStopOutput()
         self.localization = LocalizationFusion(vehicle_id=str(vehicle["id"]))
@@ -162,12 +179,12 @@ class FullSimulator:
         return self._reference_map.model_copy(deep=True)
 
     async def set_reference_map(self, reference_map: ReferenceMap) -> None:
-        route = self._build_route(reference_map)
-        save_reference_map(reference_map, self._map_path)
-        self._reference_map = reference_map.model_copy(deep=True)
-        self._route = route
-        self._route_distance_m = 0.0
-        self._configure_pipeline()
+        async with self._control_lock:
+            route = self._build_route(reference_map)
+            save_reference_map(reference_map, self._map_path)
+            self._reference_map = reference_map.model_copy(deep=True)
+            self._route = route
+            await self._reset_unlocked()
 
     async def start(self) -> None:
         if self._task is not None:
@@ -185,14 +202,49 @@ class FullSimulator:
             await task
 
     async def reset(self) -> None:
+        async with self._control_lock:
+            await self._reset_unlocked()
+
+    async def _reset_unlocked(self) -> None:
         self._route_distance_m = 0.0
+        self._tick_index = 0
+        self._elapsed_s = 0.0
+        self._timestamp_ms = now_ms()
         self._scanner_angle_deg = -80.0
         self._scanner_direction = 1.0
+        self._movement_running = True
+        self._speed_scale = float(
+            self._config["demo"]["demo"]["default_speed_scale"]
+        )
         self._alerts.clear()
         self._last_emergency_level = EmergencyLevel.SAFE
-        self.emergency_controller.reset()
-        self.occupancy.clear()
-        await self.emergency_output.set_motor_cut(False, "Simulation reset")
+        self._active_obstacle_radius_m = self._obstacle_radius_m
+        initial_sample = self._route.sample(0.0)
+        self._last_heading_deg = initial_sample.heading_deg
+        self._scene = SimulatedScene(
+            timestamp_ms=self._timestamp_ms,
+            elapsed_s=0.0,
+            pose=VehiclePose(
+                timestamp_ms=self._timestamp_ms,
+                x_m=initial_sample.x_m,
+                y_m=initial_sample.y_m,
+                heading_deg=initial_sample.heading_deg,
+                speed_mps=0.0,
+                mode=DataMode.SIMULATED,
+            ),
+            speed_mps=0.0,
+            route_distance_m=0.0,
+            yaw_rate_dps=0.0,
+            visibility_target=self._visibility_target,
+            obstacle_enabled=False,
+            obstacle_position=self._default_obstacle_position.model_copy(),
+            obstacle_radius_m=self._active_obstacle_radius_m,
+            front_scanner_angle_deg=self._scanner_angle_deg,
+            rear_scanner_angle_deg=-self._scanner_angle_deg,
+        )
+        self._configure_pipeline()
+        self._scenario = self._default_scenario
+        await self._apply_scenario(self._default_scenario)
 
     async def apply_control(
         self,
@@ -203,47 +255,83 @@ class FullSimulator:
         visibility_score: float | None = None,
         reset: bool = False,
     ) -> SimulationState:
+        async with self._control_lock:
+            return await self._apply_control_unlocked(
+                scenario=scenario,
+                running=running,
+                speed_scale=speed_scale,
+                obstacle_enabled=obstacle_enabled,
+                visibility_score=visibility_score,
+                reset=reset,
+            )
+
+    async def apply_control_and_tick(
+        self,
+        scenario: SimulationScenario | None = None,
+        running: bool | None = None,
+        speed_scale: float | None = None,
+        obstacle_enabled: bool | None = None,
+        visibility_score: float | None = None,
+        reset: bool = False,
+    ) -> WorldState:
+        async with self._control_lock:
+            await self._apply_control_unlocked(
+                scenario=scenario,
+                running=running,
+                speed_scale=speed_scale,
+                obstacle_enabled=obstacle_enabled,
+                visibility_score=visibility_score,
+                reset=reset,
+            )
+            return await self._tick_once()
+
+    async def _apply_control_unlocked(
+        self,
+        scenario: SimulationScenario | None,
+        running: bool | None,
+        speed_scale: float | None,
+        obstacle_enabled: bool | None,
+        visibility_score: float | None,
+        reset: bool,
+    ) -> SimulationState:
         if reset:
-            await self.reset()
+            await self._reset_unlocked()
+        if scenario is not None:
+            self._scenario = scenario
+            await self._apply_scenario(scenario)
         if running is not None:
             self._movement_running = running
         if speed_scale is not None:
             self._speed_scale = max(0.0, min(3.0, speed_scale))
         if obstacle_enabled is not None:
+            if self._obstacle_enabled != obstacle_enabled:
+                self.occupancy.clear()
             self._obstacle_enabled = obstacle_enabled
             if not obstacle_enabled:
                 await self.emergency_output.set_motor_cut(False, "Obstacle removed")
                 self.emergency_controller.reset()
         if visibility_score is not None:
             self._visibility_target = max(0.0, min(1.0, visibility_score))
-        if scenario is not None:
-            self._scenario = scenario
-            await self._apply_scenario(scenario)
         return self.simulation_state()
 
     async def _apply_scenario(self, scenario: SimulationScenario) -> None:
-        if scenario is SimulationScenario.NORMAL:
-            self._visibility_target = 0.9
-            self._obstacle_enabled = False
-            await self.emergency_output.set_motor_cut(False, "Normal scenario")
-            self.emergency_controller.reset()
-        elif scenario is SimulationScenario.FOG:
-            self._visibility_target = 0.18
-            self._obstacle_enabled = False
-            await self.emergency_output.set_motor_cut(False, "Fog scenario")
-            self.emergency_controller.reset()
-        elif scenario is SimulationScenario.OBSTACLE:
-            self._visibility_target = 0.72
-            self._obstacle_enabled = True
-            self._obstacle_position = self._default_obstacle_position.model_copy()
-        elif scenario is SimulationScenario.EMERGENCY:
-            self._visibility_target = 0.38
-            self._obstacle_enabled = True
+        values = self._scenario_values[scenario.value]
+        self._visibility_target = float(values["visibility_score"])
+        self._obstacle_enabled = bool(values["obstacle_enabled"])
+        self._obstacle_position = self._default_obstacle_position.model_copy()
+        self._active_obstacle_radius_m = float(
+            values.get("obstacle_radius_m", self._obstacle_radius_m)
+        )
+        self.occupancy.clear()
+        self.emergency_controller.reset()
+        await self.emergency_output.set_motor_cut(False, f"{scenario.value} scenario selected")
+        if scenario is SimulationScenario.EMERGENCY:
             pose = self._scene.pose
             radians = math.radians(pose.heading_deg)
+            obstacle_ahead_m = float(values["obstacle_ahead_m"])
             self._obstacle_position = Point2D(
-                x_m=pose.x_m + math.sin(radians) * 0.72,
-                y_m=pose.y_m + math.cos(radians) * 0.72,
+                x_m=pose.x_m + math.sin(radians) * obstacle_ahead_m,
+                y_m=pose.y_m + math.cos(radians) * obstacle_ahead_m,
             )
 
     def simulation_state(self) -> SimulationState:
@@ -252,6 +340,7 @@ class FullSimulator:
             scenario=self._scenario,
             speed_scale=self._speed_scale,
             obstacle_enabled=self._obstacle_enabled,
+            visibility_score=self._visibility_target,
             front_scanner_angle_deg=self._scanner_angle_deg,
             rear_scanner_angle_deg=-self._scanner_angle_deg,
         )
@@ -289,11 +378,24 @@ class FullSimulator:
         self._last_emergency_level = level
 
     async def tick(self) -> WorldState:
-        timestamp = now_ms()
+        async with self._control_lock:
+            return await self._tick_once()
+
+    async def _tick_once(self) -> WorldState:
+        self._tick_index += 1
+        self._elapsed_s += self._interval_s
+        self._timestamp_ms += round(self._interval_s * 1000.0)
+        timestamp = self._timestamp_ms
         speed = 0.0
         if self._movement_running and not self.emergency_output.active:
-            speed = self._route_speed_mps * self._speed_scale
-            self._route_distance_m += speed * self._interval_s
+            requested_speed = min(
+                self._route_speed_mps * self._speed_scale,
+                self._max_demo_speed_mps,
+            )
+            remaining_m = max(0.0, self._route.total_length_m - self._route_distance_m)
+            travelled_m = min(requested_speed * self._interval_s, remaining_m)
+            self._route_distance_m += travelled_m
+            speed = travelled_m / self._interval_s
         route_sample = self._route.sample(self._route_distance_m)
         heading_delta = (route_sample.heading_deg - self._last_heading_deg + 180.0) % 360.0 - 180.0
         yaw_rate = heading_delta / self._interval_s
@@ -311,6 +413,7 @@ class FullSimulator:
         self._advance_scanners()
         self._scene = SimulatedScene(
             timestamp_ms=timestamp,
+            elapsed_s=self._elapsed_s,
             pose=ground_pose,
             speed_mps=speed,
             route_distance_m=self._route_distance_m,
@@ -318,10 +421,10 @@ class FullSimulator:
             visibility_target=self._visibility_target,
             obstacle_enabled=self._obstacle_enabled,
             obstacle_position=self._obstacle_position,
-            obstacle_radius_m=self._obstacle_radius_m,
+            obstacle_radius_m=self._active_obstacle_radius_m,
             front_scanner_angle_deg=self._scanner_angle_deg,
             rear_scanner_angle_deg=-self._scanner_angle_deg,
-            aruco_visible=(timestamp // 1000) % 23 != 0,
+            aruco_visible=self._aruco_visible(),
         )
 
         odometry = await self.odometry_provider.read_odometry()
@@ -362,6 +465,7 @@ class FullSimulator:
                 sensor_id=reading.sensor_id,
                 last_update_ms=reading.timestamp_ms,
                 confidence=reading.quality,
+                detail="SIMULATED range provider",
             )
             for reading in readings
         ]
@@ -432,6 +536,16 @@ class FullSimulator:
         from backend.app.visibility.metrics import visibility_state
 
         return visibility_state(score)
+
+    def _aruco_visible(self) -> bool:
+        if self._aruco_dropout_duration_ticks <= 0:
+            return True
+        phase = self._tick_index % self._aruco_dropout_period_ticks
+        return not (
+            self._aruco_dropout_start_tick
+            <= phase
+            < self._aruco_dropout_start_tick + self._aruco_dropout_duration_ticks
+        )
 
     async def _run(self) -> None:
         while self._running:

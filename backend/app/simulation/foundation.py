@@ -92,8 +92,10 @@ class FoundationSimulator:
     async def tick(self) -> WorldState:
         timestamp = now_ms()
         self._phase = (self._phase + self._interval_s) % 60.0
-        speed = self._route_speed_mps
-        self._route_distance_m += speed * self._interval_s
+        remaining_m = max(0.0, self._route.total_length_m - self._route_distance_m)
+        travelled_m = min(self._route_speed_mps * self._interval_s, remaining_m)
+        self._route_distance_m += travelled_m
+        speed = travelled_m / self._interval_s
         route_sample = self._route.sample(self._route_distance_m)
         range_base = 2.25 + 0.18 * math.sin(self._phase)
         ranges = [

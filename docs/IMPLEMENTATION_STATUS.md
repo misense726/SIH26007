@@ -131,3 +131,35 @@ Verification:
 The current machine had no USB-connected ESP32 boards. Upload, live UART,
 sensor, servo, Hall, relay, and prolonged power tests remain on the bench
 checklist in `firmware/README.md`.
+
+## Deterministic demo and Docker stack
+
+Status: complete and launch-verified on 2026-08-25.
+
+Implemented:
+
+- the running API now uses the provider-driven `FullSimulator`;
+- NORMAL, FOG, OBSTACLE, and EMERGENCY scenario controls;
+- six bounded, staggered ToF readings derived from route and obstacle geometry;
+- coherent Hall, IMU, scheduled ArUco, BMP280, visibility, occupancy, corridor,
+  alert, and emergency-stop simulation values;
+- typed simulation control endpoints and responsive dashboard controls;
+- a two-container Docker Compose stack with FastAPI, nginx, health checks, and
+  same-origin HTTP and WebSocket proxying.
+
+Verification:
+
+- backend: 37 tests passed, including deterministic multi-tick and full-route
+  invariants;
+- frontend: 9 tests passed;
+- TypeScript and Vite production build passed;
+- Docker Compose configuration validation and image builds passed;
+- the backend and frontend containers reached healthy status;
+- `/api/health`, simulation controls, and live WebSocket updates passed through
+  the nginx service on port 8080;
+- all four scenarios returned bounded values, six healthy range channels, and
+  coherent visibility, corridor, and emergency states;
+- browser checks passed for the driver and supervisor views with no console
+  warnings or errors.
+
+Physical firmware validation remains separate from this simulated demo.
