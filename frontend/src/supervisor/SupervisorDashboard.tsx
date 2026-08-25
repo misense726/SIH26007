@@ -1,10 +1,53 @@
 import { SensorHealthList } from "../components/SensorHealthList";
 import { formatNumber, nearestRange } from "../state/selectors";
+import type { ConnectionState } from "../state/useTelemetry";
 import { TwinMap } from "../twin/TwinMap";
 import type { WorldState } from "../types";
 import { FleetCard } from "./FleetCard";
 
-export function SupervisorDashboard({ world }: { world: WorldState }) {
+interface SupervisorDashboardProps {
+  world: WorldState;
+  connection: ConnectionState;
+}
+
+export function SupervisorDashboard({ world, connection }: SupervisorDashboardProps) {
+  if (connection !== "CONNECTED") {
+    const connecting = connection === "CONNECTING";
+
+    return (
+      <section className="dashboard supervisor-dashboard" aria-label="Supervisor dashboard">
+        <div className="supervisor-summary">
+          <div>
+            <p className="eyebrow">Fleet operations</p>
+            <h2>Telemetry unavailable</h2>
+          </div>
+          <div className="summary-metrics">
+            <span><strong>--</strong> active</span>
+            <span><strong>--</strong> alerts</span>
+            <span><strong>--</strong> visibility</span>
+          </div>
+        </div>
+        <div
+          className="emergency-banner telemetry-banner"
+          role={connecting ? "status" : "alert"}
+          aria-live={connecting ? "polite" : "assertive"}
+        >
+          <strong>{connecting ? "CONNECTING" : "TELEMETRY LOST"}</strong>
+          <span>
+            {connecting
+              ? "Waiting for live fleet data."
+              : "Live fleet, environment, and safety data are unavailable."}
+          </span>
+        </div>
+        <article className="operations-card supervisor-unavailable-card">
+          <p className="eyebrow">Fleet data</p>
+          <h2>{connecting ? "Opening telemetry" : "Waiting for telemetry"}</h2>
+          <p>Current data will appear when the connection is available.</p>
+        </article>
+      </section>
+    );
+  }
+
   const nearest = nearestRange(world.ranges);
   const activeAlerts = world.emergency.state === "SAFE" ? 0 : 1;
 

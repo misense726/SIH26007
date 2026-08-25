@@ -78,10 +78,22 @@ Implemented:
 
 - camera-first driver layout with an honest unavailable state;
 - visibility-responsive synthetic road and corridor overlay;
-- vehicle-centred 360-degree ToF proximity widget;
-- speed, heading, nearest obstacle, visibility, corridor, and stop-state instruments;
-- route guidance that never tells the driver to proceed while the corridor is grey or red;
+- Auto, Camera, and ToF overlay controls, with Auto adding ToF for `LOW` and
+  `VERY_LOW` visibility;
+- vehicle-centred 360-degree ToF views drawn from backend-calibrated spatial points;
+- speed, heading, nearest obstacle, corridor, and stop-state instruments;
+- neutral dark and light themes with green reserved for safe and healthy states;
 - responsive mobile layout.
+
+Refined and browser-verified on 2026-08-25:
+
+- Driver and Supervisor views passed in light and dark modes;
+- Auto stayed camera-first in `NORMAL` and enabled ToF in `FOG`;
+- manual Camera and ToF choices worked without changing backend safety state;
+- the Driver choice survived navigation between Driver and Supervisor;
+- the 390-pixel layouts had no horizontal overflow;
+- 19 frontend tests and the TypeScript and Vite production build passed;
+- the browser console had no warnings or errors.
 
 ## M4: supervisor dashboard base
 

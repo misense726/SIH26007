@@ -1,34 +1,40 @@
 import { describe, expect, it } from "vitest";
-import { proximityPoint } from "./ProximityWidget";
+import type { SpatialPoint, VehiclePose } from "../types";
+import { spatialPointToPlot } from "./ProximityWidget";
+
+const vehicle: VehiclePose = {
+  timestamp_ms: 1,
+  vehicle_id: "DUMPER_01",
+  x_m: 0,
+  y_m: 0,
+  heading_deg: 0,
+  speed_mps: 0,
+  position_confidence: 1,
+  mode: "SIMULATED",
+};
+
+const point: SpatialPoint = {
+  timestamp_ms: 1,
+  source_sensor_id: "front_scanner",
+  x_m: 0,
+  y_m: 2,
+  height_hint_m: 0.8,
+  quality: 1,
+};
 
 describe("proximity point projection", () => {
-  it("places a forward range above the vehicle", () => {
-    const point = proximityPoint({
-      timestamp_ms: 1,
-      sensor_id: "front_scanner",
-      angle_deg: 0,
-      range_m: 2,
-      quality: 1,
-      max_range_m: 4,
-      is_valid: true,
-      mode: "SIMULATED",
-    });
-    expect(point.x).toBeCloseTo(120);
-    expect(point.y).toBeCloseTo(76);
+  it("places a forward mapped return above the vehicle", () => {
+    const projected = spatialPointToPlot(point, vehicle);
+    expect(projected.x).toBeCloseTo(120);
+    expect(projected.y).toBeCloseTo(76);
   });
 
-  it("places a right-side range to the right", () => {
-    const point = proximityPoint({
-      timestamp_ms: 1,
-      sensor_id: "right_side",
-      angle_deg: 0,
-      range_m: 1,
-      quality: 1,
-      max_range_m: 4,
-      is_valid: true,
-      mode: "SIMULATED",
-    });
-    expect(point.x).toBeCloseTo(142);
-    expect(point.y).toBeCloseTo(120);
+  it("places a right-side mapped return to the right", () => {
+    const projected = spatialPointToPlot(
+      { ...point, source_sensor_id: "right_side", x_m: 1, y_m: 0 },
+      vehicle,
+    );
+    expect(projected.x).toBeCloseTo(142);
+    expect(projected.y).toBeCloseTo(120);
   });
 });

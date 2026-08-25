@@ -29,7 +29,7 @@ export function TwinMap({ world }: { world: WorldState }) {
       >
         <defs>
           <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-            <path d="M 20 0 L 0 0 0 20" fill="none" stroke="rgba(130,153,143,.12)" />
+            <path className="map-grid-line" d="M 20 0 L 0 0 0 20" fill="none" />
           </pattern>
           <filter id="vehicle-glow" x="-100%" y="-100%" width="300%" height="300%">
             <feGaussianBlur stdDeviation="2.5" result="blur" />

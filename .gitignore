@@ -9,6 +9,7 @@ htmlcov/
 node_modules/
 frontend/dist/
 frontend/.vite/
+.pio/
 
 .env
 .env.*
@@ -23,4 +24,3 @@ maps/*.generated.json
 *.log
 Thumbs.db
 .DS_Store
-

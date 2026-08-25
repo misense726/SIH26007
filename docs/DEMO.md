@@ -9,11 +9,13 @@ that shared state.
 1. Start the backend and frontend.
 2. Confirm `/api/health` returns `ok` and the dashboard says `CONNECTED`.
 3. Open the driver view. Check that it shows `SIMULATED`, six ToF readings, the
-   moving dumper, a green corridor, 88 percent visibility, and healthy sensors.
+   moving dumper, a green corridor, and 88 percent visibility. Use the theme
+   control to check both light and dark modes.
 4. Open the supervisor view. Confirm it shows the same vehicle pose, environment,
    sensor health, corridor, and alerts.
-5. Select `FOG`. Visibility becomes 18 percent and the driver overlay becomes
-   stronger. The ToF ranges remain available.
+5. Select `FOG`. Visibility becomes 18 percent and Auto adds the ToF spatial view
+   over the camera panel. Use Camera or ToF overlay to override Auto, then return
+   to Auto.
 6. Select `OBSTACLE`. The simulator enables a fixed obstacle at the configured map
    position. ToF and simulated radar observations use the same obstacle geometry.
 7. Select `EMERGENCY`. The simulator places a close obstacle ahead of the vehicle.

@@ -1,4 +1,5 @@
 import { defaultWorldState } from "./defaultState";
+import { usableRangeReadings } from "./rangeReadings";
 import type { RangeReading, VehiclePose, WorldState } from "../types";
 
 export function primaryVehicle(world: WorldState): VehiclePose {
@@ -10,7 +11,7 @@ export function primaryVehicle(world: WorldState): VehiclePose {
 }
 
 export function nearestRange(readings: RangeReading[]): number | null {
-  const trusted = readings.filter((reading) => reading.quality >= 0.5 && reading.range_m > 0);
+  const trusted = usableRangeReadings(readings);
   return trusted.length > 0 ? Math.min(...trusted.map((reading) => reading.range_m)) : null;
 }
 
@@ -21,4 +22,3 @@ export function healthySensorCount(world: WorldState): number {
 export function formatNumber(value: number, digits = 1): string {
   return Number.isFinite(value) ? value.toFixed(digits) : "--";
 }
-

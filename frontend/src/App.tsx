@@ -1,9 +1,12 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { ConnectionPill, ModePill } from "./components/StatusPill";
+import { ThemeToggle } from "./components/ThemeToggle";
 import { DriverDashboard } from "./driver/DriverDashboard";
+import type { AwarenessMode } from "./driver/driverAwareness";
 import { SimulationControls } from "./simulation/SimulationControls";
 import { useTelemetry } from "./state/useTelemetry";
 import { SupervisorDashboard } from "./supervisor/SupervisorDashboard";
+import { applyTheme, readInitialTheme, saveTheme, type Theme } from "./theme";
 import "./styles.css";
 
 type DashboardView = "DRIVER" | "SUPERVISOR";
@@ -11,6 +14,19 @@ type DashboardView = "DRIVER" | "SUPERVISOR";
 export default function App() {
   const { world, connection } = useTelemetry();
   const [view, setView] = useState<DashboardView>("DRIVER");
+  const [awarenessMode, setAwarenessMode] = useState<AwarenessMode>("AUTO");
+  const [theme, setTheme] = useState<Theme>(() => {
+    const initialTheme = readInitialTheme();
+    applyTheme(initialTheme);
+    return initialTheme;
+  });
+
+  useEffect(() => applyTheme(theme), [theme]);
+
+  function changeTheme(nextTheme: Theme) {
+    setTheme(nextTheme);
+    saveTheme(nextTheme);
+  }
 
   return (
     <main className="app-shell">
@@ -43,17 +59,25 @@ export default function App() {
         </nav>
 
         <div className="status-row">
+          <ThemeToggle theme={theme} onChange={changeTheme} />
           <ConnectionPill state={connection} />
-          <ModePill mode={world.mode} />
+          {connection === "CONNECTED" && <ModePill mode={world.mode} />}
         </div>
       </header>
 
-      {world.mode === "SIMULATED" && <SimulationControls simulation={world.simulation} />}
+      {connection === "CONNECTED" && world.mode === "SIMULATED" && (
+        <SimulationControls simulation={world.simulation} />
+      )}
 
       {view === "DRIVER" ? (
-        <DriverDashboard world={world} />
+        <DriverDashboard
+          world={world}
+          awarenessMode={awarenessMode}
+          onAwarenessModeChange={setAwarenessMode}
+          connection={connection}
+        />
       ) : (
-        <SupervisorDashboard world={world} />
+        <SupervisorDashboard world={world} connection={connection} />
       )}
 
       <footer>

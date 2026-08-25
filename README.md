@@ -19,7 +19,8 @@ The simulated foundation includes:
 - provider interfaces for simulated, replay, and future live hardware;
 - a React and TypeScript dashboard connected to backend telemetry;
 - a manually defined semantic mine route with a moving dumper;
-- a camera-first driver dashboard with synthetic corridor and 360-degree ToF awareness;
+- a camera-first driver dashboard with Auto, Camera, and calibrated ToF spatial views;
+- saved light and dark themes with neutral surfaces and safety-only status colors;
 - a separate supervisor fleet map with environment, sensor health, and alerts;
 - deterministic normal, fog, obstacle, and emergency scenarios with bounded sensor values;
 - backend and frontend tests;

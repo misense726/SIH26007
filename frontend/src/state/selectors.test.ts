@@ -15,7 +15,7 @@ describe("world selectors", () => {
     expect(primaryVehicle(world).x_m).toBe(4);
   });
 
-  it("ignores low-quality and zero ranges", () => {
+  it("ignores invalid, non-finite, low-quality, and zero ranges", () => {
     const base = {
       timestamp_ms: 1,
       angle_deg: 0,
@@ -25,6 +25,8 @@ describe("world selectors", () => {
     };
     expect(
       nearestRange([
+        { ...base, sensor_id: "invalid", range_m: 0.05, quality: 1, is_valid: false },
+        { ...base, sensor_id: "nan", range_m: Number.NaN, quality: 1 },
         { ...base, sensor_id: "bad", range_m: 0.1, quality: 0.2 },
         { ...base, sensor_id: "zero", range_m: 0, quality: 1 },
         { ...base, sensor_id: "good", range_m: 1.4, quality: 0.9 },

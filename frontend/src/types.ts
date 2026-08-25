@@ -63,6 +63,15 @@ export interface RangeReading {
   mode: DataMode;
 }
 
+export interface SpatialPoint {
+  x_m: number;
+  y_m: number;
+  height_hint_m: number;
+  source_sensor_id: string;
+  quality: number;
+  timestamp_ms: number;
+}
+
 export interface MotionState {
   timestamp_ms: number;
   left_hall_ticks: number;
@@ -200,14 +209,7 @@ export interface WorldState {
     confidence: number;
     reason: string;
   };
-  spatial_points: Array<{
-    x_m: number;
-    y_m: number;
-    height_hint_m: number;
-    source_sensor_id: string;
-    quality: number;
-    timestamp_ms: number;
-  }>;
+  spatial_points: SpatialPoint[];
   occupancy: {
     resolution_m: number;
     origin: Point2D;
