@@ -212,6 +212,7 @@ class XiaoSensorNode {
     scanner_address_seen_ = false;
     releaseSensorFromReset(config_.scanner_xshut_pin);
     delayMicroseconds(config_.xshut_boot_us);
+    scanner_xshut_high_ = digitalRead(config_.scanner_xshut_pin) == HIGH;
     scanner_default_seen_ = probeI2cAddress(0x29);
 
     // A hardware reset returns the sensor to 0x29. Recreate the client so a
@@ -255,6 +256,10 @@ class XiaoSensorNode {
     }
     releaseSensorFromReset(xshut_pin);
     delayMicroseconds(config_.xshut_boot_us);
+    const bool xshut_high = digitalRead(xshut_pin) == HIGH;
+    if (record_fixed_a) {
+      fixed_a_xshut_high_ = xshut_high;
+    }
     const bool default_seen = probeI2cAddress(0x29);
     if (record_fixed_a) {
       fixed_a_default_seen_ = default_seen;
@@ -326,16 +331,21 @@ class XiaoSensorNode {
       return;
     }
     const bool default_after = probeI2cAddress(0x29);
+    const bool scanner_after = probeI2cAddress(config_.scanner_i2c_address);
+    const bool fixed_a_after = probeI2cAddress(config_.fixed_a_i2c_address);
     char line[176];
     const int written = snprintf(
         line, sizeof(line),
-        "[I2C-%s] scanner=%u/%u/%u fixed=%u/%u/%u default_after=%u",
+        "[I2C-%s] scanner=%u/%u/%u/%u fixed=%u/%u/%u/%u bus=%u/%u/%u",
         config_.node_id, scanner_default_seen_ ? 1U : 0U,
         scanner_init_succeeded_ ? 1U : 0U,
         scanner_address_seen_ ? 1U : 0U,
+        scanner_xshut_high_ ? 1U : 0U,
         fixed_a_default_seen_ ? 1U : 0U,
         fixed_a_init_succeeded_ ? 1U : 0U,
-        fixed_a_address_seen_ ? 1U : 0U, default_after ? 1U : 0U);
+        fixed_a_address_seen_ ? 1U : 0U,
+        fixed_a_xshut_high_ ? 1U : 0U, default_after ? 1U : 0U,
+        scanner_after ? 1U : 0U, fixed_a_after ? 1U : 0U);
     if (written <= 0 || static_cast<size_t>(written) >= sizeof(line) ||
         Serial.availableForWrite() < written + 1) {
       return;
@@ -753,9 +763,11 @@ class XiaoSensorNode {
   bool scanner_default_seen_ = false;
   bool scanner_init_succeeded_ = false;
   bool scanner_address_seen_ = false;
+  bool scanner_xshut_high_ = false;
   bool fixed_a_default_seen_ = false;
   bool fixed_a_init_succeeded_ = false;
   bool fixed_a_address_seen_ = false;
+  bool fixed_a_xshut_high_ = false;
   AcquisitionPhase acquisition_phase_ = AcquisitionPhase::kServoSettling;
   int8_t scan_direction_ = 1;
   int16_t current_angle_deg_ = 0;
