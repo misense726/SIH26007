@@ -52,7 +52,7 @@ class MiddleFixedNode {
 
   void begin() {
     Serial.begin(config_.debug_baud);
-    Serial1.begin(config_.node_uart_baud, SERIAL_8N1, config_.uart_rx_pin,
+    Serial0.begin(config_.node_uart_baud, SERIAL_8N1, config_.uart_rx_pin,
                   config_.uart_tx_pin);
 
     holdAllSensorsInReset();
@@ -268,9 +268,9 @@ class MiddleFixedNode {
     if (written <= 0 || static_cast<size_t>(written) >= capacity) {
       return;
     }
-    Serial1.write(reinterpret_cast<const uint8_t*>(packet),
+    Serial0.write(reinterpret_cast<const uint8_t*>(packet),
                   static_cast<size_t>(written));
-    Serial1.write('\n');
+    Serial0.write('\n');
 #if FOGSEN_DEBUG_LOGS
     static constexpr char kDebugPrefix[] = "[DEBUG-MIDDLE-USB] ";
     Serial.print(kDebugPrefix);
@@ -282,8 +282,8 @@ class MiddleFixedNode {
 
   void pollCommands() {
     uint8_t consumed = 0;
-    while (Serial1.available() > 0 && consumed < 64U) {
-      const int next = Serial1.read();
+    while (Serial0.available() > 0 && consumed < 64U) {
+      const int next = Serial0.read();
       if (next < 0) {
         break;
       }
