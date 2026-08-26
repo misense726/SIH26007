@@ -19,8 +19,9 @@ ESP32-C6 PlatformIO guide](https://wiki.seeedstudio.com/xiao_esp32c6_with_platfo
 ## UART and I2C
 
 Arduino-ESP32 exposes `HardwareSerial::begin(baud, config, rxPin, txPin)`. The
-nodes use an explicitly pinned `Serial1` for MAIN while USB serial remains
-available for debug output. [Arduino-ESP32 UART
+XIAO uses an explicitly pinned `Serial1` for MAIN while USB serial remains
+available for debug output. The ESP32-C3 middle node uses native UART0 through
+`Serial0`: GPIO21 is TX and GPIO20 is RX. [Arduino-ESP32 UART
 API](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/serial.html)
 
 Arduino-ESP32 supports explicit SDA/SCL assignment, clock selection, and a bus

@@ -109,7 +109,7 @@ def test_xiao_source_uses_bounded_wired_state_machines() -> None:
     assert "scheduleNodeAddressRecovery" in shared
 
     middle = (MIDDLE_ROOT / "MiddleFixedNode.h").read_text(encoding="utf-8")
-    assert "Serial1.begin" in middle
+    assert "Serial0.begin" in middle
     assert "holdAllSensorsInReset" in middle
     assert "pinMode(pin, INPUT)" in middle
     assert "runAddressSequence" in middle
