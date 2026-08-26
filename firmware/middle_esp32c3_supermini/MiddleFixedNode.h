@@ -124,6 +124,10 @@ class MiddleFixedNode {
     state.initialized = false;
     releaseSensorFromReset(xshut_pin);
     delayMicroseconds(config_.xshut_boot_us);
+    if (!probe(0x29)) {
+      holdSensorInReset(xshut_pin);
+      return false;
+    }
 
     sensor = VL53L0X();
     sensor.setBus(&Wire);

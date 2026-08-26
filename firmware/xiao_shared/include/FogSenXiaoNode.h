@@ -207,28 +207,25 @@ class XiaoSensorNode {
   bool initializeScanner(uint32_t now) {
     scanner_state_.last_init_attempt_ms = now;
     scanner_state_.initialized = false;
-    scanner_default_seen_ = false;
-    scanner_init_succeeded_ = false;
-    scanner_address_seen_ = false;
     releaseSensorFromReset(config_.scanner_xshut_pin);
     delayMicroseconds(config_.xshut_boot_us);
-    scanner_xshut_high_ = digitalRead(config_.scanner_xshut_pin) == HIGH;
-    scanner_default_seen_ = probeI2cAddress(0x29);
+    if (!probeI2cAddress(0x29)) {
+      holdSensorInReset(config_.scanner_xshut_pin);
+      return false;
+    }
 
     // A hardware reset returns the sensor to 0x29. Recreate the client so a
     // recovery does not keep trying the runtime address from the prior boot.
     scanner_sensor_ = VL53L1X();
     scanner_sensor_.setBus(&Wire);
     scanner_sensor_.setTimeout(config_.sensor_read_timeout_ms);
-    scanner_init_succeeded_ = scanner_sensor_.init();
-    if (!scanner_init_succeeded_) {
+    if (!scanner_sensor_.init()) {
       holdSensorInReset(config_.scanner_xshut_pin);
       return false;
     }
 
     scanner_sensor_.setAddress(config_.scanner_i2c_address);
-    scanner_address_seen_ = probeI2cAddress(config_.scanner_i2c_address);
-    if (!scanner_address_seen_) {
+    if (!probeI2cAddress(config_.scanner_i2c_address)) {
       holdSensorInReset(config_.scanner_xshut_pin);
       return false;
     }
@@ -248,42 +245,24 @@ class XiaoSensorNode {
       uint32_t now) {
     state.last_init_attempt_ms = now;
     state.initialized = false;
-    const bool record_fixed_a = xshut_pin == config_.fixed_a_xshut_pin;
-    if (record_fixed_a) {
-      fixed_a_default_seen_ = false;
-      fixed_a_init_succeeded_ = false;
-      fixed_a_address_seen_ = false;
-    }
     releaseSensorFromReset(xshut_pin);
     delayMicroseconds(config_.xshut_boot_us);
-    const bool xshut_high = digitalRead(xshut_pin) == HIGH;
-    if (record_fixed_a) {
-      fixed_a_xshut_high_ = xshut_high;
-    }
-    const bool default_seen = probeI2cAddress(0x29);
-    if (record_fixed_a) {
-      fixed_a_default_seen_ = default_seen;
+    if (!probeI2cAddress(0x29)) {
+      holdSensorInReset(xshut_pin);
+      return false;
     }
 
     // XSHUT also resets this sensor to 0x29, so reset the library client state.
     sensor = VL53L0X();
     sensor.setBus(&Wire);
     sensor.setTimeout(config_.sensor_read_timeout_ms);
-    const bool init_succeeded = sensor.init();
-    if (record_fixed_a) {
-      fixed_a_init_succeeded_ = init_succeeded;
-    }
-    if (!init_succeeded) {
+    if (!sensor.init()) {
       holdSensorInReset(xshut_pin);
       return false;
     }
 
     sensor.setAddress(i2c_address);
-    const bool address_seen = probeI2cAddress(i2c_address);
-    if (record_fixed_a) {
-      fixed_a_address_seen_ = address_seen;
-    }
-    if (!address_seen) {
+    if (!probeI2cAddress(i2c_address)) {
       holdSensorInReset(xshut_pin);
       return false;
     }
@@ -322,38 +301,6 @@ class XiaoSensorNode {
     acquisition_phase_ = AcquisitionPhase::kServoSettling;
     next_scan_sample_ms_ = millis() + settle_ms_;
     next_fixed_sample_ms_ = millis() + config_.fixed_only_period_ms;
-    writeAddressDiagnostics();
-  }
-
-  void writeAddressDiagnostics() {
-#if FOGSEN_DEBUG_LOGS
-    if (!Serial) {
-      return;
-    }
-    const bool default_after = probeI2cAddress(0x29);
-    const bool scanner_after = probeI2cAddress(config_.scanner_i2c_address);
-    const bool fixed_a_after = probeI2cAddress(config_.fixed_a_i2c_address);
-    char line[176];
-    const int written = snprintf(
-        line, sizeof(line),
-        "[I2C-%s] scanner=%u/%u/%u/%u fixed=%u/%u/%u/%u bus=%u/%u/%u",
-        config_.node_id, scanner_default_seen_ ? 1U : 0U,
-        scanner_init_succeeded_ ? 1U : 0U,
-        scanner_address_seen_ ? 1U : 0U,
-        scanner_xshut_high_ ? 1U : 0U,
-        fixed_a_default_seen_ ? 1U : 0U,
-        fixed_a_init_succeeded_ ? 1U : 0U,
-        fixed_a_address_seen_ ? 1U : 0U,
-        fixed_a_xshut_high_ ? 1U : 0U, default_after ? 1U : 0U,
-        scanner_after ? 1U : 0U, fixed_a_after ? 1U : 0U);
-    if (written <= 0 || static_cast<size_t>(written) >= sizeof(line) ||
-        Serial.availableForWrite() < written + 1) {
-      return;
-    }
-    Serial.write(reinterpret_cast<const uint8_t *>(line),
-                 static_cast<size_t>(written));
-    Serial.write('\n');
-#endif
   }
 
   void scheduleNodeAddressRecovery(uint32_t now) {
@@ -760,14 +707,6 @@ class XiaoSensorNode {
   bool servo_healthy_ = false;
   bool scan_enabled_ = true;
   bool address_recovery_pending_ = false;
-  bool scanner_default_seen_ = false;
-  bool scanner_init_succeeded_ = false;
-  bool scanner_address_seen_ = false;
-  bool scanner_xshut_high_ = false;
-  bool fixed_a_default_seen_ = false;
-  bool fixed_a_init_succeeded_ = false;
-  bool fixed_a_address_seen_ = false;
-  bool fixed_a_xshut_high_ = false;
   AcquisitionPhase acquisition_phase_ = AcquisitionPhase::kServoSettling;
   int8_t scan_direction_ = 1;
   int16_t current_angle_deg_ = 0;
