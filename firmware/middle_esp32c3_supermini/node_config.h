@@ -9,8 +9,8 @@ constexpr uint8_t kLeftXshutPin = 0;
 constexpr uint8_t kRightXshutPin = 1;
 constexpr uint8_t kI2cSdaPin = 4;
 constexpr uint8_t kI2cSclPin = 5;
-constexpr uint8_t kNodeUartRxPin = 20;
-constexpr uint8_t kNodeUartTxPin = 21;
+constexpr uint8_t kNodeUartRxPin = 21;
+constexpr uint8_t kNodeUartTxPin = 20;
 
 constexpr uint8_t kLeftI2cAddress = 0x31;
 constexpr uint8_t kRightI2cAddress = 0x32;
