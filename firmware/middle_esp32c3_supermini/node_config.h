@@ -39,13 +39,12 @@ const fogsen::MiddleNodeConfig kNodeConfig = {
     30,                         // i2c_bus_timeout_ms
     80,                         // sensor_read_timeout_ms
     5000,                       // sensor_retry_ms
-    2000,                       // xshut_reset_us
-    2000,                       // xshut_boot_us
+    10000,                      // xshut_reset_us
+    10000,                      // xshut_boot_us
     5,                          // inter_sensor_guard_ms
     100,                        // sample_period_ms
     20000,                      // fixed_timing_budget_us
     2000,                       // fixed_max_range_mm
-    false,                      // sensor_hardware_enabled: diagnostic bypass
 };
 
 }  // namespace fogsen_middle

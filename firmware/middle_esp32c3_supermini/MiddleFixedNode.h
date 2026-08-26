@@ -6,10 +6,6 @@
 
 #include <string.h>
 
-#ifndef FOGSEN_DEBUG_LOGS
-#define FOGSEN_DEBUG_LOGS 1
-#endif
-
 namespace fogsen {
 
 constexpr int16_t kMiddleInvalidRangeMm = -1;
@@ -43,7 +39,6 @@ struct MiddleNodeConfig {
   uint16_t sample_period_ms;
   uint32_t fixed_timing_budget_us;
   uint16_t fixed_max_range_mm;
-  bool sensor_hardware_enabled;
 };
 
 class MiddleFixedNode {
@@ -56,10 +51,8 @@ class MiddleFixedNode {
                   config_.uart_tx_pin);
 
     holdAllSensorsInReset();
-    if (config_.sensor_hardware_enabled) {
-      configureI2cBus();
-      runAddressSequence(millis());
-    }
+    configureI2cBus();
+    runAddressSequence(millis());
     next_sample_ms_ = millis();
 
     Serial.println(config_.boot_message);
@@ -271,13 +264,6 @@ class MiddleFixedNode {
     Serial0.write(reinterpret_cast<const uint8_t*>(packet),
                   static_cast<size_t>(written));
     Serial0.write('\n');
-#if FOGSEN_DEBUG_LOGS
-    static constexpr char kDebugPrefix[] = "[DEBUG-MIDDLE-USB] ";
-    Serial.print(kDebugPrefix);
-    Serial.write(reinterpret_cast<const uint8_t*>(packet),
-                 static_cast<size_t>(written));
-    Serial.write('\n');
-#endif
   }
 
   void pollCommands() {
