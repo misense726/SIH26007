@@ -3,8 +3,8 @@
 namespace {
 
 constexpr uint8_t kProbeLedPin = 8;
-constexpr uint8_t kProbeUartRxPin = 21;
-constexpr uint8_t kProbeUartTxPin = 20;
+constexpr uint8_t kProbeUartRxPin = 20;
+constexpr uint8_t kProbeUartTxPin = 21;
 constexpr uint32_t kProbeBaud = 115200;
 constexpr uint32_t kProbePeriodMs = 100;
 
