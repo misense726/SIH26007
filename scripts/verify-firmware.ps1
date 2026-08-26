@@ -37,7 +37,7 @@ try {
         "firmware/front_xiao_esp32c6"
     )
     Invoke-Checked "arduino-cli" @(
-        "compile", "--warnings", "all", "--fqbn", "esp32:esp32:esp32c3:CDCOnBoot=cdc",
+        "compile", "--warnings", "all", "--fqbn", "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashMode=dio,FlashFreq=40",
         "firmware/middle_esp32c3_supermini"
     )
     Invoke-Checked $python @(

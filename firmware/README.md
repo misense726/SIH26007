@@ -76,7 +76,7 @@ Upload with the matching FQBN and current COM port:
 
 ```powershell
 arduino-cli upload --port COM5 --fqbn esp32:esp32:XIAO_ESP32C6 firmware/front_xiao_esp32c6
-arduino-cli upload --port COM6 --fqbn "esp32:esp32:esp32c3:CDCOnBoot=cdc" firmware/middle_esp32c3_supermini
+arduino-cli upload --port COM6 --fqbn "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashMode=dio,FlashFreq=40" firmware/middle_esp32c3_supermini
 arduino-cli upload --port COM8 --fqbn esp32:esp32:esp32 firmware/main_esp32
 ```
 
