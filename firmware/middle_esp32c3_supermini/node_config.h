@@ -45,6 +45,7 @@ const fogsen::MiddleNodeConfig kNodeConfig = {
     100,                        // sample_period_ms
     20000,                      // fixed_timing_budget_us
     2000,                       // fixed_max_range_mm
+    false,                      // sensor_hardware_enabled: diagnostic bypass
 };
 
 }  // namespace fogsen_middle

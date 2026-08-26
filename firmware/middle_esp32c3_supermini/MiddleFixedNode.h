@@ -43,6 +43,7 @@ struct MiddleNodeConfig {
   uint16_t sample_period_ms;
   uint32_t fixed_timing_budget_us;
   uint16_t fixed_max_range_mm;
+  bool sensor_hardware_enabled;
 };
 
 class MiddleFixedNode {
@@ -55,8 +56,10 @@ class MiddleFixedNode {
                   config_.uart_tx_pin);
 
     holdAllSensorsInReset();
-    configureI2cBus();
-    runAddressSequence(millis());
+    if (config_.sensor_hardware_enabled) {
+      configureI2cBus();
+      runAddressSequence(millis());
+    }
     next_sample_ms_ = millis();
 
     Serial.println(config_.boot_message);
