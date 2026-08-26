@@ -13,7 +13,7 @@ Implemented:
 - all required provider interfaces;
 - backend-owned world store;
 - FastAPI health, status, world, and WebSocket endpoints;
-- simulated six-sensor telemetry heartbeat;
+- simulated range-sensor telemetry heartbeat;
 - React client with live WebSocket state;
 - backend and frontend test harnesses;
 - initial architecture, contracts, hardware, calibration, and demo docs.
@@ -24,7 +24,7 @@ Verification:
 - frontend: 1 test passed;
 - TypeScript and Vite production build passed;
 - `/api/health`, `/api/status`, `/api/world`, and `/ws/telemetry` passed;
-- browser check showed a connected client, advancing telemetry, and six healthy simulated range sensors.
+- browser check showed a connected client, advancing telemetry, and healthy simulated range sensors.
 
 Current limits:
 
@@ -115,34 +115,79 @@ Verification:
 - browser checks passed for driver, supervisor, and 390-pixel mobile layouts;
 - visible-copy audit found no implementation notes or em dashes.
 
-## Wired three-controller firmware
+## Final wired three-controller firmware
 
-Status: compile-verified on 2026-08-24; physical bench verification pending.
+Status: compile-verified on 2026-08-27; physical bench verification pending.
 
 Implemented:
 
-- MAIN firmware for a normal ESP32 DevKit/WROOM target;
-- FRONT and REAR firmware for XIAO ESP32-C6 targets;
+- BACK/MAIN firmware for a normal ESP32 DevKit/WROOM target;
+- FRONT firmware for XIAO ESP32-C6 and MIDDLE firmware for ESP32-C3 Super Mini;
+- five ToFs on three direct, controller-local I2C buses with a dedicated XSHUT GPIO
+  for every sensor;
+- ordered shutdown, default-address initialization, runtime addressing, address
+  probing, and complete node-local recovery;
 - two independent 115200-baud hardware UART links with 500 ms stale detection;
-- sequential TCA9548A ToF acquisition and discrete servo scans;
-- MPU6050, BMP280, Hall odometry, local safety state machine, and relay cut;
-- missing-sensor retries, bounded parsers, health masks, and unknown-range
-  handling;
-- wired USB laptop parser, command sender, and serial monitor;
-- no wireless or cloud dependency;
-- removal of the legacy `firmware/esp32` project.
+- sequential local ToF acquisition with configurable guards and independent
+  front and rear servo scans;
+- per-sensor sample times converted by MAIN into host-relative ages;
+- exact FRONT and MIDDLE UART masks plus the composite rear health mask;
+- MPU6050, BMP280, and the local safety state machine;
+- dormant Hall odometry and relay-cut implementations behind disabled hardware
+  profile flags;
+- unknown-range handling with no maximum-range substitution;
+- wired USB laptop protocol, command sender, and serial monitor;
+- no wireless or cloud dependency.
 
 Verification:
 
-- MAIN: 328,380 bytes flash, 35,612 bytes globals, no compiler warnings;
-- FRONT: 309,618 bytes flash, 15,860 bytes globals;
-- REAR: 309,626 bytes flash, 15,860 bytes globals;
-- 19 firmware and wired protocol contract tests passed;
-- the three compile targets pass through `scripts/verify-firmware.ps1`.
+- MAIN: 340,019 bytes flash and 35,432 bytes globals;
+- FRONT: 310,782 bytes flash and 15,876 bytes globals;
+- MIDDLE: 338,086 bytes flash and 15,332 bytes globals;
+- 32 firmware and wired protocol contract tests passed;
+- all three targets compiled with warnings enabled through
+  `scripts/verify-firmware.ps1`.
 
-The current machine had no USB-connected ESP32 boards. Upload, live UART,
-sensor, servo, Hall, relay, and prolonged power tests remain on the bench
-checklist in `firmware/README.md`.
+Arduino CLI did not identify an attached ESP32 target, and no upload was
+performed. Live XSHUT and address recovery, optical interference, servo, UART
+endurance, and power tests remain on the bench checklist in
+`firmware/README.md`. Hall and relay bench tests apply only after enabling that
+future hardware profile.
+
+## Five-sensor wired sensing-to-dashboard chain
+
+Status: software-verified on 2026-08-27; physical end-to-end verification
+pending.
+
+Implemented:
+
+- explicit `FOGSEN_MODE=LIVE` runtime with a required MAIN USB serial port;
+- MAIN packet ingestion into the canonical backend `WorldStore` used by
+  `/api/world` and `/ws/telemetry`;
+- five normalized range readings with distinct timestamps and per-sensor
+  health;
+- fail-closed handling for invalid masks, partial forward coverage, repeated or
+  out-of-order packets, controller restart, serial failure, and host-side stale
+  timeout;
+- five invalid zero-quality readings, stale or offline health, a grey corridor,
+  and a warning whenever the live stream cannot verify safety;
+- supervisor and driver views that count only the five ToFs and ignore MAIN's
+  local MPU6050 and BMP280 health when reporting range coverage;
+- saved light and dark dashboard images with the final sensor names and counts.
+
+Verification:
+
+- backend: 50 tests passed, including fake-serial packet to API and WebSocket,
+  host stale timeout, serial-open failure, duplicate rejection, and controller
+  restart;
+- frontend: 21 tests passed and the TypeScript/Vite production build passed;
+- browser checks showed five named ToFs, `5/5` health, Auto low-visibility ToF
+  activation, neutral light and dark themes, and no console warnings or errors.
+
+The software tests use a fake serial reader. They do not prove a physical MAIN
+packet reached the dashboard. Camera, ArUco absolute localization, and radar are
+not part of this serial runtime. Without an absolute pose source, `LIVE`
+position confidence stays zero and the live corridor remains grey.
 
 ## Deterministic demo and Docker stack
 
@@ -152,7 +197,7 @@ Implemented:
 
 - the running API now uses the provider-driven `FullSimulator`;
 - NORMAL, FOG, OBSTACLE, and EMERGENCY scenario controls;
-- six bounded, staggered ToF readings derived from route and obstacle geometry;
+- five bounded, staggered ToF readings derived from route and obstacle geometry;
 - coherent Hall, IMU, scheduled ArUco, BMP280, visibility, occupancy, corridor,
   alert, and emergency-stop simulation values;
 - typed simulation control endpoints and responsive dashboard controls;
@@ -169,7 +214,7 @@ Verification:
 - the backend and frontend containers reached healthy status;
 - `/api/health`, simulation controls, and live WebSocket updates passed through
   the nginx service on port 8080;
-- all four scenarios returned bounded values, six healthy range channels, and
+- all four scenarios returned bounded values, five healthy range channels, and
   coherent visibility, corridor, and emergency states;
 - browser checks passed for the driver and supervisor views with no console
   warnings or errors.

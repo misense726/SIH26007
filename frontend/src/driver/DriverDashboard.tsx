@@ -36,6 +36,11 @@ export function DriverDashboard({
     vehicle,
   );
   const emergencyClass = world.emergency.state.toLowerCase().replace("_", "-");
+  const compactStopState = !telemetryConnected
+    ? "OFFLINE"
+    : world.emergency.state === "EMERGENCY_STOP"
+      ? "STOPPED"
+      : world.emergency.state;
   const corridorState = telemetryConnected ? world.safe_corridor.state : "GREY";
 
   return (
@@ -98,7 +103,7 @@ export function DriverDashboard({
             <article>
               <span>Stop system</span>
               <strong className={telemetryConnected ? `emergency-${emergencyClass}` : "corridor-grey"}>
-                {telemetryConnected ? world.emergency.state.replaceAll("_", " ") : "UNAVAILABLE"}
+                {compactStopState}
               </strong>
             </article>
           </div>

@@ -39,6 +39,14 @@ def test_ray_cast_hits_circle_before_boundary() -> None:
     assert hit.distance_m == pytest.approx(2.5)
 
 
+def test_ray_cast_origin_inside_circle_reports_immediate_hit() -> None:
+    origin = Point2D(x_m=0.0, y_m=0.0)
+    circle = CircleTarget("overlap", Point2D(x_m=0.1, y_m=0.1), radius_m=0.5)
+    hit = cast_ray(origin, 0.0, 4.0, [], [circle])
+    assert hit.target_id == "overlap"
+    assert hit.distance_m == 0.0
+
+
 def test_occupancy_accumulates_valid_hits_only() -> None:
     accumulator = OccupancyAccumulator(
         {"front": SensorTransform("front", 0, 0, 0)},

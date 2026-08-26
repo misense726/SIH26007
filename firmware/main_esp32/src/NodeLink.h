@@ -10,7 +10,7 @@ namespace fogsen {
 
 enum class NodeRole : uint8_t {
   kFront,
-  kRear,
+  kMiddle,
 };
 
 enum class NodeLinkHealth : uint8_t {
@@ -24,9 +24,10 @@ namespace node_health_bits {
 constexpr uint8_t kScanner = 1U << 0;
 constexpr uint8_t kFixedA = 1U << 1;
 constexpr uint8_t kFixedB = 1U << 2;
-constexpr uint8_t kTca = 1U << 3;
-constexpr uint8_t kServo = 1U << 4;
-constexpr uint8_t kAll = kScanner | kFixedA | kFixedB | kTca | kServo;
+constexpr uint8_t kServo = 1U << 3;
+constexpr uint8_t kFrontExpected = kScanner | kFixedA | kServo;
+constexpr uint8_t kMiddleExpected = kFixedA | kFixedB;
+constexpr uint8_t kBackExpected = kScanner | kFixedA | kFixedB | kServo;
 }  // namespace node_health_bits
 
 struct NodePacket {
@@ -35,8 +36,11 @@ struct NodePacket {
   uint32_t receivedMs;
   int16_t angleDeg;
   int16_t scanMm;
+  uint32_t scanMs;
   int16_t fixedAMm;
+  uint32_t fixedAMs;
   int16_t fixedBMm;
+  uint32_t fixedBMs;
   uint8_t healthMask;
 };
 
@@ -72,6 +76,17 @@ class NodeLink {
   const char* nodeName() const;
   const char* fixedAKey() const { return fixedAKey_; }
   const char* fixedBKey() const { return fixedBKey_; }
+  bool hasFixedB() const { return fixedBKey_ != nullptr; }
+  bool hasScanner() const { return role_ == NodeRole::kFront; }
+  const char* fixedAMsKey() const {
+    return role_ == NodeRole::kFront ? "front_ms" : "left_ms";
+  }
+  const char* fixedBMsKey() const { return "right_ms"; }
+  const char* fixedAAgeKey() const {
+    return role_ == NodeRole::kFront ? "front_age" : "left_age";
+  }
+  const char* fixedBAgeKey() const { return "right_age"; }
+  uint8_t expectedHealthMask() const;
 
  private:
   bool handleLine(uint32_t nowMs);

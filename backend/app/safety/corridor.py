@@ -92,11 +92,11 @@ class CorridorEvaluator:
             sum(health_confidences) / len(health_confidences) if health_confidences else 0.0
         )
         confidence = min(pose.position_confidence, sensor_confidence)
-        any_stale = any(
-            health.status in {SensorStatus.STALE, SensorStatus.OFFLINE} for health in sensor_health
+        any_unverified = any(
+            health.status is not SensorStatus.HEALTHY for health in sensor_health
         )
 
-        if not sensor_health or confidence < self.confidence_floor or any_stale:
+        if not sensor_health or confidence < self.confidence_floor or any_unverified:
             state = CorridorState.GREY
             reason = "Sensor confidence is too low to verify the corridor"
         elif not self.road.covers(vehicle_point):

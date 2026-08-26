@@ -329,3 +329,6 @@ class SystemStatus(TelemetryModel):
     world_sequence: int = 0
     recording: bool = False
     replaying: bool = False
+    runtime_detail: str | None = None
+    serial_port: str | None = None
+    last_telemetry_ms: int | None = Field(default=None, ge=0)

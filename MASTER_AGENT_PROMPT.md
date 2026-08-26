@@ -24,18 +24,22 @@ FogSen should demonstrate:
 
 The V1 hardware is:
 - 2 × servo-scanned VL53L1X;
-- 4 × fixed VL53L0X;
-- 2 × servos;
+- 3 × fixed VL53L0X V2;
+- 2 × SG90 servos;
+- 1 × XIAO ESP32-C6 FRONT node;
+- 1 × ESP32-C3 Super Mini MIDDLE node;
+- 1 × normal ESP32 BACK/MAIN controller;
 - MPU6050;
-- 2 × Hall wheel sensors;
 - BMP280;
 - Raspberry Pi Zero;
 - RGB Pi camera;
 - overhead camera + ArUco;
-- ESP32;
-- relay/motor cut;
+- reserved Hall wheel sensor and relay/motor-cut support, disabled in the
+  current physical profile;
 - RC car;
 - GPU-capable laptop.
+
+The VL53LDK remains unused.
 
 Production architecture is:
 
@@ -304,7 +308,7 @@ Architecture must support multiple dumpers.
 
 Simulate:
 - two scanning ToFs;
-- four fixed ToFs;
+- three fixed ToFs;
 - Hall ticks;
 - IMU;
 - ArUco;
@@ -476,7 +480,7 @@ Use USB serial first.
 Receive:
 - front scanner angle/range;
 - rear scanner angle/range;
-- four fixed ranges;
+- three fixed ranges;
 - Hall counts;
 - MPU6050;
 - BMP280;
@@ -498,11 +502,10 @@ Then:
 
 ## Feature 18 — Fixed ToFs
 
-Integrate four VL53L0X.
+Integrate three VL53L0X V2 sensors.
 
 Show:
-- front-left;
-- front-right;
+- front;
 - left;
 - right;
 - danger zones.

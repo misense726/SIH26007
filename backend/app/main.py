@@ -8,29 +8,50 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app import __version__
 from backend.app.api.routes import api_router, telemetry_socket
-from backend.app.config import RuntimeSettings, runtime_settings
-from backend.app.config import project_config
+from backend.app.config import RuntimeSettings, load_project_config, runtime_settings
+from backend.app.live_runtime import LiveSerialRuntime, SerialFactory
 from backend.app.simulation.engine import FullSimulator
 from backend.app.twin.world_store import WorldStore
 
 
-def create_app(settings: RuntimeSettings | None = None) -> FastAPI:
+def create_app(
+    settings: RuntimeSettings | None = None,
+    serial_factory: SerialFactory | None = None,
+) -> FastAPI:
     active_settings = settings or runtime_settings()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI):
         app.state.settings = active_settings
         app.state.world_store = WorldStore()
-        app.state.simulator = FullSimulator(
-            app.state.world_store,
-            config=project_config(),
-            telemetry_hz=active_settings.telemetry_hz,
-        )
-        await app.state.simulator.start()
+        config = load_project_config(active_settings)
+        if active_settings.runtime_mode == "LIVE":
+            assert active_settings.serial_port is not None
+            app.state.simulator = None
+            app.state.runtime = LiveSerialRuntime(
+                app.state.world_store,
+                config=config,
+                port=active_settings.serial_port,
+                baud=active_settings.serial_baud,
+                stale_timeout_ms=active_settings.serial_stale_ms,
+                poll_interval_ms=active_settings.serial_poll_interval_ms,
+                reconnect_ms=active_settings.serial_reconnect_ms,
+                **({"serial_factory": serial_factory} if serial_factory else {}),
+            )
+            app.state.live_runtime = app.state.runtime
+        else:
+            app.state.simulator = FullSimulator(
+                app.state.world_store,
+                config=config,
+                telemetry_hz=active_settings.telemetry_hz,
+            )
+            app.state.runtime = app.state.simulator
+            app.state.live_runtime = None
+        await app.state.runtime.start()
         try:
             yield
         finally:
-            await app.state.simulator.stop()
+            await app.state.runtime.stop()
 
     app = FastAPI(
         title="FogSen API",

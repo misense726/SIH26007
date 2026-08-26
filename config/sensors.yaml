@@ -1,12 +1,13 @@
+# Simulation-only global staggering. Physical ToF timing is
+# configured independently in FRONT, MIDDLE, and BACK/MAIN firmware.
 acquisition:
   stagger_ms: 8
   sequence:
-    - front_left
-    - front_right
+    - front_scanner
+    - front_fixed
+    - rear_scanner
     - left_side
     - right_side
-    - front_scanner
-    - rear_scanner
 
 sensors:
   front_scanner:
@@ -27,16 +28,10 @@ sensors:
     servo_center_deg: 0.0
     range_offset_m: 0.0
     max_range_m: 4.0
-  front_left:
+  front_fixed:
     type: VL53L0X
-    position_m: [-0.26, 0.48]
-    orientation_deg: -25.0
-    range_offset_m: 0.0
-    max_range_m: 2.0
-  front_right:
-    type: VL53L0X
-    position_m: [0.26, 0.48]
-    orientation_deg: 25.0
+    position_m: [0.0, 0.48]
+    orientation_deg: 0.0
     range_offset_m: 0.0
     max_range_m: 2.0
   left_side:
@@ -60,4 +55,3 @@ localization:
 environment:
   bmp280_startup_baseline: true
   altitude_label: approximate_relative
-

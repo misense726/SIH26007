@@ -19,10 +19,36 @@ Every telemetry payload includes a source mode:
 - `EnvironmentState`;
 - `LiveObject` values;
 - `EmergencyState`;
-- per-sensor `SensorHealth`.
+- per-sensor `SensorHealth`;
 - the safe corridor and spatial point collections used by later milestones.
 
 The HTTP endpoint `/api/world` and WebSocket endpoint `/ws/telemetry` serialize the same model.
+
+## V1 range sensors
+
+The canonical range sensor identifiers are:
+
+- `front_scanner`;
+- `front_fixed`;
+- `rear_scanner`;
+- `left_side`;
+- `right_side`.
+
+Live, simulated, and replay providers publish the same five identifiers. Each
+range keeps its own timestamp, validity, quality, angle, and source mode. A
+missing, rejected, timed-out, or out-of-range sample remains present as invalid
+or unknown data. Providers never substitute the configured maximum range.
+
+MAIN's `estop.coverage` field is the authoritative forward-safety result in
+`LIVE` mode. It includes the bounded cache of the last valid in-sector scanner
+sample while the servo is outside that sector. The backend also requires fresh,
+healthy front components, but it does not infer coverage from the current
+side-looking scanner value.
+
+Current MAIN packets set `wheel.enabled` and `estop.output_enabled` to zero.
+The live adapter assigns zero confidence to Hall odometry and does not integrate
+wheel distance. It also distinguishes an internal stop request from a physical
+relay cut. Simulated packets keep exercising both interfaces for future use.
 
 ## Units
 

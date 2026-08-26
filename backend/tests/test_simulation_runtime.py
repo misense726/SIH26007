@@ -129,7 +129,7 @@ async def test_normal_simulation_is_bounded_coherent_and_explicitly_simulated() 
         assert state.simulation.visibility_score == pytest.approx(0.88)
 
         assert [reading.sensor_id for reading in state.ranges] == expected_ids
-        assert len(state.ranges) == 6
+        assert len(state.ranges) == 5
         timestamps = [reading.timestamp_ms for reading in state.ranges]
         assert all(
             later - earlier == config["sensors"]["acquisition"]["stagger_ms"]
@@ -181,7 +181,7 @@ async def test_normal_simulation_is_bounded_coherent_and_explicitly_simulated() 
         assert state.camera.raw_frame_id is not None
         assert 0.0 <= state.camera.metrics.contrast <= 1.0
         assert 0.0 <= state.camera.metrics.haze_proxy <= 1.0
-        assert len(state.sensor_health) == 6
+        assert len(state.sensor_health) == 5
         assert all(health.status is SensorStatus.HEALTHY for health in state.sensor_health)
         assert all(health.detail == "SIMULATED range provider" for health in state.sensor_health)
         assert state.safe_corridor.state is CorridorState.GREEN

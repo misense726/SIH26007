@@ -2,7 +2,11 @@
 
 Calibration belongs in YAML under `config/`, not in sensor or mapping code.
 
-`sensors.yaml` stores sensor position, orientation, servo limits, servo center, range offset, maximum range, stagger timing, and ArUco or IMU offsets. `vehicle.yaml` stores wheel geometry. `safety.yaml` stores clearance and stop thresholds.
+`sensors.yaml` stores the simulation's five-sensor acquisition order and
+stagger timing, plus shared position, orientation, servo, range, ArUco, and IMU
+calibration. Physical timing lives in FRONT `node_config.h`, MIDDLE
+`node_config.h`, and BACK/MAIN `FirmwareConfig.h`. `vehicle.yaml` stores wheel
+geometry. `safety.yaml` stores clearance and stop thresholds.
 
 Before a live run:
 
@@ -13,4 +17,3 @@ Before a live run:
 5. measure wheel circumference under vehicle load;
 6. set the BMP280 startup baseline in stationary air;
 7. validate every transform against a known point.
-

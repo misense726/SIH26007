@@ -1,5 +1,11 @@
 import { SensorHealthList } from "../components/SensorHealthList";
-import { formatNumber, nearestRange } from "../state/selectors";
+import { availableRangeReadings } from "../state/rangeReadings";
+import {
+  formatNumber,
+  nearestRange,
+  tofSensorHealth,
+  tofSensorHealthSummary,
+} from "../state/selectors";
 import type { ConnectionState } from "../state/useTelemetry";
 import { TwinMap } from "../twin/TwinMap";
 import type { WorldState } from "../types";
@@ -48,8 +54,12 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
     );
   }
 
-  const nearest = nearestRange(world.ranges);
+  const nearest = nearestRange(
+    availableRangeReadings(world.ranges, world.sensor_health, true),
+  );
   const activeAlerts = world.emergency.state === "SAFE" ? 0 : 1;
+  const tofSensors = tofSensorHealth(world.sensor_health);
+  const sensorSummary = tofSensorHealthSummary(world.sensor_health);
 
   return (
     <section className="dashboard supervisor-dashboard" aria-label="Supervisor dashboard">
@@ -115,9 +125,9 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
               <p className="eyebrow">Acquisition status</p>
               <h2>Range sensors</h2>
             </div>
-            <span className="source-badge">6 channels</span>
+            <span className="source-badge">{sensorSummary.total} ToF sensors</span>
           </div>
-          <SensorHealthList sensors={world.sensor_health} />
+          <SensorHealthList sensors={tofSensors} />
         </article>
 
         <article className="operations-card alerts-card">

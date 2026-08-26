@@ -28,8 +28,13 @@ constexpr float kResetMaxSpeedMps = 0.03F;
 // configured for forward travel. Change only after adding direction feedback.
 constexpr int kConfiguredTravelDirection = 1;  // 1=FORWARD, -1=REVERSE, 0=UNKNOWN
 
-constexpr bool kRequireHealthyFixedPairForForward = true;
-constexpr uint8_t kMinimumValidForwardRanges = 1;
+constexpr uint8_t kMinimumValidForwardRanges = 2;
+
+// One full healthy excursion from +50 through +80 and back to +50 takes six
+// node cycles. The longest permitted cycle is 285 ms: 120 ms servo settle,
+// 80 ms scanner timeout, 5 ms optical guard, and 80 ms fixed-sensor timeout.
+// Keep the last valid in-sector scanner sample beyond that 1710 ms excursion.
+constexpr uint32_t kForwardScannerEvidenceStaleMs = 1800;
 
 // Most single-channel relay boards are active-high. Confirm the exact module
 // on the bench. The setup guide explains the external boot-state bias resistor.

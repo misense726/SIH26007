@@ -10,7 +10,7 @@ NodeLink::NodeLink(NodeRole role, const char* fixedAKey, const char* fixedBKey)
     : role_(role),
       fixedAKey_(fixedAKey),
       fixedBKey_(fixedBKey),
-      packet_{0, 0, 0, 0, -1, -1, -1, 0},
+      packet_{0, 0, 0, 0, -1, 0, -1, 0, -1, 0, 0},
       stats_{0, 0, 0, 0, 0, 0, 0, 0, 0},
       hasPacket_(false),
       line_{0},
@@ -20,7 +20,12 @@ NodeLink::NodeLink(NodeRole role, const char* fixedAKey, const char* fixedBKey)
       document_() {}
 
 const char* NodeLink::nodeName() const {
-  return role_ == NodeRole::kFront ? "FRONT" : "REAR";
+  return role_ == NodeRole::kFront ? "FRONT" : "MIDDLE";
+}
+
+uint8_t NodeLink::expectedHealthMask() const {
+  return role_ == NodeRole::kFront ? node_health_bits::kFrontExpected
+                                   : node_health_bits::kMiddleExpected;
 }
 
 void NodeLink::poll(Stream& serial, uint32_t nowMs) {
@@ -141,14 +146,22 @@ bool NodeLink::handleLine(uint32_t nowMs) {
   }
 
   if (!object["seq"].is<uint32_t>() || !object["ms"].is<uint32_t>() ||
-      !object["a"].is<int>() || !object["ok"].is<int>()) {
+      (hasScanner() &&
+       (!object["a"].is<int>() || !object["scan_ms"].is<uint32_t>())) ||
+      !object[fixedAMsKey()].is<uint32_t>() ||
+      (hasFixedB() && !object[fixedBMsKey()].is<uint32_t>()) ||
+      !object["ok"].is<int>()) {
     ++stats_.schemaErrors;
     return false;
   }
 
-  const int angle = object["a"].as<int>();
+  const int angle = hasScanner() ? object["a"].as<int>() : 0;
   const int healthMask = object["ok"].as<int>();
-  if (angle < -90 || angle > 90 || healthMask < 0 || healthMask > 255) {
+  const uint8_t unexpectedHealthBits =
+      static_cast<uint8_t>(healthMask) &
+      static_cast<uint8_t>(~expectedHealthMask());
+  if (angle < -90 || angle > 90 || healthMask < 0 || healthMask > 255 ||
+      unexpectedHealthBits != 0U) {
     ++stats_.schemaErrors;
     return false;
   }
@@ -156,9 +169,11 @@ bool NodeLink::handleLine(uint32_t nowMs) {
   int16_t scanMm = -1;
   int16_t fixedAMm = -1;
   int16_t fixedBMm = -1;
-  if (!readRange(object, "scan", config::kScannerMaxMm, scanMm) ||
+  if ((hasScanner() &&
+       !readRange(object, "scan", config::kScannerMaxMm, scanMm)) ||
       !readRange(object, fixedAKey_, config::kFixedMaxMm, fixedAMm) ||
-      !readRange(object, fixedBKey_, config::kFixedMaxMm, fixedBMm)) {
+      (hasFixedB() &&
+       !readRange(object, fixedBKey_, config::kFixedMaxMm, fixedBMm))) {
     ++stats_.schemaErrors;
     return false;
   }
@@ -174,8 +189,11 @@ bool NodeLink::handleLine(uint32_t nowMs) {
   packet_.receivedMs = nowMs;
   packet_.angleDeg = static_cast<int16_t>(angle);
   packet_.scanMm = scanMm;
+  packet_.scanMs = hasScanner() ? object["scan_ms"].as<uint32_t>() : 0U;
   packet_.fixedAMm = fixedAMm;
+  packet_.fixedAMs = object[fixedAMsKey()].as<uint32_t>();
   packet_.fixedBMm = fixedBMm;
+  packet_.fixedBMs = hasFixedB() ? object[fixedBMsKey()].as<uint32_t>() : 0U;
   packet_.healthMask = static_cast<uint8_t>(healthMask);
   hasPacket_ = true;
   ++stats_.acceptedPackets;
@@ -197,7 +215,7 @@ NodeLinkHealth NodeLink::health(uint32_t nowMs) const {
   if (!isFresh(nowMs)) {
     return NodeLinkHealth::kStale;
   }
-  return (packet_.healthMask & node_health_bits::kAll) == node_health_bits::kAll
+  return (packet_.healthMask & expectedHealthMask()) == expectedHealthMask()
              ? NodeLinkHealth::kHealthy
              : NodeLinkHealth::kDegraded;
 }

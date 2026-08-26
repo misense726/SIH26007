@@ -1,6 +1,17 @@
 import { defaultWorldState } from "./defaultState";
 import { usableRangeReadings } from "./rangeReadings";
-import type { RangeReading, VehiclePose, WorldState } from "../types";
+import type { RangeReading, SensorHealth, VehiclePose, WorldState } from "../types";
+
+export const EXPECTED_TOF_SENSOR_COUNT = 5;
+export const TOF_SENSOR_IDS = [
+  "front_scanner",
+  "front_fixed",
+  "rear_scanner",
+  "left_side",
+  "right_side",
+] as const;
+
+const TOF_SENSOR_ID_SET = new Set<string>(TOF_SENSOR_IDS);
 
 export function primaryVehicle(world: WorldState): VehiclePose {
   return (
@@ -17,6 +28,31 @@ export function nearestRange(readings: RangeReading[]): number | null {
 
 export function healthySensorCount(world: WorldState): number {
   return world.sensor_health.filter((sensor) => sensor.status === "HEALTHY").length;
+}
+
+export function tofSensorHealth(sensors: SensorHealth[]): SensorHealth[] {
+  const healthById = new Map(
+    sensors
+      .filter((sensor) => TOF_SENSOR_ID_SET.has(sensor.sensor_id))
+      .map((sensor) => [sensor.sensor_id, sensor]),
+  );
+
+  return TOF_SENSOR_IDS.flatMap((sensorId) => {
+    const sensor = healthById.get(sensorId);
+    return sensor ? [sensor] : [];
+  });
+}
+
+export function tofSensorHealthSummary(sensors: SensorHealth[]): {
+  healthy: number;
+  total: number;
+} {
+  const tofSensors = tofSensorHealth(sensors);
+
+  return {
+    healthy: tofSensors.filter((sensor) => sensor.status === "HEALTHY").length,
+    total: EXPECTED_TOF_SENSOR_COUNT,
+  };
 }
 
 export function formatNumber(value: number, digits = 1): string {

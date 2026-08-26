@@ -16,6 +16,27 @@ def test_config_loader_reads_vehicle_configuration() -> None:
     assert config["frames"]["vehicle"]["y_axis"] == "forward"
 
 
+def test_sensor_configuration_matches_the_five_tof_layout() -> None:
+    settings = RuntimeSettings(config_dir=PROJECT_ROOT / "config")
+    config = load_yaml("sensors.yaml", settings)
+    expected_ids = [
+        "front_scanner",
+        "front_fixed",
+        "rear_scanner",
+        "left_side",
+        "right_side",
+    ]
+    assert config["acquisition"]["sequence"] == expected_ids
+    assert set(config["sensors"]) == set(expected_ids)
+    assert config["sensors"]["front_fixed"] == {
+        "type": "VL53L0X",
+        "position_m": [0.0, 0.48],
+        "orientation_deg": 0.0,
+        "range_offset_m": 0.0,
+        "max_range_m": 2.0,
+    }
+
+
 def test_contract_rejects_unknown_fields() -> None:
     payload = {
         "sensor_id": "front_scanner",
@@ -55,5 +76,5 @@ def test_health_status_world_and_websocket() -> None:
             telemetry = socket.receive_json()
             assert telemetry["schema_version"] == "1.0"
             assert telemetry["mode"] == "SIMULATED"
-            assert len(telemetry["ranges"]) == 6
+            assert len(telemetry["ranges"]) == 5
             assert telemetry["reference_map"]["map_id"] == "FOGSEN_TEST_ROUTE_01"

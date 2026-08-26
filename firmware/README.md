@@ -3,118 +3,93 @@
 FogSen uses three controllers and no wireless transport:
 
 ```text
-FRONT XIAO ESP32-C6 -- 115200 UART --\
-                                      MAIN ESP32 -- USB serial -- laptop
-REAR  XIAO ESP32-C6 -- 115200 UART --/
+FRONT XIAO ESP32-C6 ------- 115200 UART -------\
+                                                    BACK/MAIN ESP32 -- USB -- laptop
+MIDDLE ESP32-C3 Super Mini - 115200 UART -------/
 ```
 
-MAIN owns the relay motor cut and keeps evaluating safety if the laptop is
-closed or unplugged. The XIAO boards only read their three ToF sensors and move
-their scanner servos.
+BACK/MAIN also reads the local rear scanner and moves its servo. MAIN keeps
+evaluating safety when the laptop is disconnected. Hall odometry and relay
+motor-cut code remain available but are disabled in the current profile.
 
-## First build
+## Projects
 
-Run these commands from the repository root:
+- `front_xiao_esp32c6`: front scanner, fixed-front ToF, and front SG90;
+- `middle_esp32c3_supermini`: fixed left and right ToFs;
+- `main_esp32`: rear scanner, rear SG90, sensor aggregation, safety, and USB;
+- `xiao_shared`: the FRONT scanner and fixed-ToF state machine.
+
+Run the full build from the repository root:
 
 ```powershell
 .\scripts\setup-firmware.ps1
 .\scripts\verify-firmware.ps1
 ```
 
-The setup script pins ESP32 Arduino core 3.3.11 and every direct library. The
-verification script compiles MAIN, FRONT, and REAR one at a time, then runs the
-firmware and laptop protocol tests.
+## Controller links
 
-## Projects
+| Link | Wire |
+|---|---|
+| FRONT to MAIN | FRONT D6 / GPIO16 TX to MAIN GPIO16 RX |
+| MAIN to FRONT | MAIN GPIO17 TX to FRONT D7 / GPIO17 RX |
+| MIDDLE to MAIN | MIDDLE GPIO21 TX to MAIN GPIO26 RX |
+| MAIN to MIDDLE | MAIN GPIO27 TX to MIDDLE GPIO20 RX |
 
-- `main_esp32`: normal ESP32 DevKit or ESP32-WROOM target;
-- `front_xiao_esp32c6`: front scanner and front fixed ToFs;
-- `rear_xiao_esp32c6`: rear scanner and side fixed ToFs;
-- `xiao_shared`: shared XIAO acquisition state machine and UART contract.
+Use 115200-baud 3.3 V UART and cross TX to RX. Join FRONT, MIDDLE, MAIN, sensor,
+and servo-supply grounds. FRONT and MIDDLE have no direct data link.
 
-Each project has its own wiring, upload, packet, and bench-test notes in its
-README.
+## Pin summary
 
-## Controller wiring
+FRONT uses D0 scanner XSHUT, D1 fixed-front XSHUT, D2 SG90, D4/D5 I2C, and
+D6/D7 UART.
 
-| Link | Transmit pin | Receive pin |
-|---|---|---|
-| FRONT to MAIN | FRONT D6 / GPIO16 | MAIN GPIO16 |
-| MAIN to FRONT | MAIN GPIO17 | FRONT D7 / GPIO17 |
-| REAR to MAIN | REAR D6 / GPIO16 | MAIN GPIO26 |
-| MAIN to REAR | MAIN GPIO27 | REAR D7 / GPIO17 |
+MIDDLE uses GPIO0 left XSHUT, GPIO1 right XSHUT, GPIO4/GPIO5 I2C, and
+GPIO21/GPIO20 UART TX/RX. Leave C3 GPIO2, GPIO8, GPIO9, GPIO18, and GPIO19 free.
 
-Connect MAIN, both XIAOs, both TCA/ToF assemblies, relay logic, and the external
-servo supply to a common ground. UART is 3.3 V logic. Do not connect any UART
-pin to 5 V.
+MAIN uses GPIO13 rear-scanner XSHUT, GPIO14 rear SG90, GPIO21/GPIO22 for the
+rear scanner plus MPU6050 and BMP280. GPIO32/GPIO33 remain reserved for future
+Hall inputs and GPIO25 remains reserved for a future relay. Leave all three
+unconnected in this build.
 
-MAIN uses GPIO21/GPIO22 for its MPU6050 and BMP280 I2C bus, GPIO32/GPIO33 for
-the Hall inputs, and GPIO25 for the relay input. Each XIAO uses D4/D5 for its
-TCA9548A bus and D2 for servo PWM.
+See [docs/HARDWARE.md](../docs/HARDWARE.md) for the full wiring and power map.
 
-## Power
+## Addressing and timing
 
-Power both SG90 servos from a separate regulated 5 V supply rated for at least
-2 to 3 A. Add 470 to 1000 microfarads of bulk capacitance near the servo power
-connection. Do not power a servo from a XIAO or ESP32 3.3 V pin. Keep motor
-power away from logic wiring and join grounds deliberately.
+FRONT assigns `0x30` to its scanner and `0x31` to fixed-front. MIDDLE assigns
+`0x31` to left and `0x32` to right. MAIN assigns `0x30` to its rear scanner.
+The buses are separate, so repeated addresses are valid.
 
-## Polling and fail-safe timing
+Each controller holds its local ToFs in XSHUT, releases and addresses them one
+at a time, probes the runtime addresses, and repeats the local sequence after a
+fault. FRONT and MIDDLE read local ToFs sequentially. MAIN's rear scan runs
+independently. Unknown range is `-1`.
 
-| Work | Rate or bound |
-|---|---:|
-| MAIN UART parsing | every loop, bounded byte budget |
-| MAIN safety evaluation | 40 Hz |
-| MAIN IMU | 50 Hz |
-| MAIN Hall speed | 20 Hz |
-| MAIN BMP280 | 4 Hz |
-| MAIN USB telemetry | 10 Hz |
-| Stale XIAO cutoff | 500 ms |
-| Missing-sensor retry | 5 s |
+## Upload
 
-The 10 Hz laptop rate is deliberate. A representative 862-byte packet uses
-about 75 percent of a 115200-baud 8N1 link at 10 Hz; 20 Hz would exceed the
-wire capacity. Local safety still runs at 40 Hz and never waits for USB.
-
-During a scan, each XIAO settles the servo, then reads VL53L1X, fixed sensor A,
-and fixed sensor B sequentially. `SCAN_OFF` keeps both fixed ToFs updating at
-about 10 Hz. Missing or rejected ranges are `-1`, which always means unknown.
-
-## Flashing
-
-Connect and identify one board at a time with:
+Identify one board at a time:
 
 ```powershell
 arduino-cli board list
 ```
 
-Then upload with the matching project and port:
+Upload with the matching FQBN and current COM port:
 
 ```powershell
 arduino-cli upload --port COM5 --fqbn esp32:esp32:XIAO_ESP32C6 firmware/front_xiao_esp32c6
-arduino-cli upload --port COM6 --fqbn esp32:esp32:XIAO_ESP32C6 firmware/rear_xiao_esp32c6
+arduino-cli upload --port COM6 --fqbn "esp32:esp32:esp32c3:CDCOnBoot=cdc" firmware/middle_esp32c3_supermini
 arduino-cli upload --port COM8 --fqbn esp32:esp32:esp32 firmware/main_esp32
 ```
 
-Replace the example ports. Flash the XIAO nodes first, then MAIN. Test the
-relay with motor power disconnected and the drive wheels raised.
+Flash FRONT and MIDDLE first, then MAIN. Do not reuse an old COM number without
+matching the connected USB device.
 
-## Laptop cable check
+## Power and physical checks
 
-Install the small serial dependency and monitor MAIN:
+Power both SG90s from a separate regulated 5 V, 2 to 3 A supply. Add 470 to
+1000 microfarads near the servo rail. Do not power a servo from a controller
+3.3 V pin.
 
-```powershell
-.\.venv\Scripts\python.exe -m pip install pyserial
-.\.venv\Scripts\python.exe -m backend.app.serial_monitor --port COM8 --send STATUS
-```
-
-The monitor validates each JSON line, separates boot and command replies, and
-prints `UNKNOWN` for invalid or stale ranges. Use `--raw` for validated JSON or
-`--once` for a one-packet cable test.
-
-## What still needs hardware
-
-Compilation proves board and library compatibility, not electrical behavior.
-Before driving, verify relay polarity, Hall edge polarity, servo pulse limits,
-sensor alignment, external supply stability, and a prolonged three-board UART
-run. This is an RC motor-cut demonstration, not a service brake.
+Compilation does not prove the board silkscreen, XSHUT voltage, address
+recovery, sensor alignment, servo movement, UART wiring, optical interference,
+or supply stability. Hall and relay checks apply only after enabling that
+future profile. Run the bench checks in each project README before driving.

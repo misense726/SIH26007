@@ -20,8 +20,7 @@ enum NodeHealthBit : uint8_t {
   kScannerHealthy = 1U << 0,
   kFixedAHealthy = 1U << 1,
   kFixedBHealthy = 1U << 2,
-  kTcaHealthy = 1U << 3,
-  kServoHealthy = 1U << 4,
+  kServoHealthy = 1U << 3,
 };
 
 struct NodeConfig {
@@ -29,17 +28,20 @@ struct NodeConfig {
   const char *boot_message;
   const char *fixed_a_json_key;
   const char *fixed_b_json_key;
+  bool has_fixed_b;
 
   uint8_t i2c_sda_pin;
   uint8_t i2c_scl_pin;
   uint8_t uart_tx_pin;
   uint8_t uart_rx_pin;
   uint8_t servo_pwm_pin;
+  uint8_t scanner_xshut_pin;
+  uint8_t fixed_a_xshut_pin;
+  uint8_t fixed_b_xshut_pin;
 
-  uint8_t tca_address;
-  uint8_t scanner_tca_channel;
-  uint8_t fixed_a_tca_channel;
-  uint8_t fixed_b_tca_channel;
+  uint8_t scanner_i2c_address;
+  uint8_t fixed_a_i2c_address;
+  uint8_t fixed_b_i2c_address;
 
   uint32_t debug_baud;
   uint32_t node_uart_baud;
@@ -47,6 +49,9 @@ struct NodeConfig {
   uint16_t i2c_bus_timeout_ms;
   uint16_t sensor_read_timeout_ms;
   uint32_t sensor_retry_ms;
+  uint16_t xshut_reset_us;
+  uint16_t xshut_boot_us;
+  uint16_t inter_sensor_guard_ms;
 
   int16_t scan_min_deg;
   int16_t scan_max_deg;
@@ -82,9 +87,8 @@ class XiaoSensorNode {
         config_.uart_rx_pin,
         config_.uart_tx_pin);
 
-    Wire.begin(config_.i2c_sda_pin, config_.i2c_scl_pin);
-    Wire.setClock(config_.i2c_clock_hz);
-    Wire.setTimeOut(config_.i2c_bus_timeout_ms);
+    holdAllSensorsInReset();
+    configureI2cBus();
 
     servo_healthy_ = ledcAttach(
         config_.servo_pwm_pin,
@@ -94,21 +98,17 @@ class XiaoSensorNode {
       servo_healthy_ = writeServoAngle(config_.servo_center_deg);
     }
 
-    disableTcaChannels();
-
     const uint32_t now = millis();
-    initializeScanner(now);
-    initializeFixedSensor(fixed_a_sensor_, fixed_a_state_, config_.fixed_a_tca_channel, now);
-    initializeFixedSensor(fixed_b_sensor_, fixed_b_state_, config_.fixed_b_tca_channel, now);
+    runNodeAddressSequence(now);
 
     current_angle_deg_ = config_.scan_min_deg;
     scan_direction_ = 1;
     if (servo_healthy_) {
       servo_healthy_ = writeServoAngle(current_angle_deg_);
     }
+    acquisition_phase_ = AcquisitionPhase::kServoSettling;
     next_scan_sample_ms_ = millis() + settle_ms_;
     next_fixed_sample_ms_ = millis() + config_.fixed_only_period_ms;
-    acquisition_phase_ = AcquisitionPhase::kServoSettling;
 
 #if FOGSEN_DEBUG_LOGS
     Serial.println(config_.boot_message);
@@ -120,19 +120,34 @@ class XiaoSensorNode {
     pollCommands();
 
     const uint32_t now = millis();
-    retryMissingSensors(now);
+    retryNodeAddressSequence(now);
+
+    if (acquisition_phase_ == AcquisitionPhase::kScannerWaiting) {
+      pollScannerMeasurement(now);
+      return;
+    }
+    if (acquisition_phase_ == AcquisitionPhase::kFixedAGuard) {
+      if (timeReached(now, next_sensor_action_ms_)) {
+        samplePendingFixedA();
+      }
+      return;
+    }
+    if (acquisition_phase_ == AcquisitionPhase::kFixedBGuard) {
+      if (timeReached(now, next_sensor_action_ms_)) {
+        samplePendingFixedB();
+      }
+      return;
+    }
 
     if (scan_enabled_) {
-      if (acquisition_phase_ == AcquisitionPhase::kScannerWaiting) {
-        pollScannerMeasurement(now);
-      } else if (timeReached(now, next_scan_sample_ms_)) {
+      if (timeReached(now, next_scan_sample_ms_)) {
         startScannerMeasurement(now);
       }
       return;
     }
 
     if (timeReached(now, next_fixed_sample_ms_)) {
-      sampleFixedOnly();
+      startFixedOnlySample(now);
     }
   }
 
@@ -140,6 +155,8 @@ class XiaoSensorNode {
   enum class AcquisitionPhase : uint8_t {
     kServoSettling,
     kScannerWaiting,
+    kFixedAGuard,
+    kFixedBGuard,
   };
 
   struct SensorState {
@@ -156,94 +173,156 @@ class XiaoSensorNode {
     return static_cast<uint32_t>(now - then) >= duration_ms;
   }
 
-  bool selectTcaChannel(uint8_t channel) {
-    if (channel > 7U) {
-      tca_healthy_ = false;
-      return false;
+  static void holdSensorInReset(uint8_t pin) {
+    digitalWrite(pin, LOW);
+    pinMode(pin, OUTPUT);
+  }
+
+  static void releaseSensorFromReset(uint8_t pin) {
+    // Carrier XSHUT is not level shifted. Release it so the carrier pulls it
+    // high instead of driving a higher voltage into the sensor.
+    pinMode(pin, INPUT);
+  }
+
+  void holdAllSensorsInReset() {
+    holdSensorInReset(config_.scanner_xshut_pin);
+    holdSensorInReset(config_.fixed_a_xshut_pin);
+    if (config_.has_fixed_b) {
+      holdSensorInReset(config_.fixed_b_xshut_pin);
     }
-
-    Wire.beginTransmission(config_.tca_address);
-    Wire.write(static_cast<uint8_t>(1U << channel));
-    tca_healthy_ = Wire.endTransmission() == 0;
-    return tca_healthy_;
   }
 
-  void disableTcaChannels() {
-    Wire.beginTransmission(config_.tca_address);
-    Wire.write(static_cast<uint8_t>(0));
-    tca_healthy_ = Wire.endTransmission() == 0;
+  void configureI2cBus() {
+    Wire.end();
+    Wire.begin(config_.i2c_sda_pin, config_.i2c_scl_pin);
+    Wire.setClock(config_.i2c_clock_hz);
+    Wire.setTimeOut(config_.i2c_bus_timeout_ms);
   }
 
-  void initializeScanner(uint32_t now) {
+  bool probeI2cAddress(uint8_t address) {
+    Wire.beginTransmission(address);
+    return Wire.endTransmission() == 0;
+  }
+
+  bool initializeScanner(uint32_t now) {
     scanner_state_.last_init_attempt_ms = now;
     scanner_state_.initialized = false;
+    releaseSensorFromReset(config_.scanner_xshut_pin);
+    delayMicroseconds(config_.xshut_boot_us);
 
-    if (!selectTcaChannel(config_.scanner_tca_channel)) {
-      return;
-    }
-
+    // A hardware reset returns the sensor to 0x29. Recreate the client so a
+    // recovery does not keep trying the runtime address from the prior boot.
+    scanner_sensor_ = VL53L1X();
     scanner_sensor_.setBus(&Wire);
     scanner_sensor_.setTimeout(config_.sensor_read_timeout_ms);
     if (!scanner_sensor_.init()) {
-      return;
+      holdSensorInReset(config_.scanner_xshut_pin);
+      return false;
+    }
+
+    scanner_sensor_.setAddress(config_.scanner_i2c_address);
+    if (!probeI2cAddress(config_.scanner_i2c_address)) {
+      holdSensorInReset(config_.scanner_xshut_pin);
+      return false;
     }
 
     scanner_sensor_.setDistanceMode(VL53L1X::Long);
     scanner_sensor_.setMeasurementTimingBudget(config_.scanner_timing_budget_us);
     scanner_state_.initialized = true;
     scanner_state_.last_measurement_ms = millis();
+    return true;
   }
 
-  void initializeFixedSensor(
+  bool initializeFixedSensor(
       VL53L0X &sensor,
       SensorState &state,
-      uint8_t channel,
+      uint8_t xshut_pin,
+      uint8_t i2c_address,
       uint32_t now) {
     state.last_init_attempt_ms = now;
     state.initialized = false;
+    releaseSensorFromReset(xshut_pin);
+    delayMicroseconds(config_.xshut_boot_us);
 
-    if (!selectTcaChannel(channel)) {
-      return;
-    }
-
+    // XSHUT also resets this sensor to 0x29, so reset the library client state.
+    sensor = VL53L0X();
     sensor.setBus(&Wire);
     sensor.setTimeout(config_.sensor_read_timeout_ms);
     if (!sensor.init()) {
-      return;
+      holdSensorInReset(xshut_pin);
+      return false;
+    }
+
+    sensor.setAddress(i2c_address);
+    if (!probeI2cAddress(i2c_address)) {
+      holdSensorInReset(xshut_pin);
+      return false;
     }
 
     sensor.setMeasurementTimingBudget(config_.fixed_timing_budget_us);
     state.initialized = true;
     state.last_measurement_ms = millis();
+    return true;
   }
 
-  void retryMissingSensors(uint32_t now) {
-    if (!scanner_state_.initialized &&
-        elapsedAtLeast(now, scanner_state_.last_init_attempt_ms, config_.sensor_retry_ms)) {
-      initializeScanner(now);
+  bool allConfiguredSensorsReady() const {
+    return scanner_state_.initialized && fixed_a_state_.initialized &&
+           (!config_.has_fixed_b || fixed_b_state_.initialized);
+  }
+
+  void runNodeAddressSequence(uint32_t now) {
+    holdAllSensorsInReset();
+    delayMicroseconds(config_.xshut_reset_us);
+    configureI2cBus();
+
+    initializeScanner(now);
+    initializeFixedSensor(
+        fixed_a_sensor_, fixed_a_state_, config_.fixed_a_xshut_pin,
+        config_.fixed_a_i2c_address, now);
+    if (config_.has_fixed_b) {
+      initializeFixedSensor(
+          fixed_b_sensor_, fixed_b_state_, config_.fixed_b_xshut_pin,
+          config_.fixed_b_i2c_address, now);
+    } else {
+      fixed_b_state_.initialized = false;
+      fixed_b_state_.last_init_attempt_ms = now;
     }
 
-    if (!fixed_a_state_.initialized &&
-        elapsedAtLeast(now, fixed_a_state_.last_init_attempt_ms, config_.sensor_retry_ms)) {
-      initializeFixedSensor(
-          fixed_a_sensor_, fixed_a_state_, config_.fixed_a_tca_channel, now);
-    }
+    address_recovery_pending_ = !allConfiguredSensorsReady();
+    next_address_recovery_ms_ = millis() + config_.sensor_retry_ms;
+    acquisition_phase_ = AcquisitionPhase::kServoSettling;
+    next_scan_sample_ms_ = millis() + settle_ms_;
+    next_fixed_sample_ms_ = millis() + config_.fixed_only_period_ms;
+  }
 
-    if (!fixed_b_state_.initialized &&
-        elapsedAtLeast(now, fixed_b_state_.last_init_attempt_ms, config_.sensor_retry_ms)) {
-      initializeFixedSensor(
-          fixed_b_sensor_, fixed_b_state_, config_.fixed_b_tca_channel, now);
+  void scheduleNodeAddressRecovery(uint32_t now) {
+    if (!address_recovery_pending_) {
+      next_address_recovery_ms_ = now;
     }
+    address_recovery_pending_ = true;
+  }
+
+  void retryNodeAddressSequence(uint32_t now) {
+    if (!address_recovery_pending_ ||
+        acquisition_phase_ != AcquisitionPhase::kServoSettling ||
+        !timeReached(now, next_address_recovery_ms_)) {
+      return;
+    }
+    runNodeAddressSequence(now);
+  }
+
+  void markSensorFailed(SensorState &state, uint32_t now) {
+    state.initialized = false;
+    state.last_init_attempt_ms = now;
+    scheduleNodeAddressRecovery(now);
   }
 
   bool startScannerSingleShot(uint32_t now) {
     if (!scanner_state_.initialized || !servo_healthy_) {
       return false;
     }
-
-    if (!selectTcaChannel(config_.scanner_tca_channel)) {
-      scanner_state_.initialized = false;
-      scanner_state_.last_init_attempt_ms = now;
+    if (!probeI2cAddress(config_.scanner_i2c_address)) {
+      markSensorFailed(scanner_state_, now);
       return false;
     }
 
@@ -252,20 +331,18 @@ class XiaoSensorNode {
     return true;
   }
 
-  int16_t finishScannerSingleShot() {
+  int16_t finishScannerSingleShot(uint32_t now) {
     const uint16_t range_mm = scanner_sensor_.read(false);
     const bool timed_out = scanner_sensor_.timeoutOccurred();
-    scanner_state_.last_measurement_ms = millis();
+    scanner_state_.last_measurement_ms = now;
 
-    if (timed_out) {
-      scanner_state_.initialized = false;
-      scanner_state_.last_init_attempt_ms = millis();
+    if (timed_out || !probeI2cAddress(config_.scanner_i2c_address)) {
+      markSensorFailed(scanner_state_, now);
       return kInvalidRangeMm;
     }
 
     if (scanner_sensor_.ranging_data.range_status != VL53L1X::RangeValid ||
-        range_mm == 0U ||
-        range_mm > config_.scanner_max_range_mm) {
+        range_mm == 0U || range_mm > config_.scanner_max_range_mm) {
       return kInvalidRangeMm;
     }
 
@@ -275,14 +352,14 @@ class XiaoSensorNode {
   int16_t readFixedSensor(
       VL53L0X &sensor,
       SensorState &state,
-      uint8_t channel) {
+      uint8_t i2c_address) {
     if (!state.initialized) {
       return kInvalidRangeMm;
     }
 
-    if (!selectTcaChannel(channel)) {
-      state.initialized = false;
-      state.last_init_attempt_ms = millis();
+    const uint32_t now = millis();
+    if (!probeI2cAddress(i2c_address)) {
+      markSensorFailed(state, now);
       return kInvalidRangeMm;
     }
 
@@ -290,9 +367,8 @@ class XiaoSensorNode {
     const bool timed_out = sensor.timeoutOccurred();
     state.last_measurement_ms = millis();
 
-    if (timed_out) {
-      state.initialized = false;
-      state.last_init_attempt_ms = millis();
+    if (timed_out || !probeI2cAddress(i2c_address)) {
+      markSensorFailed(state, millis());
       return kInvalidRangeMm;
     }
 
@@ -309,9 +385,7 @@ class XiaoSensorNode {
     }
 
     const int16_t bounded_angle = constrain(
-        angle_deg,
-        config_.servo_min_angle_deg,
-        config_.servo_max_angle_deg);
+        angle_deg, config_.servo_min_angle_deg, config_.servo_max_angle_deg);
     const int32_t angle_span =
         config_.servo_max_angle_deg - config_.servo_min_angle_deg;
     if (angle_span <= 0) {
@@ -335,70 +409,87 @@ class XiaoSensorNode {
   }
 
   void startScannerMeasurement(uint32_t now) {
-    pending_sample_ms_ = now;
     pending_sample_angle_deg_ = current_angle_deg_;
+    pending_scanner_mm_ = kInvalidRangeMm;
+    pending_fixed_a_mm_ = kInvalidRangeMm;
+    pending_fixed_b_mm_ = kInvalidRangeMm;
+    pending_scanner_ms_ = now;
+    pending_fixed_a_ms_ = now;
+    pending_fixed_b_ms_ = now;
     if (!startScannerSingleShot(now)) {
-      finishScanStep(kInvalidRangeMm);
+      scheduleFixedA();
       return;
     }
     acquisition_phase_ = AcquisitionPhase::kScannerWaiting;
   }
 
   void pollScannerMeasurement(uint32_t now) {
-    if (!selectTcaChannel(config_.scanner_tca_channel)) {
-      scanner_state_.initialized = false;
-      scanner_state_.last_init_attempt_ms = now;
-      finishScanStep(kInvalidRangeMm);
-      return;
-    }
-
     if (scanner_sensor_.dataReady()) {
-      finishScanStep(finishScannerSingleShot());
+      pending_scanner_mm_ = finishScannerSingleShot(now);
+      pending_scanner_ms_ = millis();
+      scheduleFixedA();
       return;
     }
 
     if (elapsedAtLeast(
-            now,
-            scanner_measurement_started_ms_,
+            now, scanner_measurement_started_ms_,
             config_.sensor_read_timeout_ms)) {
-      scanner_state_.initialized = false;
-      scanner_state_.last_init_attempt_ms = now;
-      finishScanStep(kInvalidRangeMm);
+      markSensorFailed(scanner_state_, now);
+      pending_scanner_mm_ = kInvalidRangeMm;
+      pending_scanner_ms_ = now;
+      scheduleFixedA();
     }
   }
 
-  void finishScanStep(int16_t scanner_mm) {
-    const int16_t fixed_a_mm = readFixedSensor(
-        fixed_a_sensor_, fixed_a_state_, config_.fixed_a_tca_channel);
-    const int16_t fixed_b_mm = readFixedSensor(
-        fixed_b_sensor_, fixed_b_state_, config_.fixed_b_tca_channel);
-    sendTelemetry(
-        pending_sample_ms_,
-        pending_sample_angle_deg_,
-        scanner_mm,
-        fixed_a_mm,
-        fixed_b_mm);
+  void scheduleFixedA() {
+    acquisition_phase_ = AcquisitionPhase::kFixedAGuard;
+    next_sensor_action_ms_ = millis() + config_.inter_sensor_guard_ms;
+  }
 
-    advanceScanAngle();
-    if (!writeServoAngle(current_angle_deg_)) {
-      servo_healthy_ = false;
+  void samplePendingFixedA() {
+    pending_fixed_a_mm_ = readFixedSensor(
+        fixed_a_sensor_, fixed_a_state_, config_.fixed_a_i2c_address);
+    pending_fixed_a_ms_ = millis();
+    if (config_.has_fixed_b) {
+      acquisition_phase_ = AcquisitionPhase::kFixedBGuard;
+      next_sensor_action_ms_ = millis() + config_.inter_sensor_guard_ms;
+      return;
+    }
+    finishPendingPacket();
+  }
+
+  void samplePendingFixedB() {
+    pending_fixed_b_mm_ = readFixedSensor(
+        fixed_b_sensor_, fixed_b_state_, config_.fixed_b_i2c_address);
+    pending_fixed_b_ms_ = millis();
+    finishPendingPacket();
+  }
+
+  void startFixedOnlySample(uint32_t now) {
+    pending_sample_angle_deg_ = current_angle_deg_;
+    pending_scanner_mm_ = kInvalidRangeMm;
+    pending_fixed_a_mm_ = kInvalidRangeMm;
+    pending_fixed_b_mm_ = kInvalidRangeMm;
+    pending_scanner_ms_ = now;
+    pending_fixed_a_ms_ = now;
+    pending_fixed_b_ms_ = now;
+    samplePendingFixedA();
+  }
+
+  void finishPendingPacket() {
+    sendTelemetry(
+        millis(), pending_sample_angle_deg_, pending_scanner_mm_,
+        pending_scanner_ms_, pending_fixed_a_mm_, pending_fixed_a_ms_,
+        pending_fixed_b_mm_, pending_fixed_b_ms_);
+
+    if (scan_enabled_) {
+      advanceScanAngle();
+      if (!writeServoAngle(current_angle_deg_)) {
+        servo_healthy_ = false;
+      }
     }
     acquisition_phase_ = AcquisitionPhase::kServoSettling;
     next_scan_sample_ms_ = millis() + settle_ms_;
-  }
-
-  void sampleFixedOnly() {
-    const uint32_t sample_ms = millis();
-    const int16_t fixed_a_mm = readFixedSensor(
-        fixed_a_sensor_, fixed_a_state_, config_.fixed_a_tca_channel);
-    const int16_t fixed_b_mm = readFixedSensor(
-        fixed_b_sensor_, fixed_b_state_, config_.fixed_b_tca_channel);
-    sendTelemetry(
-        sample_ms,
-        current_angle_deg_,
-        kInvalidRangeMm,
-        fixed_a_mm,
-        fixed_b_mm);
     next_fixed_sample_ms_ = millis() + config_.fixed_only_period_ms;
   }
 
@@ -429,11 +520,8 @@ class XiaoSensorNode {
     if (fixed_a_state_.initialized) {
       mask |= kFixedAHealthy;
     }
-    if (fixed_b_state_.initialized) {
+    if (config_.has_fixed_b && fixed_b_state_.initialized) {
       mask |= kFixedBHealthy;
-    }
-    if (tca_healthy_) {
-      mask |= kTcaHealthy;
     }
     if (servo_healthy_) {
       mask |= kServoHealthy;
@@ -442,53 +530,63 @@ class XiaoSensorNode {
   }
 
   void sendTelemetry(
-      uint32_t sample_ms,
+      uint32_t packet_ms,
       int16_t angle_deg,
       int16_t scanner_mm,
+      uint32_t scanner_ms,
       int16_t fixed_a_mm,
-      int16_t fixed_b_mm) {
+      uint32_t fixed_a_ms,
+      int16_t fixed_b_mm,
+      uint32_t fixed_b_ms) {
     char packet[176];
     const uint32_t sequence = ++sequence_;
-    const int written = snprintf(
-        packet,
-        sizeof(packet),
-        "{\"node\":\"%s\",\"seq\":%lu,\"ms\":%lu,\"a\":%d,\"scan\":%d,\"%s\":%d,\"%s\":%d,\"ok\":%u}",
-        config_.node_id,
-        static_cast<unsigned long>(sequence),
-        static_cast<unsigned long>(sample_ms),
-        static_cast<int>(angle_deg),
-        static_cast<int>(scanner_mm),
-        config_.fixed_a_json_key,
-        static_cast<int>(fixed_a_mm),
-        config_.fixed_b_json_key,
-        static_cast<int>(fixed_b_mm),
-        static_cast<unsigned int>(healthMask()));
+    int written = 0;
+    if (config_.has_fixed_b) {
+      written = snprintf(
+          packet, sizeof(packet),
+          "{\"node\":\"%s\",\"seq\":%lu,\"ms\":%lu,\"a\":%d,\"scan\":%d,\"scan_ms\":%lu,\"%s\":%d,\"%s_ms\":%lu,\"%s\":%d,\"%s_ms\":%lu,\"ok\":%u}",
+          config_.node_id, static_cast<unsigned long>(sequence),
+          static_cast<unsigned long>(packet_ms), static_cast<int>(angle_deg),
+          static_cast<int>(scanner_mm),
+          static_cast<unsigned long>(scanner_ms), config_.fixed_a_json_key,
+          static_cast<int>(fixed_a_mm), config_.fixed_a_json_key,
+          static_cast<unsigned long>(fixed_a_ms), config_.fixed_b_json_key,
+          static_cast<int>(fixed_b_mm), config_.fixed_b_json_key,
+          static_cast<unsigned long>(fixed_b_ms),
+          static_cast<unsigned int>(healthMask()));
+    } else {
+      written = snprintf(
+          packet, sizeof(packet),
+          "{\"node\":\"%s\",\"seq\":%lu,\"ms\":%lu,\"a\":%d,\"scan\":%d,\"scan_ms\":%lu,\"%s\":%d,\"%s_ms\":%lu,\"ok\":%u}",
+          config_.node_id, static_cast<unsigned long>(sequence),
+          static_cast<unsigned long>(packet_ms), static_cast<int>(angle_deg),
+          static_cast<int>(scanner_mm),
+          static_cast<unsigned long>(scanner_ms), config_.fixed_a_json_key,
+          static_cast<int>(fixed_a_mm), config_.fixed_a_json_key,
+          static_cast<unsigned long>(fixed_a_ms),
+          static_cast<unsigned int>(healthMask()));
+    }
     writeLine(packet, written, sizeof(packet));
   }
 
   void sendSimpleReply(const char *reply) {
     char packet[112];
     const int written = snprintf(
-        packet,
-        sizeof(packet),
+        packet, sizeof(packet),
         "{\"node\":\"%s\",\"reply\":\"%s\",\"ms\":%lu}",
-        config_.node_id,
-        reply,
-        static_cast<unsigned long>(millis()));
+        config_.node_id, reply, static_cast<unsigned long>(millis()));
     writeLine(packet, written, sizeof(packet));
   }
 
   void sendStatusReply() {
-    char packet[160];
+    char packet[176];
     const int written = snprintf(
-        packet,
-        sizeof(packet),
-        "{\"node\":\"%s\",\"reply\":\"STATUS\",\"ms\":%lu,\"ok\":%u,\"scan_on\":%u,\"settle\":%u}",
-        config_.node_id,
-        static_cast<unsigned long>(millis()),
-        static_cast<unsigned int>(healthMask()),
-        scan_enabled_ ? 1U : 0U,
-        static_cast<unsigned int>(settle_ms_));
+        packet, sizeof(packet),
+        "{\"node\":\"%s\",\"reply\":\"STATUS\",\"ms\":%lu,\"ok\":%u,\"scan_on\":%u,\"settle\":%u,\"guard\":%u}",
+        config_.node_id, static_cast<unsigned long>(millis()),
+        static_cast<unsigned int>(healthMask()), scan_enabled_ ? 1U : 0U,
+        static_cast<unsigned int>(settle_ms_),
+        static_cast<unsigned int>(config_.inter_sensor_guard_ms));
     writeLine(packet, written, sizeof(packet));
   }
 
@@ -598,18 +696,25 @@ class XiaoSensorNode {
   SensorState fixed_a_state_;
   SensorState fixed_b_state_;
 
-  bool tca_healthy_ = false;
   bool servo_healthy_ = false;
   bool scan_enabled_ = true;
+  bool address_recovery_pending_ = false;
   AcquisitionPhase acquisition_phase_ = AcquisitionPhase::kServoSettling;
   int8_t scan_direction_ = 1;
   int16_t current_angle_deg_ = 0;
   uint16_t settle_ms_ = config_.default_settle_ms;
   int16_t pending_sample_angle_deg_ = 0;
-  uint32_t pending_sample_ms_ = 0;
+  int16_t pending_scanner_mm_ = kInvalidRangeMm;
+  int16_t pending_fixed_a_mm_ = kInvalidRangeMm;
+  int16_t pending_fixed_b_mm_ = kInvalidRangeMm;
+  uint32_t pending_scanner_ms_ = 0;
+  uint32_t pending_fixed_a_ms_ = 0;
+  uint32_t pending_fixed_b_ms_ = 0;
   uint32_t scanner_measurement_started_ms_ = 0;
+  uint32_t next_sensor_action_ms_ = 0;
   uint32_t next_scan_sample_ms_ = 0;
   uint32_t next_fixed_sample_ms_ = 0;
+  uint32_t next_address_recovery_ms_ = 0;
   uint32_t sequence_ = 0;
 
   char command_buffer_[48] = {};

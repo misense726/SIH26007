@@ -30,9 +30,10 @@ class FrontWireState(WireModel):
     age: int | None = Field(default=None, ge=0)
     a: float | None = None
     scan: int = -1
-    fl: int = -1
-    fr: int = -1
-    ok: int = 0
+    scan_age: int | None = Field(default=None, ge=0)
+    front: int = -1
+    front_age: int | None = Field(default=None, ge=0)
+    ok: int = Field(default=0, ge=0)
     seq: int | None = Field(default=None, ge=0)
     dropped: int = Field(default=0, ge=0)
 
@@ -42,9 +43,12 @@ class RearWireState(WireModel):
     age: int | None = Field(default=None, ge=0)
     a: float | None = None
     scan: int = -1
+    scan_age: int | None = Field(default=None, ge=0)
     left: int = -1
+    left_age: int | None = Field(default=None, ge=0)
     right: int = -1
-    ok: int = 0
+    right_age: int | None = Field(default=None, ge=0)
+    ok: int = Field(default=0, ge=0)
     seq: int | None = Field(default=None, ge=0)
     dropped: int = Field(default=0, ge=0)
 
@@ -70,6 +74,7 @@ class EnvironmentWireState(WireModel):
 
 
 class WheelWireState(WireModel):
+    enabled: bool | int = True
     l: int = Field(ge=0)
     r: int = Field(ge=0)
     speed: float = Field(default=0.0, ge=0.0)
@@ -82,6 +87,9 @@ class WheelWireState(WireModel):
 class EmergencyWireState(WireModel):
     state: str
     cut: bool | int
+    output_enabled: bool | int = True
+    cut_requested: bool | int | None = None
+    coverage: bool | None = None
     nearest_mm: int | None = None
     nearest: float | None = Field(default=None, ge=0.0)
     critical: float | None = Field(default=None, ge=0.0)
@@ -152,6 +160,7 @@ class BoundedLineBuffer:
 @dataclass(frozen=True, slots=True)
 class LiveSerialSample:
     controller_ms: int
+    speed_mps: float
     ranges: list[RangeReading]
     sensor_health: list[SensorHealth]
     motion: MotionState
@@ -169,7 +178,7 @@ def _range(
 ) -> RangeReading:
     valid_value = 1 <= millimetres <= maximum_m * 1000
     valid = available and valid_value
-    range_m = millimetres / 1000.0 if valid_value else 0.0
+    range_m = millimetres / 1000.0 if valid else 0.0
     return RangeReading(
         timestamp_ms=timestamp_ms,
         sensor_id=sensor_id,
@@ -193,22 +202,18 @@ def _node_is_fresh(age: int | None, state: str | None, stale_timeout_ms: int) ->
 
 def _component_is_healthy(
     node_ok: int,
-    component_bit: int,
+    required_bits: int,
+    allowed_bits: int,
     state: str | None,
-    *,
-    scanner: bool = False,
 ) -> bool:
     normalized = state.upper() if state else None
-    if normalized in {"OFFLINE", "STALE"} or node_ok == 0:
+    if (
+        normalized not in {None, "HEALTHY", "DEGRADED"}
+        or node_ok == 0
+        or node_ok & ~allowed_bits
+    ):
         return False
-    if state is None and node_ok == 1:
-        # The original prompt used ok=1 as a whole-node flag. Keep that compact
-        # packet compatible while the built firmware uses the five-bit mask.
-        return True
-    tca_required = state is not None or node_ok >= 8
-    tca_healthy = not tca_required or bool(node_ok & (1 << 3))
-    servo_healthy = not scanner or bool(node_ok & (1 << 4)) or not tca_required
-    return bool(node_ok & component_bit) and tca_healthy and servo_healthy
+    return (node_ok & required_bits) == required_bits
 
 
 def _health(
@@ -227,7 +232,7 @@ def _health(
     elif not fresh:
         status = SensorStatus.STALE
         confidence = 0.0
-        detail = "Node packet age exceeded 500 ms"
+        detail = "Node packet age exceeded the configured stale timeout"
     elif not component_healthy:
         status = SensorStatus.DEGRADED
         confidence = 0.45
@@ -284,32 +289,64 @@ def translate_main_packet(
     stale_timeout_ms: int = 500,
     distance_per_tick_m: float = 0.11,
 ) -> LiveSerialSample:
-    front_fresh = _node_is_fresh(
-        packet.front.age, packet.front.state, stale_timeout_ms
-    )
-    rear_fresh = _node_is_fresh(packet.rear.age, packet.rear.state, stale_timeout_ms)
-    front_timestamp = max(0, received_at_ms - (packet.front.age or 0))
-    rear_timestamp = max(0, received_at_ms - (packet.rear.age or 0))
+    front_ages = {
+        "front_scanner": (
+            packet.front.scan_age
+            if packet.front.scan_age is not None
+            else packet.front.age
+        ),
+        "front_fixed": (
+            packet.front.front_age
+            if packet.front.front_age is not None
+            else packet.front.age
+        ),
+    }
+    rear_ages = {
+        "rear_scanner": (
+            packet.rear.scan_age
+            if packet.rear.scan_age is not None
+            else packet.rear.age
+        ),
+        "left_side": (
+            packet.rear.left_age
+            if packet.rear.left_age is not None
+            else packet.rear.age
+        ),
+        "right_side": (
+            packet.rear.right_age
+            if packet.rear.right_age is not None
+            else packet.rear.age
+        ),
+    }
+    sensor_ages = front_ages | rear_ages
+    sensor_freshness = {
+        sensor_id: _node_is_fresh(age, packet.front.state, stale_timeout_ms)
+        for sensor_id, age in front_ages.items()
+    } | {
+        sensor_id: _node_is_fresh(age, packet.rear.state, stale_timeout_ms)
+        for sensor_id, age in rear_ages.items()
+    }
+    sensor_timestamps = {
+        sensor_id: max(0, received_at_ms - (age or 0))
+        for sensor_id, age in sensor_ages.items()
+    }
     front_components = {
         "front_scanner": _component_is_healthy(
-            packet.front.ok, 1 << 0, packet.front.state, scanner=True
+            packet.front.ok, (1 << 0) | (1 << 3), 0x0B, packet.front.state
         ),
-        "front_left": _component_is_healthy(
-            packet.front.ok, 1 << 1, packet.front.state
-        ),
-        "front_right": _component_is_healthy(
-            packet.front.ok, 1 << 2, packet.front.state
+        "front_fixed": _component_is_healthy(
+            packet.front.ok, 1 << 1, 0x0B, packet.front.state
         ),
     }
     rear_components = {
         "rear_scanner": _component_is_healthy(
-            packet.rear.ok, 1 << 0, packet.rear.state, scanner=True
+            packet.rear.ok, (1 << 0) | (1 << 3), 0x0F, packet.rear.state
         ),
         "left_side": _component_is_healthy(
-            packet.rear.ok, 1 << 1, packet.rear.state
+            packet.rear.ok, 1 << 1, 0x0F, packet.rear.state
         ),
         "right_side": _component_is_healthy(
-            packet.rear.ok, 1 << 2, packet.rear.state
+            packet.rear.ok, 1 << 2, 0x0F, packet.rear.state
         ),
     }
     ranges = [
@@ -317,67 +354,61 @@ def translate_main_packet(
             "front_scanner",
             packet.front.scan,
             packet.front.a or 0.0,
-            front_timestamp,
+            sensor_timestamps["front_scanner"],
             4.0,
-            front_fresh and front_components["front_scanner"],
+            sensor_freshness["front_scanner"]
+            and front_components["front_scanner"],
         ),
         _range(
-            "front_left",
-            packet.front.fl,
+            "front_fixed",
+            packet.front.front,
             0.0,
-            front_timestamp,
+            sensor_timestamps["front_fixed"],
             2.0,
-            front_fresh and front_components["front_left"],
-        ),
-        _range(
-            "front_right",
-            packet.front.fr,
-            0.0,
-            front_timestamp,
-            2.0,
-            front_fresh and front_components["front_right"],
+            sensor_freshness["front_fixed"] and front_components["front_fixed"],
         ),
         _range(
             "rear_scanner",
             packet.rear.scan,
             packet.rear.a or 0.0,
-            rear_timestamp,
+            sensor_timestamps["rear_scanner"],
             4.0,
-            rear_fresh and rear_components["rear_scanner"],
+            sensor_freshness["rear_scanner"]
+            and rear_components["rear_scanner"],
         ),
         _range(
             "left_side",
             packet.rear.left,
             0.0,
-            rear_timestamp,
+            sensor_timestamps["left_side"],
             2.0,
-            rear_fresh and rear_components["left_side"],
+            sensor_freshness["left_side"] and rear_components["left_side"],
         ),
         _range(
             "right_side",
             packet.rear.right,
             0.0,
-            rear_timestamp,
+            sensor_timestamps["right_side"],
             2.0,
-            rear_fresh and rear_components["right_side"],
+            sensor_freshness["right_side"] and rear_components["right_side"],
         ),
     ]
     sensor_health = [
         _health(
             sensor_id,
-            front_timestamp,
-            packet.front.age,
-            front_fresh,
+            sensor_timestamps[sensor_id],
+            sensor_ages[sensor_id],
+            sensor_freshness[sensor_id],
             packet.front.state,
             front_components[sensor_id],
         )
-        for sensor_id in ("front_scanner", "front_left", "front_right")
+        for sensor_id in ("front_scanner", "front_fixed")
     ] + [
         _health(
             sensor_id,
-            rear_timestamp,
-            packet.rear.age,
-            rear_fresh,
+            sensor_timestamps[sensor_id],
+            sensor_ages[sensor_id],
+            sensor_freshness[sensor_id],
             packet.rear.state,
             rear_components[sensor_id],
         )
@@ -414,6 +445,37 @@ def translate_main_packet(
             reason = f"MAIN controller reported unknown stop state: {raw_state}"
         else:
             reason = packet.estop.reason
+    front_health = {
+        health.sensor_id: health for health in sensor_health[:2]
+    }
+    front_ranges = {reading.sensor_id: reading for reading in ranges[:2]}
+    observed_front_coverage = all(
+        front_ranges[sensor_id].is_valid
+        and front_health[sensor_id].status is SensorStatus.HEALTHY
+        for sensor_id in ("front_scanner", "front_fixed")
+    )
+    # MAIN owns the deterministic motor-safety decision. Its scanner evidence
+    # can remain valid while the live scanner sample is outside the forward
+    # sector, so current dashboard readings cannot reconstruct this decision.
+    # Keep the local check only for older packets that lack the explicit field.
+    forward_components_healthy = all(
+        front_health[sensor_id].status is SensorStatus.HEALTHY
+        for sensor_id in ("front_scanner", "front_fixed")
+    )
+    forward_coverage_complete = (
+        bool(packet.estop.coverage) and forward_components_healthy
+        if packet.estop.coverage is not None
+        else observed_front_coverage
+    )
+    relay_output_enabled = bool(packet.estop.output_enabled)
+    reported_cut = relay_output_enabled and bool(packet.estop.cut)
+    reported_latched = bool(packet.estop.latched)
+    if reported_cut or reported_latched:
+        emergency_level = EmergencyLevel.EMERGENCY_STOP
+        reason = packet.estop.reason or "MAIN controller reports a latched motor cut"
+    elif emergency_level is EmergencyLevel.SAFE and not forward_coverage_complete:
+        emergency_level = EmergencyLevel.WARNING
+        reason = "Forward range coverage is incomplete or stale"
     nearest = packet.estop.nearest
     if (
         nearest is None
@@ -422,16 +484,20 @@ def translate_main_packet(
     ):
         nearest = packet.estop.nearest_mm / 1000.0
     heading = packet.imu.heading if packet.imu.heading is not None else 0.0
-    left_distance = (
-        packet.wheel.left_m
-        if packet.wheel.left_m is not None
-        else packet.wheel.l * distance_per_tick_m
-    )
-    right_distance = (
-        packet.wheel.right_m
-        if packet.wheel.right_m is not None
-        else packet.wheel.r * distance_per_tick_m
-    )
+    hall_enabled = bool(packet.wheel.enabled)
+    left_distance = 0.0
+    right_distance = 0.0
+    if hall_enabled:
+        left_distance = (
+            packet.wheel.left_m
+            if packet.wheel.left_m is not None
+            else packet.wheel.l * distance_per_tick_m
+        )
+        right_distance = (
+            packet.wheel.right_m
+            if packet.wheel.right_m is not None
+            else packet.wheel.r * distance_per_tick_m
+        )
     imu_healthy = sensor_health[-2].status is SensorStatus.HEALTHY
     environment_temperature = (
         packet.env.temp if packet.env.temp is not None else 0.0
@@ -444,6 +510,7 @@ def translate_main_packet(
     )
     return LiveSerialSample(
         controller_ms=packet.ms,
+        speed_mps=packet.wheel.speed if hall_enabled else 0.0,
         ranges=ranges,
         sensor_health=sensor_health,
         motion=MotionState(
@@ -457,7 +524,7 @@ def translate_main_packet(
             aruco_visible=False,
             localization_confidence=0.0,
             provider_confidence={
-                "hall_odometry": 1.0,
+                "hall_odometry": 1.0 if hall_enabled else 0.0,
                 "imu": 1.0 if imu_healthy else 0.0,
                 "aruco": 0.0,
             },
@@ -477,10 +544,10 @@ def translate_main_packet(
             reason=reason,
             nearest_obstacle_m=nearest,
             critical_distance_m=packet.estop.critical,
-            motor_cut=bool(packet.estop.cut),
+            motor_cut=reported_cut,
             latched_at_ms=(
                 packet.estop.latched_ms
-                if bool(packet.estop.latched) and packet.estop.latched_ms is not None
+                if reported_latched and packet.estop.latched_ms is not None
                 else None
             ),
         ),

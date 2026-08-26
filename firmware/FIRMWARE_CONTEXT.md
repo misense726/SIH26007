@@ -1,367 +1,135 @@
-# FogSen Firmware Context
+# FogSen firmware context
 
-## Frozen controller topology
+## Controller ownership
 
-FogSen V1 uses exactly three critical microcontrollers:
+FogSen uses three wired controllers:
 
-1. **MAIN — normal ESP32 DevKit / ESP32-WROOM-class board**
-2. **FRONT NODE — Seeed Studio XIAO ESP32-C6 #1**
-3. **REAR NODE — Seeed Studio XIAO ESP32-C6 #2**
+- FRONT XIAO ESP32-C6 owns `front_scanner`, `front_fixed`, and the front SG90;
+- MIDDLE ESP32-C3 Super Mini owns `left_side` and `right_side`;
+- BACK/MAIN ESP32-WROOM owns `rear_scanner`, the rear SG90, MPU6050, BMP280,
+  and laptop USB telemetry. Hall and motor-cut relay implementations remain in
+  the firmware but are disabled in the current hardware profile.
 
-The Ai-Thinker Ai-WB2-32S-Kit is **not used in the critical path**. It is BL602-based, not ESP32-based, and would introduce another SDK/toolchain. Keep it as a spare/future experimental node.
+Keep the five canonical range IDs unchanged. The backend packet still contains
+`front.scan`, `front.front`, `rear.scan`, `rear.left`, and `rear.right`. MAIN
+builds the `rear` object from its local scanner and the MIDDLE UART packet.
 
-Two ESP32-C3 Super Mini boards are also spares.
+The VL53LDK remains disconnected.
 
-The goal is reliability and easy debugging.
+## Pin contract
 
----
+### FRONT XIAO ESP32-C6
 
-# 1. Communications
+| Pin | Use |
+|---|---|
+| D0 / GPIO0 | front scanner XSHUT |
+| D1 / GPIO1 | fixed-front XSHUT |
+| D2 / GPIO2 | front SG90 PWM |
+| D4 / GPIO22 | SDA |
+| D5 / GPIO23 | SCL |
+| D6 / GPIO16 | UART TX to MAIN GPIO16 |
+| D7 / GPIO17 | UART RX from MAIN GPIO17 |
 
-Use **wired UART** between sensor nodes and the main ESP32.
+### MIDDLE ESP32-C3 Super Mini
 
-Do not use Wi-Fi, BLE or ESP-NOW for internal vehicle communication.
+| Pin | Use |
+|---|---|
+| GPIO0 | fixed-left XSHUT |
+| GPIO1 | fixed-right XSHUT |
+| GPIO4 | SDA |
+| GPIO5 | SCL |
+| GPIO21 | UART TX to MAIN GPIO26 |
+| GPIO20 | UART RX from MAIN GPIO27 |
 
-### FRONT XIAO C6
-- UART TX: D6 / GPIO16
-- UART RX: D7 / GPIO17
+Keep C3 GPIO2, GPIO8, and GPIO9 free because they are boot-strapping pins. Keep
+GPIO18 and GPIO19 free for native USB.
 
-### REAR XIAO C6
-- UART TX: D6 / GPIO16
-- UART RX: D7 / GPIO17
+### BACK/MAIN ESP32-WROOM
 
-### MAIN ESP32
-Use two hardware UARTs with explicit pin assignment.
+| Pin | Use |
+|---|---|
+| GPIO13 | rear scanner XSHUT |
+| GPIO14 | rear SG90 PWM |
+| GPIO21 / GPIO22 | rear scanner, MPU6050, and BMP280 SDA / SCL |
+| GPIO16 / GPIO17 | FRONT UART RX / TX |
+| GPIO26 / GPIO27 | MIDDLE UART RX / TX |
+| GPIO32 / GPIO33 | reserved left / right Hall inputs, leave unconnected |
+| GPIO25 | reserved relay motor-cut output, leave unconnected |
 
-Recommended initial pin plan:
-- Front UART RX = GPIO16
-- Front UART TX = GPIO17
-- Rear UART RX = GPIO26
-- Rear UART TX = GPIO27
-- Main USB/Serial = laptop/debug
+UART uses 115200 baud, 8 data bits, no parity, and 1 stop bit. Cross TX to RX,
+use 3.3 V logic, and join all grounds. MAIN uses USB serial for the laptop. No
+controller uses wireless transport.
 
-If the exact ESP32 board exposes different pins, preserve the logical mapping and choose safe exposed GPIOs. Avoid flash/strapping pins.
+## I2C addresses and recovery
 
-Initial baud:
-`115200`
+All ToFs boot at `0x29`.
 
-Only increase baud after the system is stable.
+| Controller | Sensor | Runtime address |
+|---|---|---:|
+| FRONT | front VL53L1X scanner | `0x30` |
+| FRONT | fixed-front VL53L0X | `0x31` |
+| MIDDLE | fixed-left VL53L0X | `0x31` |
+| MIDDLE | fixed-right VL53L0X | `0x32` |
+| MAIN | rear VL53L1X scanner | `0x30` |
 
-All UART links require common GND.
+Addresses may repeat between controllers because the buses are separate.
 
----
+At boot and recovery, a controller holds every local XSHUT low. It releases one
+sensor, initializes it at `0x29`, assigns and probes the runtime address, then
+continues. It repeats the full local sequence after a probe or timed-read
+failure. XSHUT release uses `pinMode(pin, INPUT)` so the carrier pulls the line
+high.
 
-# 2. Power
+## Timing and unknown values
 
-Do NOT power servos from the XIAO 3.3 V rail.
+FRONT reads scanner then fixed-front with a 5 ms optical guard. MIDDLE reads
+left then right with the same guard. MAIN runs the rear scanner independently.
+Both servo settle values default to 90 ms and accept 20 through 120 ms.
 
-Use a separate regulated 5 V servo supply capable of handling both servos comfortably.
+A valid scanner range is 1 through 4000 mm. A valid fixed range is 1 through
+2000 mm. Missing, rejected, timed-out, or out-of-range readings are `-1`.
+Unknown never means maximum range.
 
-Recommended:
-- 5 V buck converter
-- at least 2 A, preferably 3 A
-- common ground between servo supply and all controllers
+## Packets and health
 
-Add local bulk capacitance near servo power:
-- approximately 470–1000 µF electrolytic
-
-Keep motor power and logic power separated as much as practical.
-
-The relay controls RC motor power for the emergency-stop simulation.
-
----
-
-# 3. Front Node Hardware
-
-XIAO ESP32-C6 #1:
-
-- TCA9548A I²C multiplexer
-- VL53L1X front scanning sensor
-- VL53L0X front-left sensor
-- VL53L0X front-right sensor
-- front SG90 servo
-
-Recommended XIAO pins:
-- SDA = D4 / GPIO22
-- SCL = D5 / GPIO23
-- UART TX = D6 / GPIO16
-- UART RX = D7 / GPIO17
-- Servo PWM = D2 / GPIO2 initially
-
-TCA channels:
-- CH0 = front VL53L1X
-- CH1 = front-left VL53L0X
-- CH2 = front-right VL53L0X
-
----
-
-# 4. Rear Node Hardware
-
-XIAO ESP32-C6 #2:
-
-- TCA9548A I²C multiplexer
-- VL53L1X rear scanning sensor
-- VL53L0X left-side sensor
-- VL53L0X right-side sensor
-- rear SG90 servo
-
-Recommended pins:
-- SDA = D4 / GPIO22
-- SCL = D5 / GPIO23
-- UART TX = D6 / GPIO16
-- UART RX = D7 / GPIO17
-- Servo PWM = D2 / GPIO2 initially
-
-TCA channels:
-- CH0 = rear VL53L1X
-- CH1 = left-side VL53L0X
-- CH2 = right-side VL53L0X
-
----
-
-# 5. Main ESP32 Hardware
-
-Normal ESP32:
-
-- UART from FRONT node
-- UART from REAR node
-- MPU6050
-- BMP280
-- left Hall wheel sensor
-- right Hall wheel sensor
-- emergency-stop relay / motor cut
-- USB serial to laptop
-
-Recommended pins:
-- I²C SDA = GPIO21
-- I²C SCL = GPIO22
-- Hall left = GPIO32
-- Hall right = GPIO33
-- Relay = GPIO25
-- Front UART RX/TX = GPIO16/GPIO17
-- Rear UART RX/TX = GPIO26/GPIO27
-
-These are initial defaults and must live in one configuration header.
-
----
-
-# 6. Design Principle
-
-Sensor nodes do only sensor acquisition and servo scanning.
-
-They do NOT:
-- map;
-- run Digital Twin logic;
-- run visibility AI;
-- calculate safe corridor;
-- make global navigation decisions.
-
-The MAIN ESP32:
-- receives sensor-node packets;
-- reads IMU/BMP280/Hall;
-- timestamps/validates node data;
-- performs local deterministic emergency-stop logic;
-- forwards consolidated telemetry to laptop.
-
-The laptop:
-- mapping;
-- Digital Twin;
-- driver dashboard;
-- supervisor dashboard;
-- camera processing;
-- dehazing;
-- spatial visualization.
-
----
-
-# 7. UART Protocol
-
-Use newline-delimited compact JSON during the first working version.
-
-Do not optimize into binary until everything is stable.
-
-Front example:
+FRONT sends:
 
 ```json
-{"node":"FRONT","seq":42,"ms":18120,"a":-30,"scan":1260,"fl":620,"fr":710,"ok":1}
+{"node":"FRONT","seq":42,"ms":18120,"a":-30,"scan":1260,"scan_ms":18070,"front":620,"front_ms":18118,"ok":11}
 ```
 
-Rear example:
+MIDDLE sends:
 
 ```json
-{"node":"REAR","seq":43,"ms":18124,"a":25,"scan":930,"left":440,"right":510,"ok":1}
+{"node":"MIDDLE","seq":43,"ms":18124,"left":440,"left_ms":18095,"right":510,"right_ms":18122,"ok":6}
 ```
 
-Main-to-laptop example:
+Global health bits remain scanner `1`, fixed A `2`, fixed B `4`, and servo `8`.
+Healthy FRONT is `0x0B`. Healthy MIDDLE is `0x06`. MAIN combines healthy local
+rear scanner and servo bits with fresh MIDDLE fixed bits to publish healthy
+rear mask `0x0F`.
 
-```json
-{
-  "ms":18200,
-  "front":{"a":-30,"scan":1260,"fl":620,"fr":710,"age":4},
-  "rear":{"a":25,"scan":930,"left":440,"right":510,"age":8},
-  "imu":{"gz":1.3,"ax":0.02,"ay":-0.01},
-  "env":{"temp":31.4,"pressure":1007.2,"rel_alt":1.2},
-  "wheel":{"left":124,"right":127},
-  "estop":{"state":"SAFE","cut":false}
-}
-```
+MAIN preserves per-sensor ages. Stale or missing MIDDLE data does not invalidate
+a fresh rear scanner, and a failed rear scanner does not turn the side ToFs into
+maximum range.
 
-Keep lines reasonably short.
+## Safety and power
 
-Use one packet per line.
+Forward safety still requires the FRONT scanner and fixed-front ToF. MAIN owns
+the bounded in-sector scanner cache and keeps computing warning and stop state.
+The current profile does not read Hall pulses or drive the relay pin. Camera or
+ML output cannot make a future motor decision.
 
----
+`FirmwareConfig.h` keeps `kHallSensorsEnabled` and
+`kMotorCutRelayEnabled` false. Disabled Hall pins stay as inputs with no
+interrupts. The disabled relay pin stays as an input and telemetry reports that
+the physical output is unavailable.
 
-# 8. Packet Robustness
+Power both SG90s from a separate regulated 5 V, 2 to 3 A supply. Add 470 to 1000
+microfarads near the servo rail. Join the servo ground to all controller and
+sensor grounds.
 
-Each node packet must contain:
-- node ID
-- sequence number
-- node millis
-- measurements
-- health flag
-
-Main ESP32 must track:
-- last receive time
-- dropped/out-of-order sequence counts
-- stale-node timeout
-
-Initial stale timeout:
-`500 ms`
-
-Do not reuse stale sensor values indefinitely.
-
----
-
-# 9. Time Strategy
-
-For V1, start simple:
-
-- sensor nodes timestamp using local `millis()`
-- main timestamps reception time
-- main periodically sends a sync message if needed later
-
-Do NOT implement complex clock synchronization before basic telemetry is stable.
-
-Mapping software can initially use main reception timestamps because the RC car moves slowly.
-
-Add explicit clock sync only after the base system works.
-
----
-
-# 10. Servo Scan Strategy
-
-Do not attempt smooth continuous 180° scanning first.
-
-Start discrete.
-
-Suggested scanner angles:
-`-80, -70, -60 ... 0 ... +60, +70, +80`
-
-Then reverse direction.
-
-At each position:
-1. command servo;
-2. allow short settle delay;
-3. select scanner TCA channel;
-4. read ToF;
-5. send packet.
-
-Keep fixed ToFs updated between scanner steps.
-
-Servo angles and delays must be configurable.
-
----
-
-# 11. ToF Cross-Talk
-
-Do not read all optical ToFs simultaneously.
-
-Per node:
-1. scanner reading
-2. fixed sensor A
-3. fixed sensor B
-
-Use TCA channel selection and sequential reads.
-
-If interference appears, add configurable inter-measurement delay.
-
----
-
-# 12. Emergency Stop
-
-Emergency-stop logic lives on MAIN ESP32 so it can work even if the laptop crashes.
-
-V1 emergency action:
-**relay-controlled motor cut**
-
-Call it:
-**Automatic Emergency Stop Simulation**
-
-Never claim this is a production service/hydraulic brake.
-
-Use only deterministic valid live range + speed data.
-
-Initial logic must be conservative and configurable.
-
-Never trigger solely from:
-- camera ML;
-- dehazed image;
-- simulated radar;
-- BMP280.
-
----
-
-# 13. Firmware Build Policy
-
-Use Arduino framework for all three critical controllers.
-
-Keep each firmware in its own project/folder.
-
-Required:
-- no dynamic task complexity until needed;
-- no Wi-Fi;
-- no BLE;
-- no cloud;
-- no FreeRTOS task architecture unless simple loop/state machine proves insufficient;
-- no blocking delays longer than necessary;
-- watchdog-friendly loops;
-- serial logging that can be disabled with a compile-time flag.
-
-Prefer straightforward state machines.
-
-The firmware must compile before new features are added.
-
----
-
-# 14. Libraries
-
-The coding agent should choose stable Arduino-compatible libraries that compile for the specific board.
-
-Preferred concepts:
-- `Wire`
-- TCA9548A direct channel selection or a lightweight stable library
-- VL53L0X library
-- VL53L1X library
-- servo PWM library/API verified on ESP32-C6
-- MPU6050 library
-- Adafruit BMP280 or equivalent
-- ArduinoJson on MAIN if needed
-
-Do not assume a library supports ESP32-C6 without compiling it.
-
----
-
-# 15. Reliability Requirements
-
-Every firmware project must:
-- boot even if one sensor is absent;
-- report missing sensors instead of reboot-looping;
-- retry initialization periodically;
-- continue sending health packets;
-- use timeouts for I²C/range reads;
-- never wait forever for UART input;
-- never let logging block safety logic;
-- expose sensor health.
-
-The purpose is a demo that keeps running even when one peripheral is unhappy.
+Compilation proves source and board-package compatibility only. It does not
+prove pin labels, XSHUT voltage, I2C recovery, servo movement, UART wiring,
+optical behavior, or power stability. Relay polarity remains untested until a
+later hardware profile enables that output.

@@ -57,6 +57,8 @@ def _ray_circle_distance(
     offset_y = origin.y_m - target.center.y_m
     projection = offset_x * direction_x + offset_y * direction_y
     constant = offset_x**2 + offset_y**2 - target.radius_m**2
+    if constant <= 0.0:
+        return 0.0
     discriminant = projection**2 - constant
     if discriminant < 0.0:
         return None

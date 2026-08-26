@@ -1,14 +1,14 @@
 # Demo
 
 FogSen starts in a deterministic `NORMAL` simulation. The backend publishes the
-same `WorldState` contract used by future wired providers. Both dashboards read
+same `WorldState` contract used by the wired live runtime. Both dashboards read
 that shared state.
 
 ## Demo sequence
 
 1. Start the backend and frontend.
 2. Confirm `/api/health` returns `ok` and the dashboard says `CONNECTED`.
-3. Open the driver view. Check that it shows `SIMULATED`, six ToF readings, the
+3. Open the driver view. Check that it shows `SIMULATED`, five ToF readings, the
    moving dumper, a green corridor, and 88 percent visibility. Use the theme
    control to check both light and dark modes.
 4. Open the supervisor view. Confirm it shows the same vehicle pose, environment,
@@ -55,7 +55,7 @@ and unknown fields.
 - The route advances at 1.15 metres per second at normal speed and never exceeds
   the configured 2.5 metres per second demo limit. It stops at the destination
   instead of jumping back to the start.
-- The simulator publishes exactly two scanning ToFs and four fixed ToFs. Each
+- The simulator publishes exactly two scanning ToFs and three fixed ToFs. Each
   reading uses its configured angle, maximum range, quality, and staggered
   timestamp.
 - Hall counts, IMU heading, and ArUco pose follow the same route motion. The ArUco

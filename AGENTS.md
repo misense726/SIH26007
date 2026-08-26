@@ -112,7 +112,7 @@ Design the data model for multiple dumpers even if V1 uses one.
 
 Simulate:
 - 2 scanning ToFs;
-- 4 fixed ToFs;
+- 3 fixed ToFs;
 - Hall ticks;
 - IMU;
 - ArUco;
@@ -264,15 +264,27 @@ Always label them.
 
 Use USB serial first.
 
-ESP32 handles:
-- 6 ToFs;
-- 2 servos;
+The FRONT XIAO ESP32-C6 handles the front scanner, fixed-front ToF, and front
+servo. The MIDDLE ESP32-C3 Super Mini handles the fixed left and right ToFs.
+
+The normal ESP32 MAIN is mounted at the back and handles:
+- the local rear scanner and rear servo;
+- wired UART links from FRONT and MIDDLE;
 - MPU6050;
-- Hall sensors;
 - BMP280;
-- relay output.
+- reserved Hall inputs and relay output code, disabled in the current hardware
+  profile;
+- USB telemetry to the laptop.
+
+Leave GPIO32, GPIO33, and GPIO25 unconnected in the current build. Preserve the
+Hall odometry and motor-cut implementations for a later profile.
 
 Use staggered ToF reads.
+
+Each controller keeps its local ToFs on one I2C bus. Give every ToF a dedicated
+XSHUT GPIO and assign runtime addresses one sensor at a time. Re-run the complete
+controller-local address sequence after sensor or bus recovery. Use no I2C
+multiplexer.
 
 Timestamp everything.
 
@@ -290,8 +302,7 @@ Do not chase perfect mapping immediately.
 ## M18 — Fixed ToFs
 
 Integrate:
-- front-left;
-- front-right;
+- front;
 - left;
 - right.
 
@@ -473,11 +484,14 @@ No scattered hard-coded calibration.
 
 # 8. ToF Timing
 
-Six ToFs may interfere.
+Five ToFs may interfere optically.
 
-Do not blindly poll all simultaneously.
+Read each controller's ToFs sequentially with configurable timing. The FRONT
+and rear scans remain independent. MAIN owns the rear scan locally, while the
+MIDDLE C3 reads the two side ToFs sequentially.
 
-Implement configurable staggered acquisition.
+At node boot and recovery, hold every local XSHUT low, then enable, initialize,
+address, and verify each sensor before enabling the next one.
 
 Timestamp every range reading.
 

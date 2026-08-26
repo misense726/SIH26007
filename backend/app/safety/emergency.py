@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from backend.app.models import EmergencyLevel, EmergencyState, RangeReading
 
 
-FRONT_SENSORS = {"front_scanner", "front_left", "front_right"}
+FRONT_SENSORS = {"front_scanner", "front_fixed"}
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,6 +97,9 @@ class EmergencyController:
         detected = [
             reading for reading in valid if reading.range_m < reading.max_range_m - 0.01
         ]
+        coverage_complete = FRONT_SENSORS <= {
+            reading.sensor_id for reading in valid
+        }
         nearest = (
             min(reading.range_m for reading in detected)
             if detected
@@ -155,6 +158,10 @@ class EmergencyController:
         elif nearest <= distances.warning_m:
             level = EmergencyLevel.WARNING
             reason = "Forward obstacle is inside the warning distance"
+        elif not coverage_complete:
+            level = EmergencyLevel.WARNING
+            reason = "Forward range coverage is incomplete or stale"
+            confidence = 0.0
         else:
             level = EmergencyLevel.SAFE
             reason = None

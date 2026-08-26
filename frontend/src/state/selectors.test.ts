@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { defaultWorldState } from "./defaultState";
-import { nearestRange, primaryVehicle } from "./selectors";
+import { availableRangeReadings } from "./rangeReadings";
+import {
+  nearestRange,
+  primaryVehicle,
+  tofSensorHealth,
+  tofSensorHealthSummary,
+} from "./selectors";
 
 describe("world selectors", () => {
   it("selects the backend-designated primary vehicle", () => {
@@ -32,5 +38,63 @@ describe("world selectors", () => {
         { ...base, sensor_id: "good", range_m: 1.4, quality: 0.9 },
       ]),
     ).toBe(1.4);
+  });
+
+  it("does not expose a stale range to dashboard summaries", () => {
+    const reading = {
+      timestamp_ms: 1,
+      sensor_id: "front_fixed",
+      angle_deg: 0,
+      range_m: 0.2,
+      quality: 1,
+      max_range_m: 2,
+      is_valid: true,
+      mode: "LIVE" as const,
+    };
+    const health = {
+      sensor_id: "front_fixed",
+      status: "STALE" as const,
+      last_update_ms: 1,
+      confidence: 0,
+      detail: "No fresh MAIN packet",
+    };
+
+    expect(availableRangeReadings([reading], [health], true)).toEqual([]);
+  });
+
+  it("summarizes the final five-ToF health layout", () => {
+    const sensors = [
+      "front_scanner",
+      "front_fixed",
+      "rear_scanner",
+      "left_side",
+      "right_side",
+    ].map((sensorId) => ({
+      sensor_id: sensorId,
+      status: "HEALTHY" as const,
+      last_update_ms: 1,
+      confidence: 1,
+      detail: null,
+    }));
+
+    const mixedHealth = [
+      ...sensors,
+      { ...sensors[0], sensor_id: "mpu6050" },
+      { ...sensors[0], sensor_id: "bmp280", status: "OFFLINE" as const },
+    ];
+
+    expect(tofSensorHealth(mixedHealth).map((sensor) => sensor.sensor_id)).toEqual([
+      "front_scanner",
+      "front_fixed",
+      "rear_scanner",
+      "left_side",
+      "right_side",
+    ]);
+    expect(tofSensorHealthSummary(mixedHealth)).toEqual({ healthy: 5, total: 5 });
+    expect(tofSensorHealthSummary([{ ...sensors[0], status: "OFFLINE" }])).toEqual({
+      healthy: 0,
+      total: 5,
+    });
+    expect(tofSensorHealthSummary(mixedHealth.slice(5))).toEqual({ healthy: 0, total: 5 });
   });
 });

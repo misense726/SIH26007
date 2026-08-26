@@ -1,4 +1,4 @@
-import { formatNumber } from "../state/selectors";
+import { formatNumber, tofSensorHealthSummary } from "../state/selectors";
 import type { EnvironmentState, EmergencyState, SensorHealth, VehiclePose } from "../types";
 
 interface FleetCardProps {
@@ -9,7 +9,7 @@ interface FleetCardProps {
 }
 
 export function FleetCard({ vehicle, environment, emergency, sensors }: FleetCardProps) {
-  const healthy = sensors.filter((sensor) => sensor.status === "HEALTHY").length;
+  const sensorSummary = tofSensorHealthSummary(sensors);
   const emergencyClass = emergency.state.toLowerCase().replace("_", "-");
 
   return (
@@ -32,9 +32,8 @@ export function FleetCard({ vehicle, environment, emergency, sensors }: FleetCar
         <div><dt>Heading</dt><dd>{formatNumber(vehicle.heading_deg, 0)}°</dd></div>
         <div><dt>Relative altitude</dt><dd>{formatNumber(environment.relative_altitude_m, 2)} m approx.</dd></div>
         <div><dt>Visibility</dt><dd>{Math.round(environment.visibility_score * 100)}%</dd></div>
-        <div><dt>Sensor health</dt><dd>{healthy}/{sensors.length || 6} healthy</dd></div>
+        <div><dt>ToF health</dt><dd>{sensorSummary.healthy}/{sensorSummary.total} healthy</dd></div>
       </dl>
     </article>
   );
 }
-

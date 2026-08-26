@@ -11,6 +11,7 @@
 #include "LocalSensors.h"
 #include "NodeLink.h"
 #include "Pins.h"
+#include "RearScanner.h"
 #include "SafetyConfig.h"
 #include "SafetyController.h"
 #include "SerialTxQueue.h"
@@ -22,10 +23,11 @@ namespace fogsen {
 namespace {
 
 HardwareSerial frontSerial(1);
-HardwareSerial rearSerial(2);
-NodeLink frontNode(NodeRole::kFront, "fl", "fr");
-NodeLink rearNode(NodeRole::kRear, "left", "right");
+HardwareSerial middleSerial(2);
+NodeLink frontNode(NodeRole::kFront, "front", nullptr);
+NodeLink middleNode(NodeRole::kMiddle, "left", "right");
 LocalSensors localSensors(Wire);
+RearScanner rearScanner(Wire);
 WheelOdometry wheelOdometry(config::kWheelCircumferenceM,
                             config::kMagnetsPerWheel,
                             config::kMaxPlausibleWheelSpeedMps,
@@ -71,6 +73,17 @@ uint32_t lastTelemetryMs = 0;
 uint32_t telemetrySequence = 0;
 uint32_t telemetryOversizeDrops = 0;
 
+struct FrontScannerEvidence {
+  bool valid;
+  int16_t rangeMm;
+  uint32_t sampleMainMs;
+  bool hasProcessedPacket;
+  uint32_t lastProcessedSequence;
+  uint32_t observedRebootCount;
+};
+
+FrontScannerEvidence frontScannerEvidence{false, -1, 0, false, 0, 0};
+
 StaticJsonDocument<config::kTelemetryJsonCapacity> telemetryDocument;
 char telemetryLine[config::kTelemetryLineCapacity];
 
@@ -107,6 +120,10 @@ int relayLevel(bool cut) {
 }
 
 void applyRelayCut(bool cut) {
+  if (!config::kMotorCutRelayEnabled) {
+    relayCutApplied = false;
+    return;
+  }
   if (cut == relayCutApplied) {
     return;
   }
@@ -142,9 +159,116 @@ void includeRange(int16_t rangeMm,
   ++count;
 }
 
+uint32_t nodeSampleAgeMs(const NodeLink& node,
+                         uint32_t nowMs,
+                         uint32_t sampleNodeMs) {
+  const uint32_t linkAgeMs = node.ageMs(nowMs);
+  const uint32_t localAgeMs = elapsedMs(node.packet().nodeMs, sampleNodeMs);
+  if (UINT32_MAX - linkAgeMs < localAgeMs) {
+    return UINT32_MAX;
+  }
+  return linkAgeMs + localAgeMs;
+}
+
+void clearFrontScannerEvidence() {
+  frontScannerEvidence.valid = false;
+  frontScannerEvidence.rangeMm = -1;
+  frontScannerEvidence.sampleMainMs = 0;
+}
+
+bool cachedFrontScannerRange(uint32_t nowMs, int16_t& rangeMm) {
+  if (!frontNode.isFresh(nowMs)) {
+    clearFrontScannerEvidence();
+    return false;
+  }
+
+  const NodePacket& packet = frontNode.packet();
+  const NodeLinkStats& stats = frontNode.stats();
+  if (stats.rebootCount != frontScannerEvidence.observedRebootCount) {
+    clearFrontScannerEvidence();
+    frontScannerEvidence.observedRebootCount = stats.rebootCount;
+    frontScannerEvidence.hasProcessedPacket = false;
+  }
+
+  const bool scannerHealthy =
+      (packet.healthMask & node_health_bits::kScanner) != 0 &&
+      (packet.healthMask & node_health_bits::kServo) != 0;
+  if (!scannerHealthy) {
+    clearFrontScannerEvidence();
+    frontScannerEvidence.hasProcessedPacket = true;
+    frontScannerEvidence.lastProcessedSequence = packet.sequence;
+    return false;
+  }
+
+  const bool newPacket =
+      !frontScannerEvidence.hasProcessedPacket ||
+      packet.sequence != frontScannerEvidence.lastProcessedSequence;
+  if (newPacket) {
+    frontScannerEvidence.hasProcessedPacket = true;
+    frontScannerEvidence.lastProcessedSequence = packet.sequence;
+
+    if (abs(packet.angleDeg) <= config::kScannerSafetyHalfAngleDeg) {
+      const uint32_t sampleAgeMs =
+          nodeSampleAgeMs(frontNode, nowMs, packet.scanMs);
+      if (validRange(packet.scanMm, config::kScannerMaxMm) &&
+          sampleAgeMs <= safety_config::kForwardScannerEvidenceStaleMs) {
+        frontScannerEvidence.valid = true;
+        frontScannerEvidence.rangeMm = packet.scanMm;
+        frontScannerEvidence.sampleMainMs = nowMs - sampleAgeMs;
+      } else {
+        clearFrontScannerEvidence();
+      }
+    }
+  }
+
+  if (!frontScannerEvidence.valid ||
+      elapsedMs(nowMs, frontScannerEvidence.sampleMainMs) >
+          safety_config::kForwardScannerEvidenceStaleMs) {
+    clearFrontScannerEvidence();
+    return false;
+  }
+
+  rangeMm = frontScannerEvidence.rangeMm;
+  return true;
+}
+
+void collectForwardRanges(uint32_t nowMs,
+                          uint8_t& count,
+                          float& nearestM,
+                          bool& coverageSufficient) {
+  coverageSufficient = false;
+
+  int16_t scannerMm = -1;
+  const bool scannerValid = cachedFrontScannerRange(nowMs, scannerMm);
+  if (!frontNode.isFresh(nowMs)) {
+    return;
+  }
+
+  const NodePacket& packet = frontNode.packet();
+  const bool fixedHealthy =
+      (packet.healthMask & node_health_bits::kFixedA) != 0;
+  const uint32_t fixedAgeMs =
+      nodeSampleAgeMs(frontNode, nowMs, packet.fixedAMs);
+  const bool fixedValid =
+      fixedHealthy && validRange(packet.fixedAMm, config::kFixedMaxMm) &&
+      fixedAgeMs <= config::kNodeStaleMs;
+
+  if (scannerValid) {
+    includeRange(scannerMm, config::kScannerMaxMm, count, nearestM);
+  }
+  if (fixedValid) {
+    includeRange(packet.fixedAMm, config::kFixedMaxMm, count, nearestM);
+  }
+
+  coverageSufficient =
+      scannerValid && fixedValid &&
+      count >= safety_config::kMinimumValidForwardRanges;
+}
+
 void collectNodeRanges(const NodeLink& node,
                        uint32_t nowMs,
-                       bool requireFixedPair,
+                       bool requireFixedA,
+                       bool requireFixedB,
                        bool requireScanner,
                        uint8_t& count,
                        float& nearestM,
@@ -155,14 +279,13 @@ void collectNodeRanges(const NodeLink& node,
   }
 
   const NodePacket& packet = node.packet();
-  const bool tcaHealthy =
-      (packet.healthMask & node_health_bits::kTca) != 0;
   const bool fixedAHealthy =
-      tcaHealthy && (packet.healthMask & node_health_bits::kFixedA) != 0;
+      (packet.healthMask & node_health_bits::kFixedA) != 0;
   const bool fixedBHealthy =
-      tcaHealthy && (packet.healthMask & node_health_bits::kFixedB) != 0;
+      node.hasFixedB() &&
+      (packet.healthMask & node_health_bits::kFixedB) != 0;
   const bool scannerHealthy =
-      tcaHealthy && (packet.healthMask & node_health_bits::kScanner) != 0 &&
+      (packet.healthMask & node_health_bits::kScanner) != 0 &&
       (packet.healthMask & node_health_bits::kServo) != 0;
 
   if (fixedAHealthy) {
@@ -177,14 +300,51 @@ void collectNodeRanges(const NodeLink& node,
   }
 
   coverageSufficient =
-      tcaHealthy && (!requireFixedPair || (fixedAHealthy && fixedBHealthy)) &&
+      (!requireFixedA || fixedAHealthy) &&
+      (!requireFixedB || fixedBHealthy) &&
       (!requireScanner || scannerHealthy) && count > 0;
+}
+
+uint8_t backHealthMask(uint32_t nowMs) {
+  uint8_t mask = 0;
+  if (rearScanner.sensorHealthy()) {
+    mask |= node_health_bits::kScanner;
+  }
+  if (rearScanner.servoHealthy()) {
+    mask |= node_health_bits::kServo;
+  }
+  if (middleNode.isFresh(nowMs)) {
+    mask |= middleNode.packet().healthMask &
+            node_health_bits::kMiddleExpected;
+  }
+  return mask;
+}
+
+void collectBackRanges(uint32_t nowMs,
+                       uint8_t& count,
+                       float& nearestM,
+                       bool& coverageSufficient) {
+  coverageSufficient = false;
+  const RearScannerReading& reading = rearScanner.reading();
+  const bool scannerHealthy = rearScanner.sensorHealthy() &&
+                              rearScanner.servoHealthy();
+  const bool scannerFresh =
+      reading.hasSample && rearScanner.sampleAgeMs(nowMs) <= config::kNodeStaleMs;
+  const bool scannerInSector =
+      reading.hasSample &&
+      abs(reading.angleDeg) <= config::kScannerSafetyHalfAngleDeg;
+  if (scannerHealthy && scannerFresh && scannerInSector) {
+    includeRange(reading.rangeMm, config::kScannerMaxMm, count, nearestM);
+  }
+  coverageSufficient = scannerHealthy && scannerFresh && scannerInSector &&
+                       validRange(reading.rangeMm, config::kScannerMaxMm);
 }
 
 SafetyInput buildSafetyInput(uint32_t nowMs) {
   SafetyInput input;
   input.nowMs = nowMs;
-  input.speedMps = wheelOdometry.state().speedMps;
+  input.speedMps =
+      config::kHallSensorsEnabled ? wheelOdometry.state().speedMps : 0.0F;
   input.direction = configuredTravelDirection();
   input.coverageSufficient = false;
   input.hasValidRange = false;
@@ -194,21 +354,20 @@ SafetyInput buildSafetyInput(uint32_t nowMs) {
   float nearestM = 0.0F;
   bool coverage = false;
   if (input.direction == TravelDirection::kForward) {
-    collectNodeRanges(frontNode, nowMs,
-                      safety_config::kRequireHealthyFixedPairForForward, false,
-                      validCount, nearestM, coverage);
-    coverage = coverage &&
-               validCount >= safety_config::kMinimumValidForwardRanges;
+    collectForwardRanges(nowMs, validCount, nearestM, coverage);
   } else if (input.direction == TravelDirection::kReverse) {
-    collectNodeRanges(rearNode, nowMs, false, true, validCount, nearestM,
-                      coverage);
+    collectBackRanges(nowMs, validCount, nearestM, coverage);
   } else {
     bool frontCoverage = false;
-    bool rearCoverage = false;
-    collectNodeRanges(frontNode, nowMs, false, false, validCount, nearestM,
+    bool middleCoverage = false;
+    bool backCoverage = false;
+    collectNodeRanges(frontNode, nowMs, false, false, false,
+                      validCount, nearestM,
                       frontCoverage);
-    collectNodeRanges(rearNode, nowMs, false, false, validCount, nearestM,
-                      rearCoverage);
+    collectNodeRanges(middleNode, nowMs, false, false, false,
+                      validCount, nearestM,
+                      middleCoverage);
+    collectBackRanges(nowMs, validCount, nearestM, backCoverage);
     coverage = false;
   }
 
@@ -242,16 +401,28 @@ void addNodeTelemetry(JsonObject object,
     object["node_ms"] = packet.nodeMs;
     object["a"] = packet.angleDeg;
     object["scan"] = packet.scanMm;
+    object["scan_age"] = nodeSampleAgeMs(node, nowMs, packet.scanMs);
     object[node.fixedAKey()] = packet.fixedAMm;
-    object[node.fixedBKey()] = packet.fixedBMm;
+    object[node.fixedAAgeKey()] =
+        nodeSampleAgeMs(node, nowMs, packet.fixedAMs);
+    if (node.hasFixedB()) {
+      object[node.fixedBKey()] = packet.fixedBMm;
+      object[node.fixedBAgeKey()] =
+          nodeSampleAgeMs(node, nowMs, packet.fixedBMs);
+    }
     object["ok"] = packet.healthMask;
   } else {
     object["seq"] = nullptr;
     object["node_ms"] = nullptr;
     object["a"] = nullptr;
     object["scan"] = -1;
+    object["scan_age"] = nullptr;
     object[node.fixedAKey()] = -1;
-    object[node.fixedBKey()] = -1;
+    object[node.fixedAAgeKey()] = nullptr;
+    if (node.hasFixedB()) {
+      object[node.fixedBKey()] = -1;
+      object[node.fixedBAgeKey()] = nullptr;
+    }
     object["ok"] = 0;
   }
   const NodeLinkStats& stats = node.stats();
@@ -259,6 +430,61 @@ void addNodeTelemetry(JsonObject object,
   object["ooo"] = stats.outOfOrderPackets;
   object["bad"] = stats.parseErrors + stats.schemaErrors + stats.overflowLines;
   object["reboot"] = stats.rebootCount;
+}
+
+void addBackTelemetry(JsonObject object, uint32_t nowMs) {
+  const RearScannerReading& scanner = rearScanner.reading();
+  const uint8_t healthMask = backHealthMask(nowMs);
+  const bool scannerFresh =
+      scanner.hasSample && rearScanner.sampleAgeMs(nowMs) <= config::kNodeStaleMs;
+  const bool middleFresh = middleNode.isFresh(nowMs);
+  const bool anyData = scanner.hasSample || middleNode.hasPacket();
+  const bool allHealthy =
+      healthMask == node_health_bits::kBackExpected && scannerFresh &&
+      middleFresh;
+  object["state"] = !anyData ? "OFFLINE" : allHealthy ? "HEALTHY" : "DEGRADED";
+
+  uint32_t aggregateAgeMs = 0;
+  if (scanner.hasSample) {
+    aggregateAgeMs = rearScanner.sampleAgeMs(nowMs);
+  }
+  if (middleNode.hasPacket() && middleNode.ageMs(nowMs) > aggregateAgeMs) {
+    aggregateAgeMs = middleNode.ageMs(nowMs);
+  }
+  addNullableAge(object, "age", anyData, aggregateAgeMs);
+  object["seq"] = middleNode.hasPacket() ? middleNode.packet().sequence : 0U;
+  object["node_ms"] = nowMs;
+
+  if (scanner.hasSample) {
+    object["a"] = scanner.angleDeg;
+    object["scan"] = scanner.rangeMm;
+    object["scan_age"] = rearScanner.sampleAgeMs(nowMs);
+  } else {
+    object["a"] = nullptr;
+    object["scan"] = -1;
+    object["scan_age"] = nullptr;
+  }
+
+  if (middleNode.hasPacket()) {
+    const NodePacket& packet = middleNode.packet();
+    object["left"] = packet.fixedAMm;
+    object["left_age"] = nodeSampleAgeMs(middleNode, nowMs, packet.fixedAMs);
+    object["right"] = packet.fixedBMm;
+    object["right_age"] = nodeSampleAgeMs(middleNode, nowMs, packet.fixedBMs);
+  } else {
+    object["left"] = -1;
+    object["left_age"] = nullptr;
+    object["right"] = -1;
+    object["right_age"] = nullptr;
+  }
+  object["ok"] = healthMask;
+
+  const NodeLinkStats& stats = middleNode.stats();
+  object["drop"] = stats.droppedPackets;
+  object["ooo"] = stats.outOfOrderPackets;
+  object["bad"] = stats.parseErrors + stats.schemaErrors + stats.overflowLines;
+  object["reboot"] = stats.rebootCount;
+  object["scanner_err"] = rearScanner.failures();
 }
 
 bool queueTelemetry(uint32_t nowMs) {
@@ -272,8 +498,7 @@ bool queueTelemetry(uint32_t nowMs) {
 
   addNodeTelemetry(telemetryDocument.createNestedObject("front"), frontNode,
                    nowMs);
-  addNodeTelemetry(telemetryDocument.createNestedObject("rear"), rearNode,
-                   nowMs);
+  addBackTelemetry(telemetryDocument.createNestedObject("rear"), nowMs);
 
   JsonObject imu = telemetryDocument.createNestedObject("imu");
   const ImuReading& imuReading = localSensors.imu();
@@ -323,6 +548,7 @@ bool queueTelemetry(uint32_t nowMs) {
 
   const WheelState& wheels = wheelOdometry.state();
   JsonObject wheel = telemetryDocument.createNestedObject("wheel");
+  wheel["enabled"] = config::kHallSensorsEnabled ? 1 : 0;
   wheel["l"] = wheels.leftTicks;
   wheel["r"] = wheels.rightTicks;
   wheel["ls"] = compactFloat(wheels.leftSpeedMps, 1000.0F);
@@ -334,7 +560,10 @@ bool queueTelemetry(uint32_t nowMs) {
   emergency["reason"] = safetyReasonName(lastSafetyOutput.reason);
   emergency["direction"] = travelDirectionName(lastSafetyInput.direction);
   emergency["coverage"] = lastSafetyInput.coverageSufficient ? 1 : 0;
-  emergency["cut"] = lastSafetyOutput.motorCut ? 1 : 0;
+  emergency["output_enabled"] =
+      config::kMotorCutRelayEnabled ? 1 : 0;
+  emergency["cut_requested"] = lastSafetyOutput.motorCut ? 1 : 0;
+  emergency["cut"] = relayCutApplied ? 1 : 0;
   emergency["latched"] = lastSafetyOutput.latched ? 1 : 0;
   if (lastSafetyInput.hasValidRange) {
     emergency["nearest"] =
@@ -403,14 +632,22 @@ void handleCommand(const char* command) {
     queueCommandReply(command, ok,
                       ok ? "RELATIVE_ALTITUDE_ZEROED" : "BMP280_NOT_READY");
   } else if (strcmp(command, "RESET_TICKS") == 0) {
-    resetHallTicks(nowMs);
-    queueCommandReply(command, true, "HALL_TICKS_RESET");
+    if (config::kHallSensorsEnabled) {
+      resetHallTicks(nowMs);
+      queueCommandReply(command, true, "HALL_TICKS_RESET");
+    } else {
+      queueCommandReply(command, false, "HALL_SENSORS_DISABLED");
+    }
   } else if (strcmp(command, "ESTOP_TEST") == 0) {
-    safetyController.triggerManualTest(nowMs);
-    lastSafetyInput = buildSafetyInput(nowMs);
-    lastSafetyOutput = safetyController.evaluate(lastSafetyInput);
-    applyRelayCut(true);
-    queueCommandReply(command, true, "MOTOR_CUT_LATCHED");
+    if (config::kMotorCutRelayEnabled) {
+      safetyController.triggerManualTest(nowMs);
+      lastSafetyInput = buildSafetyInput(nowMs);
+      lastSafetyOutput = safetyController.evaluate(lastSafetyInput);
+      applyRelayCut(true);
+      queueCommandReply(command, true, "MOTOR_CUT_LATCHED");
+    } else {
+      queueCommandReply(command, false, "RELAY_OUTPUT_DISABLED");
+    }
   } else if (strcmp(command, "ESTOP_RESET") == 0) {
     lastSafetyInput = buildSafetyInput(nowMs);
     const bool ok = safetyController.reset(lastSafetyInput);
@@ -418,16 +655,17 @@ void handleCommand(const char* command) {
       lastSafetyOutput = safetyController.evaluate(lastSafetyInput);
       applyRelayCut(false);
     }
-    queueCommandReply(
-        command, ok,
-        ok ? "MOTOR_CUT_RELEASED"
-           : "RESET_REQUIRES_STOPPED_VEHICLE_AND_VERIFIED_CLEAR_RANGE");
+    const char* reason =
+        !ok ? "RESET_REQUIRES_STOPPED_VEHICLE_AND_VERIFIED_CLEAR_RANGE"
+            : config::kMotorCutRelayEnabled ? "MOTOR_CUT_RELEASED"
+                                            : "SAFETY_LATCH_RESET";
+    queueCommandReply(command, ok, reason);
   } else if (strcmp(command, "FRONT_CENTER") == 0) {
     const bool ok = sendNodeCommand(frontSerial, "CENTER");
     queueCommandReply(command, ok, ok ? "FORWARDED" : "FRONT_UART_BUSY");
   } else if (strcmp(command, "REAR_CENTER") == 0) {
-    const bool ok = sendNodeCommand(rearSerial, "CENTER");
-    queueCommandReply(command, ok, ok ? "FORWARDED" : "REAR_UART_BUSY");
+    const bool ok = rearScanner.center(nowMs);
+    queueCommandReply(command, ok, ok ? "CENTERED" : "REAR_SERVO_ERROR");
   } else if (strcmp(command, "FRONT_SCAN_ON") == 0 ||
              strcmp(command, "FRONT_SCAN_OFF") == 0) {
     const char* nodeCommand = strcmp(command, "FRONT_SCAN_ON") == 0
@@ -437,11 +675,12 @@ void handleCommand(const char* command) {
     queueCommandReply(command, ok, ok ? "FORWARDED" : "FRONT_UART_BUSY");
   } else if (strcmp(command, "REAR_SCAN_ON") == 0 ||
              strcmp(command, "REAR_SCAN_OFF") == 0) {
-    const char* nodeCommand = strcmp(command, "REAR_SCAN_ON") == 0
-                                  ? "SCAN_ON"
-                                  : "SCAN_OFF";
-    const bool ok = sendNodeCommand(rearSerial, nodeCommand);
-    queueCommandReply(command, ok, ok ? "FORWARDED" : "REAR_UART_BUSY");
+    const bool enabled = strcmp(command, "REAR_SCAN_ON") == 0;
+    const bool ok = rearScanner.setScanning(enabled, nowMs);
+    queueCommandReply(command, ok, ok ? "APPLIED" : "REAR_SERVO_ERROR");
+  } else if (strcmp(command, "MIDDLE_STATUS") == 0) {
+    const bool ok = sendNodeCommand(middleSerial, "STATUS");
+    queueCommandReply(command, ok, ok ? "FORWARDED" : "MIDDLE_UART_BUSY");
   } else {
     queueCommandReply(command, false, "UNKNOWN_COMMAND");
   }
@@ -452,11 +691,33 @@ void commandHandler(const char* command, void*) {
 }
 
 void initializeRelay() {
+  relayCutApplied = false;
+  if (!config::kMotorCutRelayEnabled) {
+    pinMode(pins::kMotorCutRelay, INPUT);
+    return;
+  }
   const int safeLevel = relayLevel(false);
   digitalWrite(pins::kMotorCutRelay, safeLevel);
   pinMode(pins::kMotorCutRelay, OUTPUT);
   digitalWrite(pins::kMotorCutRelay, safeLevel);
-  relayCutApplied = false;
+}
+
+void initializeHallSensors(uint32_t nowMs) {
+  uint32_t left = 0;
+  uint32_t right = 0;
+  if (config::kHallSensorsEnabled) {
+    pinMode(pins::kHallLeft, INPUT_PULLUP);
+    pinMode(pins::kHallRight, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(pins::kHallLeft), onLeftHallTick,
+                    FALLING);
+    attachInterrupt(digitalPinToInterrupt(pins::kHallRight), onRightHallTick,
+                    FALLING);
+    snapshotHallTicks(left, right);
+  } else {
+    pinMode(pins::kHallLeft, INPUT);
+    pinMode(pins::kHallRight, INPUT);
+  }
+  wheelOdometry.begin(nowMs, left, right);
 }
 
 void queueBootEvent() {
@@ -466,6 +727,8 @@ void queueBootEvent() {
   event["fw"] = config::kFirmwareVersion;
   event["mode"] = config::kDataMode;
   event["ms"] = millis();
+  event["hall_enabled"] = config::kHallSensorsEnabled ? 1 : 0;
+  event["relay_enabled"] = config::kMotorCutRelayEnabled ? 1 : 0;
   event["relay_cut"] = 0;
   char line[256];
   const size_t length = serializeJson(event, line, sizeof(line));
@@ -480,30 +743,21 @@ void setup() {
 
   initializeRelay();
 
-  pinMode(pins::kHallLeft, INPUT_PULLUP);
-  pinMode(pins::kHallRight, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(pins::kHallLeft), onLeftHallTick,
-                  FALLING);
-  attachInterrupt(digitalPinToInterrupt(pins::kHallRight), onRightHallTick,
-                  FALLING);
-
   Serial.setRxBufferSize(512);
   Serial.begin(config::kUsbSerialBaud);
   frontSerial.setRxBufferSize(1024);
-  rearSerial.setRxBufferSize(1024);
+  middleSerial.setRxBufferSize(1024);
   frontSerial.begin(config::kNodeUartBaud, SERIAL_8N1, pins::kFrontUartRx,
                     pins::kFrontUartTx);
-  rearSerial.begin(config::kNodeUartBaud, SERIAL_8N1, pins::kRearUartRx,
-                   pins::kRearUartTx);
+  middleSerial.begin(config::kNodeUartBaud, SERIAL_8N1, pins::kMiddleUartRx,
+                     pins::kMiddleUartTx);
 
   Wire.begin(pins::kI2cSda, pins::kI2cScl, config::kI2cClockHz);
   Wire.setTimeOut(config::kI2cTimeoutMs);
 
   const uint32_t nowMs = millis();
-  uint32_t left = 0;
-  uint32_t right = 0;
-  snapshotHallTicks(left, right);
-  wheelOdometry.begin(nowMs, left, right);
+  initializeHallSensors(nowMs);
+  rearScanner.begin(nowMs);
   localSensors.begin(nowMs);
 
   lastWheelMs = nowMs - config::kWheelPeriodMs;
@@ -520,12 +774,14 @@ void loop() {
   const uint32_t nowMs = millis();
   laptopTx.poll(Serial);
   frontNode.poll(frontSerial, nowMs);
-  rearNode.poll(rearSerial, nowMs);
+  middleNode.poll(middleSerial, nowMs);
   commandParser.poll(Serial, commandHandler, nullptr);
 
+  rearScanner.poll(nowMs);
   localSensors.poll(nowMs);
 
-  if (intervalElapsed(nowMs, lastWheelMs, config::kWheelPeriodMs)) {
+  if (config::kHallSensorsEnabled &&
+      intervalElapsed(nowMs, lastWheelMs, config::kWheelPeriodMs)) {
     lastWheelMs = nowMs;
     uint32_t left = 0;
     uint32_t right = 0;

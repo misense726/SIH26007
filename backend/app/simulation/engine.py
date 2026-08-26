@@ -68,8 +68,10 @@ class FullSimulator:
         self._tick_index = 0
         self._elapsed_s = 0.0
         self._timestamp_ms = now_ms()
-        self._scanner_angle_deg = -80.0
-        self._scanner_direction = 1.0
+        self._front_scanner_angle_deg = -80.0
+        self._front_scanner_direction = 1.0
+        self._rear_scanner_angle_deg = 80.0
+        self._rear_scanner_direction = -1.0
         scenario_values = demo["scenarios"][self._default_scenario.value]
         self._visibility_target = float(scenario_values["visibility_score"])
         self._obstacle_enabled = bool(scenario_values["obstacle_enabled"])
@@ -117,8 +119,8 @@ class FullSimulator:
             obstacle_enabled=self._obstacle_enabled,
             obstacle_position=self._obstacle_position,
             obstacle_radius_m=self._active_obstacle_radius_m,
-            front_scanner_angle_deg=self._scanner_angle_deg,
-            rear_scanner_angle_deg=-self._scanner_angle_deg,
+            front_scanner_angle_deg=self._front_scanner_angle_deg,
+            rear_scanner_angle_deg=self._rear_scanner_angle_deg,
         )
         self._configure_pipeline()
 
@@ -210,8 +212,10 @@ class FullSimulator:
         self._tick_index = 0
         self._elapsed_s = 0.0
         self._timestamp_ms = now_ms()
-        self._scanner_angle_deg = -80.0
-        self._scanner_direction = 1.0
+        self._front_scanner_angle_deg = -80.0
+        self._front_scanner_direction = 1.0
+        self._rear_scanner_angle_deg = 80.0
+        self._rear_scanner_direction = -1.0
         self._movement_running = True
         self._speed_scale = float(
             self._config["demo"]["demo"]["default_speed_scale"]
@@ -239,8 +243,8 @@ class FullSimulator:
             obstacle_enabled=False,
             obstacle_position=self._default_obstacle_position.model_copy(),
             obstacle_radius_m=self._active_obstacle_radius_m,
-            front_scanner_angle_deg=self._scanner_angle_deg,
-            rear_scanner_angle_deg=-self._scanner_angle_deg,
+            front_scanner_angle_deg=self._front_scanner_angle_deg,
+            rear_scanner_angle_deg=self._rear_scanner_angle_deg,
         )
         self._configure_pipeline()
         self._scenario = self._default_scenario
@@ -341,18 +345,26 @@ class FullSimulator:
             speed_scale=self._speed_scale,
             obstacle_enabled=self._obstacle_enabled,
             visibility_score=self._visibility_target,
-            front_scanner_angle_deg=self._scanner_angle_deg,
-            rear_scanner_angle_deg=-self._scanner_angle_deg,
+            front_scanner_angle_deg=self._front_scanner_angle_deg,
+            rear_scanner_angle_deg=self._rear_scanner_angle_deg,
         )
 
     def _advance_scanners(self) -> None:
-        self._scanner_angle_deg += self._scanner_direction * 10.0
-        if self._scanner_angle_deg >= 80.0:
-            self._scanner_angle_deg = 80.0
-            self._scanner_direction = -1.0
-        elif self._scanner_angle_deg <= -80.0:
-            self._scanner_angle_deg = -80.0
-            self._scanner_direction = 1.0
+        self._front_scanner_angle_deg += self._front_scanner_direction * 10.0
+        if self._front_scanner_angle_deg >= 80.0:
+            self._front_scanner_angle_deg = 80.0
+            self._front_scanner_direction = -1.0
+        elif self._front_scanner_angle_deg <= -80.0:
+            self._front_scanner_angle_deg = -80.0
+            self._front_scanner_direction = 1.0
+
+        self._rear_scanner_angle_deg += self._rear_scanner_direction * 10.0
+        if self._rear_scanner_angle_deg >= 80.0:
+            self._rear_scanner_angle_deg = 80.0
+            self._rear_scanner_direction = -1.0
+        elif self._rear_scanner_angle_deg <= -80.0:
+            self._rear_scanner_angle_deg = -80.0
+            self._rear_scanner_direction = 1.0
 
     def _append_alert(self, level: EmergencyLevel, timestamp_ms: int, reason: str | None) -> None:
         if level is self._last_emergency_level:
@@ -422,8 +434,8 @@ class FullSimulator:
             obstacle_enabled=self._obstacle_enabled,
             obstacle_position=self._obstacle_position,
             obstacle_radius_m=self._active_obstacle_radius_m,
-            front_scanner_angle_deg=self._scanner_angle_deg,
-            rear_scanner_angle_deg=-self._scanner_angle_deg,
+            front_scanner_angle_deg=self._front_scanner_angle_deg,
+            rear_scanner_angle_deg=self._rear_scanner_angle_deg,
             aruco_visible=self._aruco_visible(),
         )
 

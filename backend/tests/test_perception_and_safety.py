@@ -52,7 +52,7 @@ def test_change_detector_finds_repeated_unknown_road_points() -> None:
 def test_corridor_is_green_with_confident_sensors_and_no_obstacle() -> None:
     reference_map = load_reference_map("maps/test_route.json")
     evaluator = CorridorEvaluator(reference_map, 0.35, 0.45, 0.55)
-    health = [SensorHealth(sensor_id=f"sensor-{index}") for index in range(6)]
+    health = [SensorHealth(sensor_id=f"sensor-{index}") for index in range(5)]
     corridor = evaluator.evaluate(
         pose=VehiclePose(x_m=5, y_m=2, position_confidence=0.95),
         live_objects=[],
@@ -71,6 +71,26 @@ def test_corridor_treats_stale_sensor_as_unknown() -> None:
     health = [SensorHealth(sensor_id="front", status=SensorStatus.STALE, confidence=0.4)]
     corridor = evaluator.evaluate(
         VehiclePose(x_m=5, y_m=2), [], health, None, 1.5, 0.8
+    )
+    assert corridor.state == "GREY"
+
+
+def test_corridor_treats_one_degraded_required_sensor_as_unknown() -> None:
+    reference_map = load_reference_map("maps/test_route.json")
+    evaluator = CorridorEvaluator(reference_map, 0.35, 0.45, 0.55)
+    health = [
+        SensorHealth(sensor_id="front_scanner"),
+        SensorHealth(
+            sensor_id="front_fixed",
+            status=SensorStatus.DEGRADED,
+            confidence=0.45,
+        ),
+        SensorHealth(sensor_id="rear_scanner"),
+        SensorHealth(sensor_id="left_side"),
+        SensorHealth(sensor_id="right_side"),
+    ]
+    corridor = evaluator.evaluate(
+        VehiclePose(x_m=5, y_m=2), [], health, 3.0, 1.5, 0.8
     )
     assert corridor.state == "GREY"
 
@@ -103,11 +123,21 @@ def test_emergency_stop_requires_persistent_deterministic_range() -> None:
         range_m=0.15,
         quality=1.0,
     )
-    first = controller.evaluate(1000, 0.2, [reading])
+    front_fixed = RangeReading(
+        timestamp_ms=1000,
+        sensor_id="front_fixed",
+        range_m=2.0,
+        max_range_m=2.0,
+        quality=1.0,
+    )
+    first = controller.evaluate(1000, 0.2, [reading, front_fixed])
     second = controller.evaluate(
         1400,
         0.2,
-        [reading.model_copy(update={"timestamp_ms": 1400})],
+        [
+            reading.model_copy(update={"timestamp_ms": 1400}),
+            front_fixed.model_copy(update={"timestamp_ms": 1400}),
+        ],
     )
     assert first.state == "CRITICAL"
     assert second.state == "EMERGENCY_STOP"
@@ -116,12 +146,20 @@ def test_emergency_stop_requires_persistent_deterministic_range() -> None:
     clear_reading = reading.model_copy(
         update={"timestamp_ms": 1500, "range_m": reading.max_range_m}
     )
-    still_latched = controller.evaluate(1500, 0.0, [clear_reading])
+    still_latched = controller.evaluate(
+        1500,
+        0.0,
+        [clear_reading, front_fixed.model_copy(update={"timestamp_ms": 1500})],
+    )
     assert still_latched.state == "EMERGENCY_STOP"
     assert still_latched.motor_cut is True
 
     controller.reset()
-    cleared = controller.evaluate(1600, 0.0, [clear_reading])
+    cleared = controller.evaluate(
+        1600,
+        0.0,
+        [clear_reading, front_fixed.model_copy(update={"timestamp_ms": 1600})],
+    )
     assert cleared.state == "SAFE"
     assert cleared.motor_cut is False
 
@@ -130,4 +168,18 @@ def test_missing_front_range_is_not_reported_safe() -> None:
     controller = EmergencyController(safety_parameters())
     state = controller.evaluate(1000, 1.0, [])
     assert state.state == "WARNING"
+    assert state.confidence == 0.0
+
+
+def test_one_clear_front_range_is_not_enough_to_report_safe() -> None:
+    controller = EmergencyController(safety_parameters())
+    scanner = RangeReading(
+        timestamp_ms=1000,
+        sensor_id="front_scanner",
+        range_m=4.0,
+        max_range_m=4.0,
+    )
+    state = controller.evaluate(1000, 1.0, [scanner])
+    assert state.state == "WARNING"
+    assert state.reason == "Forward range coverage is incomplete or stale"
     assert state.confidence == 0.0

@@ -98,7 +98,7 @@ It is not intended to reproduce production-grade LiDAR, radar or positioning.
 
 # 3. Frozen V1 Hardware
 
-## 3.1 ToF Perception — 6 Sensors Total
+## 3.1 ToF Perception — 5 Sensors Total
 
 ### Scanning ToFs
 
@@ -114,26 +114,35 @@ It is not intended to reproduce production-grade LiDAR, radar or positioning.
 
 ### Fixed ToFs
 
-3. **Front-left VL53L0X**  
-4. **Front-right VL53L0X**  
-5. **Left-side VL53L0X**  
-6. **Right-side VL53L0X**
+3. **Front fixed VL53L0X V2**
+4. **Left-side VL53L0X V2**
+5. **Right-side VL53L0X V2**
 
 Responsibilities:
 - near-field proximity;
 - side clearance;
-- front-side obstacle detection;
+- forward obstacle confirmation;
 - continuous gap awareness;
 - independent confirmation of nearby geometry.
 
 These fixed ToFs are not radar substitutes.
 
+The FRONT XIAO ESP32-C6 reads the front scanner and fixed-front ToF. The MIDDLE
+ESP32-C3 Super Mini reads the fixed left and right ToFs. The normal ESP32 MAIN,
+mounted at the back, reads the rear scanner locally. Every controller uses one
+local I2C bus and gives each ToF a dedicated XSHUT GPIO. Firmware releases and
+addresses local ToFs one at a time, verifies each runtime address, and repeats
+the controller-local sequence after recovery. The V1 uses no I2C multiplexer.
+The VL53LDK remains unused.
+
 ## 3.2 Motion and Environment
 
 - MPU6050 IMU;
-- 2 × Hall-effect wheel sensors;
-- wheel magnets;
 - BMP280 pressure/temperature sensor.
+
+Hall odometry remains a future option. The code retains support for two
+Hall-effect wheel sensors and wheel magnets, but the current physical profile
+does not fit or read them.
 
 BMP280 is used only for:
 - pressure;
@@ -181,14 +190,19 @@ Production equivalent:
 
 ## 3.5 Compute and Control
 
-- ESP32 for low-level sensors and servo control;
+- FRONT XIAO ESP32-C6 for the front scanner, fixed-front ToF, and front servo;
+- MIDDLE ESP32-C3 Super Mini for the fixed left and right ToFs;
+- normal ESP32 MAIN at the back for the rear scanner and servo, wired UART
+  aggregation, MPU6050, BMP280, and laptop USB telemetry. Hall inputs and relay
+  control remain compiled but disabled for future use;
 - Raspberry Pi Zero for camera streaming;
 - GPU-capable laptop for mapping, Digital Twin, visualization, image enhancement and fusion;
 - RC car as dumper-scale prototype.
 
 ## 3.6 Emergency Stop Simulation
 
-Use a relay or motor-cut control to simulate automatic braking.
+The current physical profile does not connect a relay or motor-cut output. The
+firmware and backend retain the output abstraction for a later hardware build.
 
 Call it:
 
@@ -196,7 +210,9 @@ Call it:
 
 Do not claim mechanical braking if the implementation only removes motor power.
 
-Trigger from deterministic proximity/speed logic, not camera ML alone.
+The current build still computes deterministic proximity warnings. A later
+relay-enabled profile may use range and speed logic to request motor cut, never
+camera ML alone.
 
 ---
 
@@ -205,11 +221,11 @@ Trigger from deterministic proximity/speed logic, not camera ML alone.
 | Production FogSen | V1 |
 |---|---|
 | LiDAR | Front/rear servo-scanned VL53L1X |
-| Local proximity sensing | Four fixed VL53L0X |
+| Local proximity sensing | Three fixed VL53L0X V2 sensors |
 | Distributed mmWave radar | Future / simulated interface |
 | RTK-GNSS | Overhead ArUco |
 | Industrial INS | MPU6050 |
-| HEMM wheel odometry/CAN | Hall-effect wheel sensors |
+| HEMM wheel odometry/CAN | Reserved Hall-effect wheel sensor support |
 | Altitude from GNSS/map | BMP280 relative altitude for demo |
 | Vehicle RGB camera | Pi camera |
 | Rugged edge computer | GPU laptop |
@@ -490,12 +506,13 @@ With multiple ToFs, do not blindly trigger all sensors simultaneously.
 Use configurable staggered acquisition to reduce cross-interference.
 
 Example acquisition sequence:
-1. front-left;
-2. front-right;
-3. left-side;
-4. right-side;
-5. front scanner sample;
-6. rear scanner sample.
+1. front scanner and front fixed, sequentially on the FRONT node;
+2. left-side and right-side, sequentially on the MIDDLE node;
+3. rear scanner, locally on MAIN.
+
+The three controller-local schedules run independently. FRONT and MAIN use
+configurable servo settle timing. FRONT and MIDDLE use optical guard timing
+between local ToFs.
 
 Timestamp every sample.
 
@@ -558,7 +575,7 @@ V1 succeeds when it demonstrates:
 3. live spatial point map;
 4. 2D/2.5D surrounding reconstruction;
 5. ArUco vehicle localization;
-6. Hall + IMU vehicle motion;
+6. IMU and ArUco vehicle motion, with Hall odometry reserved for later;
 7. BMP280 relative altitude/pressure/temp;
 8. supervisor dashboard;
 9. driver camera feed;
@@ -567,7 +584,7 @@ V1 succeeds when it demonstrates:
 12. safe corridor;
 13. physical obstacle appearing in dashboard;
 14. warning state;
-15. emergency-stop motor cut;
+15. emergency-stop state, with physical motor cut reserved for later;
 16. operation in darkness;
 17. optional mild smoke test;
 18. record/replay;

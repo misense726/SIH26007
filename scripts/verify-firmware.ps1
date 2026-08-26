@@ -37,8 +37,8 @@ try {
         "firmware/front_xiao_esp32c6"
     )
     Invoke-Checked "arduino-cli" @(
-        "compile", "--warnings", "all", "--fqbn", "esp32:esp32:XIAO_ESP32C6",
-        "firmware/rear_xiao_esp32c6"
+        "compile", "--warnings", "all", "--fqbn", "esp32:esp32:esp32c3:CDCOnBoot=cdc",
+        "firmware/middle_esp32c3_supermini"
     )
     Invoke-Checked $python @(
         "-m", "pytest", "-q",
@@ -50,4 +50,4 @@ try {
     Pop-Location
 }
 
-Write-Host "All three firmware builds and wired protocol checks passed."
+Write-Host "MAIN, FRONT, and MIDDLE firmware builds and wired protocol checks passed."

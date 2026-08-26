@@ -28,9 +28,8 @@ class FoundationSimulator:
 
     SENSOR_IDS = (
         "front_scanner",
+        "front_fixed",
         "rear_scanner",
-        "front_left",
-        "front_right",
         "left_side",
         "right_side",
     )

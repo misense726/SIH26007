@@ -3,10 +3,15 @@
 FogSen is a proof of concept for mine-vehicle operation in fog and low visibility. It builds one backend-owned world model from vehicle pose, range sensing, environment data, and safety state. The driver and supervisor interfaces render that same state.
 
 The dashboard starts in `SIMULATED` mode. The repository also includes
-compile-verified wired firmware for MAIN, FRONT, and REAR plus a laptop serial
-monitor. It does not claim that prototype ToF sensors are industrial LiDAR,
+compile-verified wired firmware for BACK/MAIN, FRONT, and MIDDLE, a laptop serial
+monitor, and an opt-in `LIVE` runtime that feeds MAIN USB telemetry into the
+same dashboard state. It does not claim that prototype ToF sensors are industrial LiDAR,
 that BMP280 produces precise altitude, or that a relay motor cut is production
 braking.
+
+The current `LIVE` hardware profile leaves Hall sensors and the motor-cut relay
+unconnected. Their code remains behind disabled flags for a later build. The
+deterministic simulator still exercises those future interfaces.
 
 ## What runs now
 
@@ -15,8 +20,8 @@ The simulated foundation includes:
 - FastAPI health, status, and world-state endpoints;
 - a WebSocket telemetry stream;
 - strict Pydantic telemetry contracts;
-- configuration for the vehicle, six ToFs, calibration, safety, and the demo;
-- provider interfaces for simulated, replay, and future live hardware;
+- configuration for the vehicle, five ToFs, calibration, safety, and the demo;
+- provider interfaces for simulated, wired live, replay, and future hardware;
 - a React and TypeScript dashboard connected to backend telemetry;
 - a manually defined semantic mine route with a moving dumper;
 - a camera-first driver dashboard with Auto, Camera, and calibrated ToF spatial views;
@@ -24,7 +29,8 @@ The simulated foundation includes:
 - a separate supervisor fleet map with environment, sensor health, and alerts;
 - deterministic normal, fog, obstacle, and emergency scenarios with bounded sensor values;
 - backend and frontend tests;
-- wired firmware for one ESP32 DevKit and two XIAO ESP32-C6 nodes;
+- wired firmware for one ESP32-WROOM BACK/MAIN, one XIAO ESP32-C6 FRONT, and
+  one ESP32-C3 Super Mini MIDDLE controller;
 - a validated MAIN-to-laptop USB serial protocol with no wireless dependency.
 
 See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for the milestone record.
@@ -111,6 +117,21 @@ starting the dashboard:
 Replace `COM8` with the port shown by `arduino-cli board list`. Full wiring,
 power, upload, and bench-test instructions are in `firmware/README.md`.
 
+To feed MAIN telemetry into the dashboard, install the hardware dependencies
+and start the backend in explicit `LIVE` mode:
+
+```powershell
+.\.venv\Scripts\python.exe -m pip install -e ".[hardware]"
+$env:FOGSEN_MODE = "LIVE"
+$env:FOGSEN_SERIAL_PORT = "COM8"
+.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8000
+```
+
+Start the frontend normally in another terminal. `SIMULATED` remains the
+default when `FOGSEN_MODE` is not set. In `LIVE` mode, an absent port or stale
+MAIN stream publishes five invalid ranges, degraded health, a grey corridor,
+and a warning instead of leaving the last healthy state on screen.
+
 ## Test
 
 ```powershell
@@ -130,7 +151,7 @@ FogSen uses metres and seconds internally. In the vehicle frame, positive X poin
 backend/     FastAPI, canonical world model, providers, simulation, and tests
 config/      Vehicle, sensors, safety thresholds, and demo settings
 docs/        Architecture, contracts, hardware, calibration, and demo notes
-firmware/    MAIN, FRONT, and REAR wired ESP32 firmware and build notes
+firmware/    BACK/MAIN, FRONT, and MIDDLE wired ESP32 firmware and build notes
 frontend/    Driver and supervisor React application
 maps/        Saved reference twins
 recordings/  JSONL record and replay files

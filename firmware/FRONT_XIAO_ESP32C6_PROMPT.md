@@ -1,198 +1,71 @@
-# Firmware Agent Prompt — FRONT XIAO ESP32-C6
+# Firmware agent prompt for FRONT XIAO ESP32-C6
 
-You are implementing the **FogSen FRONT SENSOR NODE** firmware.
+Implement the FogSen FRONT sensor node. Read `FIRMWARE_CONTEXT.md` first and
+keep this project wired-only.
 
-Read `FIRMWARE_CONTEXT.md` first and follow it exactly.
+## Fixed hardware contract
 
-Target:
-**Seeed Studio XIAO ESP32-C6**
+- Target: Seeed Studio XIAO ESP32-C6 with Arduino
+- Scanner: one servo-mounted VL53L1X V2
+- Fixed sensor: one forward-facing VL53L0X V2
+- Servo: one SG90 on a separate regulated 5 V supply
+- Internal link: wired UART to MAIN at 115200
+- VL53LDK: unused
 
-Framework:
-**Arduino**
+| Use | Pin |
+|---|---|
+| scanner XSHUT | D0 / GPIO0 |
+| fixed-front XSHUT | D1 / GPIO1 |
+| servo PWM | D2 / GPIO2 |
+| SDA / SCL | D4 / GPIO22, D5 / GPIO23 |
+| UART TX / RX | D6 / GPIO16, D7 / GPIO17 |
 
-Do not add Wi-Fi/BLE.
+Both ToFs connect directly to the same SDA/SCL bus. Keep every pin and timing
+value in `node_config.h`.
 
----
+## Address sequence
 
-# Hardware
+At boot, drive both XSHUT pins low. Release only the scanner by changing D0 to
+input, initialize it at `0x29`, set `0x30`, and probe `0x30`. Then release the
+fixed sensor, initialize it at `0x29`, set `0x31`, and probe `0x31`.
 
-This node owns:
+Do not drive XSHUT high. If a sensor or bus operation fails, report the affected
+range as `-1`, clear its health bit, keep UART running, and rerun the complete
+local shutdown and address sequence. Retry persistent missing hardware at a
+bounded interval.
 
-1. TCA9548A I²C multiplexer
-2. Front servo-scanned VL53L1X
-3. Front-left VL53L0X
-4. Front-right VL53L0X
-5. SG90 front servo
-6. Wired UART to MAIN ESP32
+## Acquisition behavior
 
-Default pins:
-- SDA = D4 / GPIO22
-- SCL = D5 / GPIO23
-- UART TX = D6 / GPIO16
-- UART RX = D7 / GPIO17
-- Servo PWM = D2 / GPIO2
+Use a non-blocking servo and scanner state machine. Sweep from -80 through +80
+degrees in 10 degree steps, then reverse without repeating an endpoint. After
+settling, read scanner then fixed-front with a configurable optical guard. Keep
+fixed-front updating when scanning is off.
 
-TCA channels:
-- CH0 = scanning VL53L1X
-- CH1 = front-left VL53L0X
-- CH2 = front-right VL53L0X
+Use bounded I2C and ranging timeouts. An invalid or out-of-range sample is `-1`.
+Never replace it with maximum range.
 
-Keep all pin/channel assignments in one config header.
+## UART contract
 
----
-
-# Development Order
-
-## F0 — Compile-only skeleton
-
-Create a minimal project that:
-- boots;
-- starts USB debug Serial;
-- starts node UART;
-- prints `FRONT BOOT`;
-- loops without blocking.
-
-Compile for XIAO ESP32-C6 before doing anything else.
-
-## F1 — TCA9548A
-
-Implement:
-- I²C initialization;
-- `selectTcaChannel(uint8_t ch)`;
-- scan/health output.
-
-Prove all expected channels are selectable.
-
-## F2 — One fixed VL53L0X
-
-Integrate front-left only.
-
-Requirements:
-- timeout;
-- invalid-range handling;
-- health state;
-- no reboot if missing.
-
-## F3 — Second fixed VL53L0X
-
-Add front-right.
-
-Alternate reads:
-- FL
-- FR
-
-Prove both operate reliably.
-
-## F4 — Scanning VL53L1X without servo
-
-Integrate scanner on CH0.
-
-Keep servo fixed at 0°.
-
-Prove scanner range is stable.
-
-## F5 — Servo only
-
-Implement servo position control separately.
-
-Test:
-- -80°
-- 0°
-- +80°
-
-Do not scan yet.
-
-Servo must use external 5 V power with common ground.
-
-## F6 — Discrete scanner state machine
-
-Create scan sequence:
-
-`-80,-70,...,0,...,+70,+80`
-
-then reverse.
-
-For each angle:
-1. command servo;
-2. settle;
-3. read VL53L1X;
-4. read FL;
-5. read FR;
-6. send one compact UART packet.
-
-No long blocking loop.
-
-Use state machine / millis timing.
-
-## F7 — UART packets
-
-Send newline-delimited JSON:
+Send one compact JSON object per line:
 
 ```json
-{"node":"FRONT","seq":1,"ms":1234,"a":-30,"scan":1200,"fl":600,"fr":700,"ok":1}
+{"node":"FRONT","seq":1,"ms":1234,"a":-30,"scan":1200,"scan_ms":1200,"front":600,"front_ms":1232,"ok":11}
 ```
 
-Fields:
-- `node`
-- `seq`
-- `ms`
-- `a` angle degrees
-- `scan` scanner mm, null/-1 on invalid
-- `fl` mm
-- `fr` mm
-- `ok` bitmask or overall health
+Health bits are scanner `1`, fixed-front `2`, and servo `8`. The fully healthy
+mask is `0x0B`. Support `PING`, `STATUS`, `CENTER`, `SCAN_ON`, `SCAN_OFF`, and
+`SETTLE=<ms>` from 20 through 120 ms without blocking the acquisition loop.
+Reject any other value with `ERROR_SETTLE_RANGE` and keep the current setting.
 
-Keep packet under control.
+Packet `ms` is local packet-completion time. Each range has its own local
+sample-completion `*_ms` so MAIN can calculate host-relative age.
 
-Initial baud:
-115200.
+## Completion checks
 
-## F8 — Commands from MAIN
+Compile for `esp32:esp32:XIAO_ESP32C6`. Then report compilation separately from
+physical evidence. Bench acceptance still requires address probing, supply and
+servo checks, one-sensor disconnect and reconnect tests, optical interference
+testing, continuous UART packets, and a full sweep without resets.
 
-Support simple line commands:
-
-- `PING`
-- `STATUS`
-- `CENTER`
-- `SCAN_ON`
-- `SCAN_OFF`
-- `SETTLE=<ms>`
-- optional `SYNC=<ms>` later
-
-Replies must be clear and non-blocking.
-
-## F9 — Fault handling
-
-If one ToF fails:
-- mark it failed;
-- continue other sensors;
-- periodically retry initialization;
-- continue UART health packets.
-
-If servo command fails logically, scanner data should be marked degraded.
-
----
-
-# Acceptance Test
-
-Firmware is complete only when:
-
-1. it boots repeatedly without manual intervention;
-2. all three ToFs can run;
-3. servo scans front sector;
-4. no controller reset occurs during servo movement;
-5. UART packets arrive continuously at 115200;
-6. unplugging one ToF does not kill the node;
-7. reconnect/retry works or at minimum health status updates correctly;
-8. packet sequence is monotonic;
-9. no Wi-Fi/BLE is used.
-
-At the end, provide:
-- wiring table;
-- library list and versions;
-- PlatformIO/Arduino IDE board config;
-- compile result;
-- serial example;
-- known limitations.
-
-Do not start optimization until the above works.
+Do not add mapping, navigation, safety decisions, wireless transport, or
+laptop-side logic to this node.

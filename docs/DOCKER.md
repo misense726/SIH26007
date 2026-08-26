@@ -6,6 +6,8 @@ The Compose stack runs two containers:
 - `frontend` serves the built dashboard through nginx on port 8080. Nginx forwards `/api` and `/ws` to the backend, so the browser uses one origin for the dashboard and telemetry.
 
 The stack does not build or flash firmware. It has no cloud dependency and stores no secrets.
+It runs the deterministic simulator. Run the backend directly on Windows for
+`LIVE` mode so it can open the MAIN controller COM port.
 
 ## Start the stack
 

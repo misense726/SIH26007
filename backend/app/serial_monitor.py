@@ -63,6 +63,14 @@ def _arguments() -> argparse.ArgumentParser:
 def format_main_packet(packet: MainTelemetryPacket, received_at_ms: int) -> str:
     sample = translate_main_packet(packet, received_at_ms)
     ranges = {reading.sensor_id: reading for reading in sample.ranges}
+    speed = (
+        f"{packet.wheel.speed:.3f}m/s" if bool(packet.wheel.enabled) else "DISABLED"
+    )
+    motor_cut = (
+        str(int(sample.emergency.motor_cut))
+        if bool(packet.estop.output_enabled)
+        else "DISABLED"
+    )
 
     def distance(sensor_id: str) -> str:
         reading = ranges[sensor_id]
@@ -70,12 +78,11 @@ def format_main_packet(packet: MainTelemetryPacket, received_at_ms: int) -> str:
 
     return (
         f"MAIN {packet.ms}ms | "
-        f"front {distance('front_scanner')}/{distance('front_left')}/"
-        f"{distance('front_right')} | "
+        f"front {distance('front_scanner')}/{distance('front_fixed')} | "
         f"rear {distance('rear_scanner')}/{distance('left_side')}/"
         f"{distance('right_side')} | "
-        f"speed {packet.wheel.speed:.3f}m/s | "
-        f"{sample.emergency.state.value} cut={int(sample.emergency.motor_cut)}"
+        f"speed {speed} | "
+        f"{sample.emergency.state.value} cut={motor_cut}"
     )
 
 
