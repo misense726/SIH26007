@@ -270,12 +270,10 @@ class MiddleFixedNode {
     Serial1.write('\n');
 #if FOGSEN_DEBUG_LOGS
     static constexpr char kDebugPrefix[] = "[DEBUG-MIDDLE-USB] ";
-    if (Serial) {
-      Serial.print(kDebugPrefix);
-      Serial.write(reinterpret_cast<const uint8_t*>(packet),
-                   static_cast<size_t>(written));
-      Serial.write('\n');
-    }
+    Serial.print(kDebugPrefix);
+    Serial.write(reinterpret_cast<const uint8_t*>(packet),
+                 static_cast<size_t>(written));
+    Serial.write('\n');
 #endif
   }
 
