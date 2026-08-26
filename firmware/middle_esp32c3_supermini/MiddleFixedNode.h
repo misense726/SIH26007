@@ -6,6 +6,10 @@
 
 #include <string.h>
 
+#ifndef FOGSEN_DEBUG_LOGS
+#define FOGSEN_DEBUG_LOGS 1
+#endif
+
 namespace fogsen {
 
 constexpr int16_t kMiddleInvalidRangeMm = -1;
@@ -264,6 +268,17 @@ class MiddleFixedNode {
     Serial1.write(reinterpret_cast<const uint8_t*>(packet),
                   static_cast<size_t>(written));
     Serial1.write('\n');
+#if FOGSEN_DEBUG_LOGS
+    static constexpr char kDebugPrefix[] = "[DEBUG-MIDDLE-USB] ";
+    const size_t debug_length = sizeof(kDebugPrefix) - 1U +
+                                static_cast<size_t>(written) + 1U;
+    if (Serial.availableForWrite() >= static_cast<int>(debug_length)) {
+      Serial.print(kDebugPrefix);
+      Serial.write(reinterpret_cast<const uint8_t*>(packet),
+                   static_cast<size_t>(written));
+      Serial.write('\n');
+    }
+#endif
   }
 
   void pollCommands() {
