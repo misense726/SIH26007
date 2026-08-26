@@ -40,8 +40,8 @@ const fogsen::NodeConfig kNodeConfig = {
     30,                          // i2c_bus_timeout_ms
     80,                          // sensor_read_timeout_ms
     5000,                        // sensor_retry_ms
-    2000,                        // xshut_reset_us
-    2000,                        // xshut_boot_us
+    10000,                       // xshut_reset_us
+    10000,                       // xshut_boot_us
     5,                           // inter_sensor_guard_ms
     -80,                         // scan_min_deg
     80,                          // scan_max_deg
