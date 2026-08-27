@@ -36,10 +36,11 @@ bounded interval.
 
 ## Acquisition behavior
 
-Use a non-blocking servo and scanner state machine. Sweep from -80 through +80
-degrees in 10 degree steps, then reverse without repeating an endpoint. After
-settling, read scanner then fixed-front with a configurable optical guard. Keep
-fixed-front updating when scanning is off.
+Use a non-blocking servo and scanner state machine. The live profile sweeps from
+-80 through +80 degrees in 5-degree steps, then reverses without repeating an
+endpoint. It uses a 30 ms default settle and a 20 ms VL53L1X short-mode timing
+budget. After settling, read scanner then fixed-front with a configurable
+optical guard. Keep fixed-front updating when scanning is off.
 
 Use bounded I2C and ranging timeouts. An invalid or out-of-range sample is `-1`.
 Never replace it with maximum range.

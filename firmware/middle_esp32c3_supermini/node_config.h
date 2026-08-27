@@ -42,7 +42,7 @@ const fogsen::MiddleNodeConfig kNodeConfig = {
     10000,                      // xshut_reset_us
     10000,                      // xshut_boot_us
     5,                          // inter_sensor_guard_ms
-    100,                        // sample_period_ms
+    20,                         // sample_period_ms
     20000,                      // fixed_timing_budget_us
     2000,                       // fixed_max_range_mm
 };

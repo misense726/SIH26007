@@ -141,15 +141,21 @@ Every controller connects its local ToFs directly to one SDA/SCL bus. No I2C
 multiplexer is installed. At boot and after a sensor or bus fault, firmware:
 
 1. drives every local XSHUT line low;
-2. releases one XSHUT line by changing the GPIO to input mode;
-3. initializes that sensor at default address `0x29`;
-4. assigns and probes its runtime address;
-5. repeats for the next local sensor.
+2. clears the local I2C bus when the controller supports bus recovery;
+3. releases one XSHUT line by changing the GPIO to input mode;
+4. initializes that sensor at default address `0x29`;
+5. assigns and probes its runtime address;
+6. repeats for the next local sensor.
 
 FRONT sequences its scanner and fixed-front sensor. MIDDLE sequences left and
 right. MAIN repeats the same reset and address check for its single rear
 scanner. A missing, timed-out, or rejected range is `-1`, which means unknown.
 Firmware never substitutes maximum range.
+
+The current fast live profile uses 5-degree scanner steps, 30 ms servo settle,
+and 20 ms VL53L1X short-mode measurements. It is a near-field prototype profile.
+Use a separately validated long-mode profile if the installation needs longer
+range.
 
 The VL53LDK remains disconnected.
 

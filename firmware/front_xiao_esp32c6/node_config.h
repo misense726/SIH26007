@@ -36,16 +36,16 @@ const fogsen::NodeConfig kNodeConfig = {
     kUnusedI2cAddress,           // fixed_b_i2c_address
     115200,                      // debug_baud
     115200,                      // node_uart_baud
-    400000,                      // i2c_clock_hz
+    100000,                      // i2c_clock_hz
     30,                          // i2c_bus_timeout_ms
     80,                          // sensor_read_timeout_ms
     5000,                        // sensor_retry_ms
-    10000,                       // xshut_reset_us
-    10000,                       // xshut_boot_us
+    50000,                       // xshut_reset_us
+    20000,                       // xshut_boot_us
     5,                           // inter_sensor_guard_ms
     -80,                         // scan_min_deg
     80,                          // scan_max_deg
-    10,                          // scan_step_deg
+    5,                           // scan_step_deg
     0,                           // servo_center_deg
     -90,                         // servo_min_angle_deg
     90,                          // servo_max_angle_deg
@@ -53,11 +53,12 @@ const fogsen::NodeConfig kNodeConfig = {
     2500,                        // servo_max_pulse_us
     50,                          // servo_frequency_hz
     14,                          // servo_resolution_bits
-    90,                          // default_settle_ms
+    30,                          // default_settle_ms
     20,                          // min_settle_ms
-    120,                         // max_settle_ms
+    100,                         // max_settle_ms
     100,                         // fixed_only_period_ms
-    50000,                       // scanner_timing_budget_us
+    VL53L1X::Short,              // scanner_distance_mode
+    20000,                       // scanner_timing_budget_us
     4000,                        // scanner_max_range_mm
     20000,                       // fixed_timing_budget_us
     2000,                        // fixed_max_range_mm

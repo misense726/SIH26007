@@ -30,10 +30,12 @@ constexpr int kConfiguredTravelDirection = 1;  // 1=FORWARD, -1=REVERSE, 0=UNKNO
 
 constexpr uint8_t kMinimumValidForwardRanges = 2;
 
-// One full healthy excursion from +50 through +80 and back to +50 takes six
-// node cycles. The longest permitted cycle is 285 ms: 120 ms servo settle,
-// 80 ms scanner timeout, 5 ms optical guard, and 80 ms fixed-sensor timeout.
-// Keep the last valid in-sector scanner sample beyond that 1710 ms excursion.
+// One full healthy excursion from +50 through +80 and back to +50 takes 12
+// node cycles with the 5-degree sweep. The longest configured healthy cycle is
+// 145 ms: 100 ms servo settle, 20 ms scanner timing, 5 ms optical guard, and
+// 20 ms fixed timing. A timeout clears sensor health instead of extending
+// cached evidence. Keep the last valid in-sector sample beyond the 1740 ms
+// excursion.
 constexpr uint32_t kForwardScannerEvidenceStaleMs = 1800;
 
 // Most single-channel relay boards are active-high. Confirm the exact module

@@ -55,8 +55,10 @@ failure reports `-1`, holds the sensor in reset, and retries the full rear
 sequence after five seconds.
 
 GPIO14 drives the rear SG90 at 50 Hz. The scan runs from -80 through +80 degrees
-in 10-degree steps. Servo settle defaults to 90 ms and is bounded to 20 through
-120 ms. Power the servo from the separate regulated 5 V rail, not the ESP32.
+in 5-degree steps. Servo settle defaults to 30 ms and is bounded to 20 through
+120 ms. The VL53L1X uses short mode with a 20 ms timing budget because that was
+the fastest bench profile that returned valid data consistently. Power the
+servo from the separate regulated 5 V rail, not the ESP32.
 
 The rear scanner shares GPIO21/GPIO22 with MPU6050 and BMP280. Their addresses
 do not collide. MAIN serializes its own bus operations in the main loop.
@@ -79,7 +81,9 @@ two fixed-sensor bits are fresh.
 
 Copy `wifi_secrets.example.h` to the ignored `wifi_secrets.h`, then set the
 private SSID, password, and backend computer IPv4 address. MAIN connects to TCP
-port `8765` and sends newline-delimited `fogsen.main.v1` packets at 10 Hz.
+port `8765` and sends newline-delimited `fogsen.main.v1` packets with a 20 Hz
+target. The 115200-baud USB fallback sustains about 10 Hz for the full packet;
+that USB limit does not throttle the independent Wi-Fi queue.
 
 The Wi-Fi sender runs in a bounded FreeRTOS queue on core 0. A slow or missing
 network drops Wi-Fi frames without blocking the core 1 sensor and safety loop.

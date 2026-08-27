@@ -24,7 +24,9 @@ Leave D3 unused. Do not connect the VL53LDK.
 The scanner receives runtime address `0x30`; fixed-front receives `0x31`.
 Firmware holds both XSHUT lines low, releases and addresses one sensor at a
 time, probes each assigned address, and repeats the full sequence after a bus
-or sensor recovery. Releasing XSHUT uses GPIO input mode. The firmware never
+or sensor recovery. Recovery also clocks a stuck I2C bus clear before Wire is
+restarted. The front bus runs at 100 kHz, XSHUT stays low for 50 ms, and each
+sensor gets 20 ms to boot. Releasing XSHUT uses GPIO input mode; firmware never
 drives an XSHUT line high.
 
 Power the SG90 from a separate regulated 5 V supply. Do not use the XIAO 3.3 V
@@ -49,14 +51,6 @@ Upload after replacing `COM5` with the board's port:
 
 ```powershell
 arduino-cli upload -p COM5 --fqbn esp32:esp32:XIAO_ESP32C6 firmware/front_xiao_esp32c6
-```
-
-For PlatformIO:
-
-```powershell
-Set-Location firmware/front_xiao_esp32c6
-pio run
-pio run --target upload --upload-port COM5
 ```
 
 Set `FOGSEN_DEBUG_LOGS=0` in the build flags to remove USB debug text. Node UART
@@ -93,14 +87,15 @@ These checks have not been completed by compilation:
    clear after a communication failure, and the node must keep sending packets.
 7. Reconnect the ToF. Confirm the complete XSHUT and address sequence restores
    `0x30` and `0x31` after the retry period.
-8. Run `SCAN_OFF`. Confirm `front` continues near 10 Hz while `scan` stays
-   `-1`.
+8. Run `SCAN_OFF`. Confirm `front` continues updating while `scan` stays `-1`.
 9. Check for optical cross-talk, then tune the 5 ms inter-sensor guard if
    needed.
 
 ## Known limits
 
-The servo has no position feedback. A successful PWM write does not prove that
-the horn moved. Calibrate the pulse endpoints and 90 ms settle period against
-the final linkage. Target reflectance, ambient infrared, cover material, and
-alignment affect range.
+The live profile uses 5-degree steps, a 30 ms settle period, VL53L1X short mode,
+and a 20 ms timing budget. This favors fast, reliable prototype near-field
+ranging over the longer reach of long mode. The servo has no position feedback;
+a successful PWM write does not prove that the horn moved. Calibrate the pulse
+endpoints and settle period against the final linkage. Target reflectance,
+ambient infrared, cover material, and alignment affect range.

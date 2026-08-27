@@ -22,9 +22,10 @@ The rear scanner boots at `0x29`. Hold GPIO13 low, release it as input, assign
 `0x30`, probe the address, and retry the reset and address sequence after a
 failure. Report invalid or stale readings as `-1`.
 
-Keep the rear scanner non-blocking. Sweep -80 through +80 degrees in 10-degree
-steps with a 20 to 120 ms servo-settle bound. Serialize local I2C work in the
-main loop so scanner, MPU6050, and BMP280 operations do not overlap.
+Keep the rear scanner non-blocking. The live profile sweeps -80 through +80
+degrees in 5-degree steps with a 30 ms default settle and a 20 ms VL53L1X
+short-mode timing budget. Serialize local I2C work in the main loop so scanner,
+MPU6050, and BMP280 operations do not overlap.
 
 Preserve exactly five laptop range fields:
 

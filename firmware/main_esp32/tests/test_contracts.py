@@ -265,19 +265,76 @@ def test_maximum_front_settle_keeps_full_sweep_inside_cache_lifetime() -> None:
     match = re.search(r"\n\s*(\d+),\s*// max_settle_ms", config)
     assert match, "Missing max_settle_ms in FRONT"
     maximum_settle_ms = int(match.group(1))
-    assert maximum_settle_ms == 120
+    assert maximum_settle_ms == 100
 
-    scanner_timeout_ms = 80
+    scanner_timing_budget_ms = 20
     optical_guard_ms = 5
-    fixed_timeout_ms = 80
+    fixed_timing_budget_ms = 20
     worst_cycle_ms = (
-        maximum_settle_ms + scanner_timeout_ms + optical_guard_ms + fixed_timeout_ms
+        maximum_settle_ms
+        + scanner_timing_budget_ms
+        + optical_guard_ms
+        + fixed_timing_budget_ms
     )
     cache_ms = int(
         _header_value("SafetyConfig.h", "kForwardScannerEvidenceStaleMs")
     )
-    assert 6 * worst_cycle_ms == 1710
-    assert 6 * worst_cycle_ms < cache_ms
+    out_of_sector_steps = 12
+    assert out_of_sector_steps * worst_cycle_ms == 1740
+    assert out_of_sector_steps * worst_cycle_ms < cache_ms
+
+
+def test_live_tof_profile_uses_validated_fast_near_field_timing() -> None:
+    front_config = (
+        PROJECT_ROOT / "firmware" / "front_xiao_esp32c6" / "node_config.h"
+    ).read_text(encoding="utf-8")
+    middle_config = (
+        PROJECT_ROOT
+        / "firmware"
+        / "middle_esp32c3_supermini"
+        / "node_config.h"
+    ).read_text(encoding="utf-8")
+    main_config = (FIRMWARE_ROOT / "src" / "FirmwareConfig.h").read_text(
+        encoding="utf-8"
+    )
+    rear_source = (FIRMWARE_ROOT / "src" / "RearScanner.cpp").read_text(
+        encoding="utf-8"
+    )
+
+    assert "VL53L1X::Short,              // scanner_distance_mode" in front_config
+    assert "20000,                       // scanner_timing_budget_us" in front_config
+    assert "5,                           // scan_step_deg" in front_config
+    assert "30,                          // default_settle_ms" in front_config
+    assert "20,                         // sample_period_ms" in middle_config
+    assert "constexpr uint32_t kTelemetryPeriodMs = 50;" in main_config
+    assert "constexpr bool kRearScannerShortDistanceMode = true;" in main_config
+    assert "constexpr uint32_t kRearScannerTimingBudgetUs = 20000;" in main_config
+    assert "constexpr int16_t kRearScanStepDeg = 5;" in main_config
+    assert "constexpr uint16_t kRearDefaultSettleMs = 30;" in main_config
+    assert "? VL53L1X::Short" in rear_source
+
+
+def test_front_recovery_clears_bus_before_readdressing_both_tofs() -> None:
+    shared = (
+        PROJECT_ROOT
+        / "firmware"
+        / "xiao_shared"
+        / "include"
+        / "FogSenXiaoNode.h"
+    ).read_text(encoding="utf-8")
+    front_config = (
+        PROJECT_ROOT / "firmware" / "front_xiao_esp32c6" / "node_config.h"
+    ).read_text(encoding="utf-8")
+
+    assert "void clearI2cBus()" in shared
+    assert "pulse < 16U" in shared
+    assert "holdAllSensorsInReset();" in shared
+    assert "configureI2cBus();" in shared
+    assert "scanner_default_seen_ = probeI2cAddress(0x29);" in shared
+    assert "fixed_a_default_seen_ = default_seen;" in shared
+    assert "100000,                      // i2c_clock_hz" in front_config
+    assert "50000,                       // xshut_reset_us" in front_config
+    assert "20000,                       // xshut_boot_us" in front_config
 
 
 def test_forward_scanner_cache_clears_on_each_failure_condition() -> None:

@@ -24,6 +24,11 @@ def _arguments() -> argparse.ArgumentParser:
     )
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--stale-ms", type=int, default=1_500)
+    parser.add_argument(
+        "--skip-camera",
+        action="store_true",
+        help="Validate MAIN Wi-Fi and the five-range contract without a Pi camera.",
+    )
     return parser
 
 
@@ -32,7 +37,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     try:
         status = _get(arguments.base_url, "/api/status")
         world = _get(arguments.base_url, "/api/world")
-        camera = _get(arguments.base_url, "/api/camera/status")
+        camera = (
+            None
+            if arguments.skip_camera
+            else _get(arguments.base_url, "/api/camera/status")
+        )
     except (OSError, URLError, ValueError, json.JSONDecodeError) as exc:
         print(f"FAIL FogSen live API: {exc}")
         return 1
@@ -77,6 +86,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"INFO {sensor_id}: {reading.get('range_m')} m")
         else:
             print(f"INFO {sensor_id}: unknown (not promoted to max range)")
+
+    if camera is None:
+        print("INFO Pi camera check skipped")
+        return 0 if source_ok and len(ranges) == 5 else 1
 
     camera_ok = camera.get("status") == "live" and camera.get("raw_available") is True
     print(f"{'PASS' if camera_ok else 'FAIL'} Pi camera Wi-Fi stream")

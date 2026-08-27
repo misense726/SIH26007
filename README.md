@@ -107,6 +107,13 @@ the check from another terminal:
 The launcher leaves camera enhancement off for the first connectivity check.
 Enable the optional ML worker only after the raw feed is stable.
 
+For a sensor-only run while the Pi is offline:
+
+```powershell
+.\scripts\start_live_fogsen.ps1 -NoCamera -TelemetryHz 20
+.\.venv\Scripts\python.exe scripts\check_live_network.py --skip-camera
+```
+
 ## Run with Docker
 
 From the repository root:

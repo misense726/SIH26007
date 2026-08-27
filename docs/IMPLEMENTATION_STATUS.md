@@ -117,7 +117,7 @@ Verification:
 
 ## Final wired three-controller firmware
 
-Status: compile-verified on 2026-08-28; physical bench verification pending.
+Status: compiled and uploaded on 2026-08-28; live bench verification is partial.
 
 Implemented:
 
@@ -130,6 +130,10 @@ Implemented:
 - two independent 115200-baud hardware UART links with 500 ms stale detection;
 - sequential local ToF acquisition with configurable guards and independent
   front and rear servo scans;
+- validated VL53L1X short-mode timing at 20 ms, 5-degree scan steps, and 30 ms
+  default servo settling;
+- bounded FRONT I2C bus clearing, 100 kHz recovery, address-stage diagnostics,
+  and longer XSHUT reset timing;
 - per-sensor sample times converted by MAIN into host-relative ages;
 - exact FRONT and MIDDLE UART masks plus the composite rear health mask;
 - MPU6050, BMP280, and the local safety state machine;
@@ -143,23 +147,35 @@ Implemented:
 
 Verification:
 
-- MAIN: 966,003 bytes flash and 60,004 bytes globals;
-- FRONT: 310,802 bytes flash and 15,876 bytes globals;
+- MAIN: 966,007 bytes flash and 60,004 bytes globals;
+- FRONT: 311,620 bytes flash and 15,892 bytes globals;
 - MIDDLE: 317,042 bytes flash and 14,232 bytes globals;
-- 35 firmware and wired protocol contract tests passed;
+- 37 firmware and wired protocol contract tests passed;
 - all three targets compiled with warnings enabled through
-  `scripts/verify-firmware.ps1`.
+  `scripts/verify-firmware.ps1`;
+- Arduino CLI identified and uploaded MAIN ESP32-D0WD-V3 on COM11, FRONT
+  ESP32-C6FH4 on COM5, and MIDDLE ESP32-C3 on COM3;
+- an isolated rear-sensor probe returned 40 of 40 valid readings in short mode
+  at both 20 and 33 ms, with no timeouts. Medium and long modes returned no
+  valid readings in the same fixed setup, so the temporary probe was removed
+  and short 20 ms was retained in production firmware;
+- the optimized rear scan measured about 17.5 samples per second with 99.3%
+  valid returns. MIDDLE measured about 13 to 14 range pairs per second with
+  both side ranges valid.
 
-Arduino CLI did not identify an attached ESP32 target, and no upload was
-performed. Live XSHUT and address recovery, optical interference, servo, UART
-endurance, and power tests remain on the bench checklist in
-`firmware/README.md`. Hall and relay bench tests apply only after enabling that
-future hardware profile.
+The FRONT pair initially passed the full five-ToF harness after the correct C6
+image was uploaded. Later, both front sensors disappeared together from their
+shared bus. Direct COM5 diagnostics show both XSHUT pins high and SDA/SCL high,
+but no response at default or runtime addresses. Firmware correctly publishes
+both ranges as unknown. Reseat or power-cycle the FRONT VCC, ground, SDA, and
+SCL path before closing the physical bench check. Servo motion, optical
+interference, supply endurance, Hall inputs, and relay polarity still require
+separate physical checks.
 
 ## Five-sensor sensing-to-dashboard chain
 
 Status: software-verified and Wi-Fi transport bench-verified on 2026-08-28;
-front and rear ToF optical/electrical checks remain open.
+FRONT shared-bus repair remains open.
 
 Implemented:
 
@@ -167,8 +183,10 @@ Implemented:
 - LAN-aware live launcher that resolves the Pi hostname, binds MAIN's TCP
   listener on all interfaces, and keeps raw camera ingest independent from the
   telemetry source;
-- repeatable live-network check for fresh MAIN packets, five range records, and
-  Pi camera frames;
+- sensor-only live launcher mode for runs where the Pi camera is intentionally
+  offline;
+- repeatable live-network check for fresh MAIN packets and five range records,
+  with an optional Pi camera requirement;
 - MAIN packet ingestion into the canonical backend `WorldStore` used by
   `/api/world` and `/ws/telemetry`;
 - five normalized range readings with distinct timestamps and per-sensor
@@ -190,23 +208,19 @@ Verification:
 - frontend: 37 tests passed and the TypeScript/Vite production build passed;
 - all three Arduino targets compiled with warnings enabled and the wired
   protocol checks passed;
-- on the connected bench, MAIN COM11 produced 75 valid telemetry packets in
-  eight seconds, both UART links were fresh, and MIDDLE left/right ranges were
-  valid in all packets;
-- the same live backend received fresh MAIN Wi-Fi packets, exposed five range
-  records through HTTP/WebSocket, and decoded the Pi RGB stream at
-  1296x972 around 26 FPS;
-- the browser showed `CONNECTED`, `LIVE`, `CAMERA LIVE - WI-FI`, and all five
-  named sensor rows after the frontend layout split.
+- on the connected bench, the 115200-baud COM11 fallback sustained about 9.7
+  full packets per second, both UART links stayed fresh, and MIDDLE left/right
+  ranges stayed valid;
+- the live backend received MAIN Wi-Fi at about 19 updates per second against
+  the 20 Hz target and exposed all five range records through HTTP/WebSocket;
+- the sensor-only network check passed with real rear, left, and right values,
+  both unavailable front readings preserved as unknown, and the camera check
+  explicitly skipped.
 
-The captured FRONT mask was `0x08` for every packet: the servo bit was present,
-but both front ToF bits were absent and both ranges were `-1`. The captured MAIN
-rear mask was `0x0F`, but the rear scanner returned `-1` at the bench target.
-Unknown is preserved as unknown; it is never promoted to maximum range. These
-are physical sensor/XSHUT/I2C or target-return checks, not a transport or
-dashboard failure. Camera, ArUco absolute localization, and radar are not part
-of this serial runtime. Without an absolute pose source, `LIVE` position
-confidence stays zero and the live corridor remains grey.
+The Pi camera was intentionally disabled for this run. Camera, ArUco absolute
+localization, and radar were not part of the sensor bench test. Without an
+absolute pose source, `LIVE` position confidence stays zero and the live
+corridor remains grey.
 
 ## Deterministic demo and Docker stack
 

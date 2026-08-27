@@ -77,7 +77,9 @@ bool RearScanner::initializeSensor(uint32_t nowMs) {
     nextRetryMs_ = nowMs + config::kSensorRetryMs;
     return false;
   }
-  sensor_.setDistanceMode(VL53L1X::Long);
+  sensor_.setDistanceMode(config::kRearScannerShortDistanceMode
+                              ? VL53L1X::Short
+                              : VL53L1X::Long);
   sensor_.setMeasurementTimingBudget(config::kRearScannerTimingBudgetUs);
   sensorInitialized_ = true;
   phase_ = Phase::kSettling;

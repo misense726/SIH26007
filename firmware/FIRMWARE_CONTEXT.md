@@ -79,17 +79,24 @@ At boot and recovery, a controller holds every local XSHUT low. It releases one
 sensor, initializes it at `0x29`, assigns and probes the runtime address, then
 continues. It repeats the full local sequence after a probe or timed-read
 failure. XSHUT release uses `pinMode(pin, INPUT)` so the carrier pulls the line
-high.
+high. FRONT also clears a stuck SDA line with bounded SCL pulses before
+restarting Wire, uses a 100 kHz bus, holds both sensors down for 50 ms, and
+allows 20 ms after each release.
 
 ## Timing and unknown values
 
 FRONT reads scanner then fixed-front with a 5 ms optical guard. MIDDLE reads
 left then right with the same guard. MAIN runs the rear scanner independently.
-Both servo settle values default to 90 ms and accept 20 through 120 ms.
+Both scanners use VL53L1X short mode with a 20 ms timing budget. Their live
+sweeps use 5-degree steps and a 30 ms settle period. FRONT accepts 20 through
+100 ms; rear accepts 20 through 120 ms. MIDDLE starts its next sequential side
+pair 20 ms after the previous pair. MAIN targets 20 Hz over Wi-Fi.
 
 A valid scanner range is 1 through 4000 mm. A valid fixed range is 1 through
 2000 mm. Missing, rejected, timed-out, or out-of-range readings are `-1`.
-Unknown never means maximum range.
+Unknown never means maximum range. The protocol ceiling remains 4000 mm, but
+the short-mode live profile is intended for reliable near-field prototype
+coverage rather than four-metre reach.
 
 ## Packets and health
 

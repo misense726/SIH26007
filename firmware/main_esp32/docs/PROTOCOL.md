@@ -1,7 +1,9 @@
 # MAIN firmware protocol
 
-All links use newline-delimited UTF-8 JSON at 115200 baud. Internal node links
-are wired hardware UART. MAIN uses wired USB serial for the laptop.
+Packets use newline-delimited UTF-8 JSON. Internal node links and the USB
+fallback use 115200 baud. MAIN also sends the same telemetry to the FogSen
+backend over Wi-Fi TCP. Wi-Fi targets 20 Hz; the full USB packet sustains about
+10 Hz at 115200 baud.
 
 ## Sensor-node input
 
