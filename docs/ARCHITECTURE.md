@@ -60,11 +60,17 @@ FRONT XIAO supplies the two front ranges. MIDDLE ESP32-C3 supplies the side
 ranges. BACK/MAIN reads the rear scanner locally and merges all five readings
 into the unchanged laptop contract.
 
-Wi-Fi mode listens on TCP port `8765`. USB remains available for uploads and
-diagnostics. Serial mode still requires `FOGSEN_SERIAL_PORT`. The runtime
+Wi-Fi mode listens on TCP port `8765` on all interfaces so MAIN can reach the
+laptop over the same LAN. USB remains available for uploads and diagnostics.
+Serial mode still requires `FOGSEN_SERIAL_PORT`. The runtime
 reconnects after source or read failures. If the stream is absent or stale, it advances the world sequence with
 five invalid ranges, offline or stale health, a grey corridor, and a warning.
 It never freezes the last healthy snapshot. Simulation remains the default.
+
+The React frontend keeps application chrome in `frontend/src/layout/AppShell.tsx`
+and view selection in `frontend/src/layout/DashboardViewRouter.tsx`. Driver,
+spatial, supervisor, settings, state, and map modules remain separate so a
+layout change does not need to touch telemetry normalization or safety logic.
 
 ## Map presentation boundary
 

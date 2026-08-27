@@ -52,8 +52,9 @@ Backend endpoints remain available directly at:
 - `http://127.0.0.1:8000/api/v2x/state`
 - `http://127.0.0.1:8000/docs`
 
-The default Pi source is `tcp://10.38.143.254:8888`. Set
-`FOGSEN_CAMERA_STREAM_URL` in `.env` if its Wi-Fi address changes. Set
+The default Pi source is `tcp://misense.local:8888`. Set
+`FOGSEN_CAMERA_STREAM_URL` in `.env` to the Pi's current LAN IP when Docker
+cannot resolve mDNS. Set
 `FOGSEN_CAMERA_DEHAZE_ENABLED=false` to run raw video without the model.
 Set `FOGSEN_CAMERA_IR_ENABLED=false` to disable the false-color IR worker.
 `FOGSEN_CAMERA_IR_DEVICE`, `FOGSEN_CAMERA_IR_FP16`,

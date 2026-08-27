@@ -1,25 +1,13 @@
 import { useEffect, useState } from "react";
-import { ConnectionPill, ModePill } from "./components/StatusPill";
-import { ThemeToggle } from "./components/ThemeToggle";
-import { DriverDashboard } from "./driver/DriverDashboard";
 import type { AwarenessMode } from "./driver/driverAwareness";
-import { SensorSettingsPage } from "./settings/SensorSettingsPage";
 import { useSensorSettings } from "./settings/useSensorSettings";
+import { AppShell } from "./layout/AppShell";
+import { DashboardViewRouter } from "./layout/DashboardViewRouter";
+import type { DashboardView } from "./layout/dashboardViews";
 import { SimulationControls } from "./simulation/SimulationControls";
-import { SpatialDashboard } from "./spatial/SpatialDashboard";
 import { useTelemetry } from "./state/useTelemetry";
-import { SupervisorDashboard } from "./supervisor/SupervisorDashboard";
 import { applyTheme, readInitialTheme, saveTheme, type Theme } from "./theme";
 import "./styles.css";
-
-type DashboardView = "DRIVER" | "SPATIAL" | "SUPERVISOR" | "SETTINGS";
-
-const dashboardViews: Array<{ value: DashboardView; label: string }> = [
-  { value: "DRIVER", label: "Driver" },
-  { value: "SPATIAL", label: "Spatial view" },
-  { value: "SUPERVISOR", label: "Supervisor" },
-  { value: "SETTINGS", label: "Settings" },
-];
 
 export default function App() {
   const { world, connection } = useTelemetry();
@@ -40,77 +28,31 @@ export default function App() {
   }
 
   return (
-    <main className="app-shell">
-      <header className="topbar">
-        <div className="brand-lockup">
-          <span className="brand-mark" aria-hidden="true">FS</span>
-          <div>
-            <p className="eyebrow">Mine vehicle awareness</p>
-            <h1>FogSen</h1>
-          </div>
-        </div>
-
-        <nav className="view-switcher" aria-label="Dashboard view">
-          {dashboardViews.map((dashboardView) => (
-            <button
-              key={dashboardView.value}
-              type="button"
-              className={view === dashboardView.value ? "active" : ""}
-              aria-pressed={view === dashboardView.value}
-              onClick={() => setView(dashboardView.value)}
-            >
-              {dashboardView.label}
-            </button>
-          ))}
-        </nav>
-
-        <div className="status-row">
-          <ThemeToggle theme={theme} onChange={changeTheme} />
-          <ConnectionPill state={connection} />
-          {connection === "CONNECTED" && <ModePill mode={world.mode} />}
-        </div>
-      </header>
-
+    <AppShell
+      view={view}
+      onViewChange={setView}
+      theme={theme}
+      onThemeChange={changeTheme}
+      connection={connection}
+      mode={world.mode}
+    >
       {connection === "CONNECTED" && world.mode === "SIMULATED" && view !== "SETTINGS" && (
         <SimulationControls simulation={world.simulation} />
       )}
 
-      {view === "DRIVER" && (
-        <DriverDashboard
-          world={world}
-          awarenessMode={awarenessMode}
-          onAwarenessModeChange={setAwarenessMode}
-          connection={connection}
-          sensorSettings={sensorSettings.settings.sensors}
-        />
-      )}
-      {view === "SPATIAL" && (
-        <SpatialDashboard
-          world={world}
-          connection={connection}
-          sensorSettings={sensorSettings.settings.sensors}
-        />
-      )}
-      {view === "SUPERVISOR" && (
-        <SupervisorDashboard world={world} connection={connection} />
-      )}
-      {view === "SETTINGS" && (
-        <SensorSettingsPage
-          world={world}
-          telemetryConnection={connection}
-          settings={sensorSettings.settings}
-          settingsConnection={sensorSettings.connection}
-          message={sensorSettings.message}
-          onSensorChange={sensorSettings.updateSensor}
-          onSensorSave={sensorSettings.saveSensor}
-          onZeroImu={sensorSettings.zeroImuNow}
-        />
-      )}
-
-      <footer>
-        2D/2.5D ToF awareness. Relative altitude is approximate. Motor cut is an automatic
-        emergency stop simulation.
-      </footer>
-    </main>
+      <DashboardViewRouter
+        view={view}
+        world={world}
+        connection={connection}
+        awarenessMode={awarenessMode}
+        onAwarenessModeChange={setAwarenessMode}
+        sensorSettings={sensorSettings.settings}
+        settingsConnection={sensorSettings.connection}
+        settingsMessage={sensorSettings.message}
+        onSensorChange={sensorSettings.updateSensor}
+        onSensorSave={sensorSettings.saveSensor}
+        onZeroImu={sensorSettings.zeroImuNow}
+      />
+    </AppShell>
   );
 }

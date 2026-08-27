@@ -11,7 +11,7 @@ MAIN owns:
 - MIDDLE UART on GPIO26 RX and GPIO27 TX;
 - reserved Hall inputs on GPIO32 and GPIO33, disabled and unconnected;
 - reserved relay output on GPIO25, disabled and unconnected;
-- laptop USB telemetry.
+- laptop Wi-Fi telemetry, with USB retained as a diagnostic fallback.
 
 Use 115200-baud hardware UART. FRONT sends `front.scan` and `front.front`.
 MIDDLE sends `left` and `right` with healthy mask `0x06`. MAIN combines its

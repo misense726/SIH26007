@@ -2,12 +2,13 @@
 
 ## Controller ownership
 
-FogSen uses three wired controllers:
+FogSen uses three controllers. Their sensor links remain wired, while MAIN
+publishes the combined dashboard packet to the laptop over Wi-Fi:
 
 - FRONT XIAO ESP32-C6 owns `front_scanner`, `front_fixed`, and the front SG90;
 - MIDDLE ESP32-C3 Super Mini owns `left_side` and `right_side`;
 - BACK/MAIN ESP32-WROOM owns `rear_scanner`, the rear SG90, MPU6050, BMP280,
-  and laptop USB telemetry. Hall and motor-cut relay implementations remain in
+  and laptop Wi-Fi telemetry (with USB diagnostics). Hall and motor-cut relay implementations remain in
   the firmware but are disabled in the current hardware profile.
 
 Keep the five canonical range IDs unchanged. The backend packet still contains
@@ -57,8 +58,8 @@ GPIO18 and GPIO19 free for native USB.
 | GPIO25 | reserved relay motor-cut output, leave unconnected |
 
 UART uses 115200 baud, 8 data bits, no parity, and 1 stop bit. Cross TX to RX,
-use 3.3 V logic, and join all grounds. MAIN uses USB serial for the laptop. No
-controller uses wireless transport.
+use 3.3 V logic, and join all grounds. MAIN connects to the laptop's LAN TCP
+listener on port `8765`; USB remains a diagnostic/upload path.
 
 ## I2C addresses and recovery
 

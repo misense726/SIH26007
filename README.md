@@ -90,6 +90,23 @@ npm run dev
 
 Open `http://127.0.0.1:5173`.
 
+For the connected ESP32 MAIN and Pi camera, use the LAN-aware launcher instead:
+
+```powershell
+.\scripts\start_live_fogsen.ps1
+```
+
+It resolves `misense.local`, binds the API and MAIN listener to the laptop's
+LAN interfaces, selects `LIVE` + `WIFI`, and connects the camera over TCP. Run
+the check from another terminal:
+
+```powershell
+.\.venv\Scripts\python.exe scripts\check_live_network.py
+```
+
+The launcher leaves camera enhancement off for the first connectivity check.
+Enable the optional ML worker only after the raw feed is stable.
+
 ## Run with Docker
 
 From the repository root:
@@ -118,9 +135,10 @@ Backend checks:
 ## Raspberry Pi camera over Wi-Fi
 
 The Pi runs `camera/pi_sender/sender.py` through `fogsen-camera.service` and
-listens on TCP port 8888. The default Docker configuration connects to
-`tcp://10.38.143.254:8888`. Override `FOGSEN_CAMERA_STREAM_URL` when the Pi's
-Wi-Fi address changes. USB video and USB-LAN are not used.
+listens on TCP port 8888. The default source is
+`tcp://misense.local:8888`; override `FOGSEN_CAMERA_STREAM_URL` with the Pi's
+current LAN IP when Docker cannot resolve mDNS. USB video and USB-LAN are not
+used.
 
 The laptop decodes one shared H.264 connection, calculates camera visibility,
 and exposes raw and enhanced MJPEG views to every dashboard client. The ML
@@ -180,7 +198,7 @@ $env:FOGSEN_MODE = "LIVE"
 $env:FOGSEN_TELEMETRY_TRANSPORT = "WIFI"
 $env:FOGSEN_WIFI_LISTEN_HOST = "0.0.0.0"
 $env:FOGSEN_WIFI_LISTEN_PORT = "8765"
-.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 127.0.0.1 --port 8001
+.\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
 ```
 
 Start the frontend normally in another terminal. `SIMULATED` remains the
@@ -211,7 +229,7 @@ camera/      Raspberry Pi Wi-Fi camera sender and systemd unit
 config/      Vehicle, sensors, safety thresholds, and demo settings
 docs/        Architecture, contracts, hardware, calibration, and demo notes
 firmware/    BACK/MAIN, FRONT, and MIDDLE wired ESP32 firmware and build notes
-frontend/    Driver and supervisor React application
+frontend/    React app with independent layout, view-router, and domain views
 maps/        Saved reference twins
 recordings/  JSONL record and replay files
 scripts/     Local launch and validation helpers

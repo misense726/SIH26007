@@ -156,14 +156,19 @@ endurance, and power tests remain on the bench checklist in
 `firmware/README.md`. Hall and relay bench tests apply only after enabling that
 future hardware profile.
 
-## Five-sensor wired sensing-to-dashboard chain
+## Five-sensor sensing-to-dashboard chain
 
-Status: software-verified on 2026-08-27; physical end-to-end verification
-pending.
+Status: software-verified and Wi-Fi transport bench-verified on 2026-08-28;
+front and rear ToF optical/electrical checks remain open.
 
 Implemented:
 
 - explicit `FOGSEN_MODE=LIVE` runtime with Wi-Fi TCP telemetry and USB serial fallback;
+- LAN-aware live launcher that resolves the Pi hostname, binds MAIN's TCP
+  listener on all interfaces, and keeps raw camera ingest independent from the
+  telemetry source;
+- repeatable live-network check for fresh MAIN packets, five range records, and
+  Pi camera frames;
 - MAIN packet ingestion into the canonical backend `WorldStore` used by
   `/api/world` and `/ws/telemetry`;
 - five normalized range readings with distinct timestamps and per-sensor
@@ -179,17 +184,29 @@ Implemented:
 
 Verification:
 
-- backend: 50 tests passed, including fake-serial packet to API and WebSocket,
+- backend: 66 tests passed, including fake-serial packet to API and WebSocket,
   host stale timeout, serial-open failure, duplicate rejection, and controller
   restart;
-- frontend: 21 tests passed and the TypeScript/Vite production build passed;
-- browser checks showed five named ToFs, `5/5` health, Auto low-visibility ToF
-  activation, neutral light and dark themes, and no console warnings or errors.
+- frontend: 37 tests passed and the TypeScript/Vite production build passed;
+- all three Arduino targets compiled with warnings enabled and the wired
+  protocol checks passed;
+- on the connected bench, MAIN COM11 produced 75 valid telemetry packets in
+  eight seconds, both UART links were fresh, and MIDDLE left/right ranges were
+  valid in all packets;
+- the same live backend received fresh MAIN Wi-Fi packets, exposed five range
+  records through HTTP/WebSocket, and decoded the Pi RGB stream at
+  1296x972 around 26 FPS;
+- the browser showed `CONNECTED`, `LIVE`, `CAMERA LIVE - WI-FI`, and all five
+  named sensor rows after the frontend layout split.
 
-The software tests use a fake serial reader. They do not prove a physical MAIN
-packet reached the dashboard. Camera, ArUco absolute localization, and radar are
-not part of this serial runtime. Without an absolute pose source, `LIVE`
-position confidence stays zero and the live corridor remains grey.
+The captured FRONT mask was `0x08` for every packet: the servo bit was present,
+but both front ToF bits were absent and both ranges were `-1`. The captured MAIN
+rear mask was `0x0F`, but the rear scanner returned `-1` at the bench target.
+Unknown is preserved as unknown; it is never promoted to maximum range. These
+are physical sensor/XSHUT/I2C or target-return checks, not a transport or
+dashboard failure. Camera, ArUco absolute localization, and radar are not part
+of this serial runtime. Without an absolute pose source, `LIVE` position
+confidence stays zero and the live corridor remains grey.
 
 ## Deterministic demo and Docker stack
 
