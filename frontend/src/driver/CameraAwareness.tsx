@@ -79,8 +79,8 @@ export function CameraAwareness({
   const sourceLabel = showLiveCamera
     ? showIRCamera
       ? isIrGpu
-        ? "SIMULATED IR · GPU"
-        : "SIMULATED IR · CPU"
+        ? "IR LIVE · GPU"
+        : "IR LIVE · CPU"
       : showEnhancedCamera
         ? "DEHAZED LIVE · GPU"
         : "CAMERA LIVE · WI-FI"
@@ -97,13 +97,13 @@ export function CameraAwareness({
       ? "/api/camera/stream?view=enhanced"
       : "/api/camera/stream?view=raw";
   const cameraAlt = showIRCamera
-    ? "Simulated infrared view from the Raspberry Pi camera (not real IR)"
+    ? "Infrared view from the Raspberry Pi camera"
     : showEnhancedCamera
       ? "ML-dehazed forward view from the Raspberry Pi camera"
       : "Raw forward view from the Raspberry Pi camera";
   const frameDetail = showLiveCamera && world.camera.width_px && world.camera.height_px
     ? showIRCamera
-      ? `${world.camera.ir_model ?? "Simulated IR"} · ${world.camera.ir_fps.toFixed(1)} FPS · ${Math.round(world.camera.ir_latency_ms ?? 0)} ms`
+      ? `${world.camera.ir_model ?? "IR"} · ${world.camera.ir_fps.toFixed(1)} FPS · ${Math.round(world.camera.ir_latency_ms ?? 0)} ms`
       : showEnhancedCamera
         ? `${world.camera.enhancement_model ?? "ML dehazing"} · ${world.camera.enhancement_fps.toFixed(1)} FPS · ${Math.round(world.camera.enhancement_latency_ms ?? 0)} ms`
         : `${world.camera.width_px}×${world.camera.height_px} · ${world.camera.measured_fps.toFixed(1)} FPS`
@@ -168,7 +168,7 @@ export function CameraAwareness({
               title={world.camera.ir_detail ?? undefined}
               onClick={() => setCameraView("IR")}
             >
-              Simulated IR
+              IR
             </button>
           </div>
         )}

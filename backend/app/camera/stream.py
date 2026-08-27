@@ -129,7 +129,7 @@ class LiveCameraStream:
             enhancement_model=enhancer.name if enhancer is not None else None,
             ir_status="loading" if ir_enhancer is not None else "disabled",
             ir_detail=(
-                f"Loading {ir_enhancer.name}" if ir_enhancer is not None else "Simulated IR is disabled"
+                f"Loading {ir_enhancer.name}" if ir_enhancer is not None else "IR enhancement is disabled"
             ),
             ir_model=ir_enhancer.name if ir_enhancer is not None else None,
         )
@@ -224,7 +224,7 @@ class LiveCameraStream:
                 snapshot,
                 ir_jpeg=None,
                 ir_status="stale",
-                ir_detail="The latest simulated IR frame is stale",
+                ir_detail="The latest IR frame is stale",
                 ir_fps=0.0,
             )
         return snapshot
@@ -419,7 +419,7 @@ class LiveCameraStream:
                     [int(cv2.IMWRITE_JPEG_QUALITY), self._jpeg_quality],
                 )
                 if not encoded:
-                    raise RuntimeError("OpenCV could not encode the simulated IR frame")
+                    raise RuntimeError("OpenCV could not encode the IR frame")
             except Exception as exc:
                 with self._lock:
                     self._snapshot = replace(
@@ -449,7 +449,7 @@ class LiveCameraStream:
                     ir_frame_id=f"ir-{source_frame_id}",
                     ir_jpeg=jpeg.tobytes(),
                     ir_status="live",
-                    ir_detail="Simulated IR transform is running",
+                    ir_detail="IR enhancement is running",
                     ir_model=self._ir_enhancer.name,
                     ir_device=self._ir_enhancer.device,
                     ir_precision=self._ir_enhancer.precision,

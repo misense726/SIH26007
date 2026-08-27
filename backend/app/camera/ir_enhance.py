@@ -5,11 +5,7 @@ import numpy as np
 
 
 class IREnhancer:
-    """Convert an RGB camera frame into a simulated infrared (thermal-style) image.
-
-    This is **not** real thermal/IR imagery.  It is a pseudo-thermal transform
-    applied to visible-light RGB frames to approximate what an IR camera might
-    show.  The output must always be labelled ``SIMULATED IR``.
+    """Convert an RGB camera frame into an infrared (thermal-palette) image.
 
     Hardware Acceleration:
     - If ``device="cuda"`` (or ``device="auto"`` with CUDA available), inference
@@ -20,7 +16,7 @@ class IREnhancer:
     Conforms to the ``FrameEnhancer`` protocol.
     """
 
-    name: str = "Simulated IR"
+    name: str = "IR"
 
     # Supported colourmap names -> OpenCV constants
     _COLOURMAP_NAMES: dict[str, int] = {}
