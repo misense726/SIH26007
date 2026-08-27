@@ -10,6 +10,7 @@ import type { ConnectionState } from "../state/useTelemetry";
 import { TwinMap } from "../twin/TwinMap";
 import type { WorldState } from "../types";
 import { FleetCard } from "./FleetCard";
+import { V2XPanel } from "./V2XPanel";
 
 interface SupervisorDashboardProps {
   world: WorldState;
@@ -113,7 +114,7 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
             <div><span>Temperature</span><strong>{formatNumber(world.environment.temperature_c)}°C</strong></div>
             <div><span>Pressure</span><strong>{formatNumber(world.environment.pressure_hpa)} hPa</strong></div>
             <div><span>Relative altitude</span><strong>{formatNumber(world.environment.relative_altitude_m, 2)} m</strong><small>approximate</small></div>
-            <div><span>Visibility</span><strong>{world.environment.visibility_state.replace("_", " ")}</strong></div>
+            <div><span>Visibility</span><strong>{world.environment.visibility_state.replaceAll("_", " ")}</strong></div>
             <div><span>Nearest obstacle</span><strong>{nearest === null ? "--" : `${formatNumber(nearest, 2)} m`}</strong></div>
             <div><span>Map confidence</span><strong>{Math.round(world.safe_corridor.confidence * 100)}%</strong></div>
           </div>
@@ -154,6 +155,8 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
           )}
         </article>
       </div>
+
+      <V2XPanel v2x={world.v2x} />
     </section>
   );
 }

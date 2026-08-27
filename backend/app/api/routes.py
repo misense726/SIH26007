@@ -11,6 +11,9 @@ from backend.app.models import (
     SimulationControlRequest,
     SimulationState,
     SystemStatus,
+    V2IAdvisoryMessage,
+    V2VBasicSafetyMessage,
+    V2XState,
     WorldState,
 )
 from backend.app.sensor_settings import (
@@ -215,6 +218,32 @@ async def reference_map(request: Request) -> ReferenceMap:
 async def replace_reference_map(request: Request, reference_map: ReferenceMap) -> ReferenceMap:
     await request.app.state.runtime.set_reference_map(reference_map)
     return request.app.state.runtime.reference_map
+
+
+@api_router.get("/v2x/state", response_model=V2XState)
+async def v2x_state(request: Request) -> V2XState:
+    v2x_manager = getattr(request.app.state, "v2x_manager", None)
+    if v2x_manager is None:
+        raise HTTPException(status_code=503, detail="V2X subsystem is offline")
+    return v2x_manager.snapshot()
+
+
+@api_router.post("/v2x/messages/bsm", response_model=dict[str, str])
+async def receive_v2v_bsm(request: Request, bsm: V2VBasicSafetyMessage) -> dict[str, str]:
+    v2x_manager = getattr(request.app.state, "v2x_manager", None)
+    if v2x_manager is None:
+        raise HTTPException(status_code=503, detail="V2X subsystem is offline")
+    v2x_manager.receive_bsm(bsm)
+    return {"status": "accepted", "message_id": bsm.message_id}
+
+
+@api_router.post("/v2x/broadcast-advisory", response_model=dict[str, str])
+async def broadcast_v2i_advisory(request: Request, advisory: V2IAdvisoryMessage) -> dict[str, str]:
+    v2x_manager = getattr(request.app.state, "v2x_manager", None)
+    if v2x_manager is None:
+        raise HTTPException(status_code=503, detail="V2X subsystem is offline")
+    v2x_manager.broadcast_advisory(advisory)
+    return {"status": "broadcasted", "message_id": advisory.message_id}
 
 
 async def telemetry_socket(websocket: WebSocket) -> None:

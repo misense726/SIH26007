@@ -44,6 +44,7 @@ from backend.app.simulation.providers import (
 from backend.app.twin.map_store import load_reference_map, save_reference_map
 from backend.app.twin.route import PolylineRoute
 from backend.app.twin.world_store import WorldStore
+from backend.app.v2x import V2XManager
 
 
 class FullSimulator:
@@ -55,10 +56,12 @@ class FullSimulator:
         config: dict,
         telemetry_hz: float = 10.0,
         camera_feed: CameraFeed | None = None,
+        v2x_manager: V2XManager | None = None,
     ) -> None:
         self._store = store
         self._config = config
         self._camera_feed = camera_feed
+        self._v2x_manager = v2x_manager or V2XManager()
         self._interval_s = 1.0 / telemetry_hz
         self._control_lock = asyncio.Lock()
         self._task: asyncio.Task[None] | None = None
@@ -250,6 +253,7 @@ class FullSimulator:
             rear_scanner_angle_deg=self._rear_scanner_angle_deg,
         )
         self._configure_pipeline()
+        self._v2x_manager.reset()
         self._scenario = self._default_scenario
         await self._apply_scenario(self._default_scenario)
 
@@ -517,6 +521,12 @@ class FullSimulator:
             safety_distances.warning_m,
             safety_distances.critical_m,
         )
+        self._v2x_manager.update_from_vehicle(
+            pose,
+            emergency,
+            corridor,
+            emergency.nearest_obstacle_m,
+        )
         current = await self._store.snapshot()
         return await self._store.replace(
             WorldState(
@@ -554,6 +564,7 @@ class FullSimulator:
                 alerts=list(self._alerts),
                 recording=self._recording_state,
                 simulation=self.simulation_state(),
+                v2x=self._v2x_manager.snapshot(),
             )
         )
 

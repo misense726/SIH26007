@@ -33,6 +33,16 @@ from backend.app.models.telemetry import (
     VisibilityState,
     WorldState,
 )
+from backend.app.models.v2x import (
+    V2IAdvisoryMessage,
+    V2IAdvisoryType,
+    V2XInfrastructureNode,
+    V2VBasicSafetyMessage,
+    V2XMessage,
+    V2XMessageType,
+    V2XPeerNode,
+    V2XState,
+)
 
 __all__ = [
     "AlertEvent",
@@ -68,4 +78,12 @@ __all__ = [
     "VisibilityMetrics",
     "VisibilityState",
     "WorldState",
+    "V2IAdvisoryMessage",
+    "V2IAdvisoryType",
+    "V2XInfrastructureNode",
+    "V2VBasicSafetyMessage",
+    "V2XMessage",
+    "V2XMessageType",
+    "V2XPeerNode",
+    "V2XState",
 ]
