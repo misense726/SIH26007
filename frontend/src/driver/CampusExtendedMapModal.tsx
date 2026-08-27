@@ -12,16 +12,40 @@ interface CampusExtendedMapModalProps {
   onClose: () => void;
 }
 
-function createVehicleIcon(headingDeg: number) {
+function createPrimaryVehicleIcon(headingDeg: number, vehicleId: string) {
   return L.divIcon({
     className: "campus-vehicle-icon-wrap",
     html: `
-      <div class="campus-vehicle-marker campus-vehicle-marker-large" style="transform: rotate(${headingDeg}deg);">
+      <div class="campus-vehicle-marker campus-vehicle-marker-large primary-driver" style="transform: rotate(${headingDeg}deg);">
         <div class="campus-vehicle-pulse"></div>
-        <svg viewBox="0 0 28 28" width="28" height="28" class="campus-vehicle-svg">
-          <path d="M14 2 L24 24 L14 19 L4 24 Z" fill="#60a5fa" stroke="#0f172a" stroke-width="2" />
-          <circle cx="14" cy="13" r="3.5" fill="#ffffff" />
+        <svg viewBox="0 0 32 32" width="32" height="32" class="campus-vehicle-svg">
+          <path d="M16 2 L26 26 L16 20 L6 26 Z" fill="#38bdf8" stroke="#030712" stroke-width="2" />
+          <circle cx="16" cy="14" r="4" fill="#ffffff" />
         </svg>
+      </div>
+      <div class="campus-driver-label primary-label extended-driver-label">
+        <strong>${vehicleId} (YOU)</strong>
+      </div>
+    `,
+    iconSize: [40, 40],
+    iconAnchor: [20, 20],
+  });
+}
+
+function createPeerVehicleIcon(headingDeg: number, vehicleId: string, distanceM: number, speedMps: number, emergency: string) {
+  const isEmergency = emergency && emergency !== "SAFE";
+  return L.divIcon({
+    className: "campus-vehicle-icon-wrap peer-driver-wrap",
+    html: `
+      <div class="campus-vehicle-marker campus-vehicle-marker-large peer-driver ${isEmergency ? "peer-alert" : ""}" style="transform: rotate(${headingDeg}deg);">
+        <svg viewBox="0 0 28 28" width="28" height="28" class="campus-vehicle-svg">
+          <path d="M14 2 L22 22 L14 17 L6 22 Z" fill="${isEmergency ? "#ef4444" : "#f59e0b"}" stroke="#030712" stroke-width="1.8" />
+          <circle cx="14" cy="12" r="3.5" fill="#ffffff" />
+        </svg>
+      </div>
+      <div class="campus-driver-label peer-label extended-driver-label">
+        <strong>${vehicleId}</strong>
+        <span>${(speedMps * 3.6).toFixed(0)} km/h | ${Math.round(distanceM)}m</span>
       </div>
     `,
     iconSize: [36, 36],
@@ -52,6 +76,7 @@ export function CampusExtendedMapModal({
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
   const vehicleMarkerRef = useRef<L.Marker | null>(null);
+  const peerMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const routeLayerRef = useRef<L.Polyline | null>(null);
   const poiLayerGroupRef = useRef<L.LayerGroup | null>(null);
   const [showPois, setShowPois] = useState(true);
@@ -64,9 +89,10 @@ export function CampusExtendedMapModal({
     DEFAULT_CAMPUS_CONFIG.anchor,
   );
 
+  const activePeers = world.v2x?.active_peers ?? [];
   const corridorState = telemetryConnected ? world.safe_corridor.state : "GREY";
 
-  // ESC key to close
+  // ESC key to close modal
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.key === "Escape") {
@@ -89,20 +115,31 @@ export function CampusExtendedMapModal({
       maxZoom: DEFAULT_CAMPUS_CONFIG.maxZoom,
       zoomControl: false,
       attributionControl: true,
+      preferCanvas: true,
     });
 
-    // Custom Zoom control top-left
+    // Custom Zoom & Scale control
     L.control.zoom({ position: "topleft" }).addTo(map);
     L.control.scale({ position: "bottomleft", imperial: false }).addTo(map);
 
-    // CARTO Dark Matter Tiles
+    // Fast-loading CARTO Dark Matter Tiles
     L.tileLayer(DEFAULT_CAMPUS_CONFIG.tiles.url, {
       subdomains: DEFAULT_CAMPUS_CONFIG.tiles.subdomains,
       attribution: DEFAULT_CAMPUS_CONFIG.tiles.attribution,
       maxZoom: DEFAULT_CAMPUS_CONFIG.tiles.maxZoom,
+      updateWhenIdle: false,
+      updateWhenZooming: true,
+      keepBuffer: 8,
     }).addTo(map);
 
-    // Route polyline
+    // Primary Vehicle Marker
+    const vehicleMarker = L.marker(initialCenter, {
+      icon: createPrimaryVehicleIcon(vehicle.heading_deg, vehicle.vehicle_id || "PRIMARY DUMPER"),
+      zIndexOffset: 1000,
+    }).addTo(map);
+    vehicleMarkerRef.current = vehicleMarker;
+
+    // Reference Route
     if (world.reference_map?.features) {
       const routeFeature = world.reference_map.features.find(
         (f) => f.feature_type === "ROUTE" || f.feature_type === "CENTERLINE",
@@ -113,11 +150,21 @@ export function CampusExtendedMapModal({
           return [geo.lat, geo.lng];
         });
 
+        // Glow backing
+        L.polyline(latLngs, {
+          color: "#0284c7",
+          weight: 10,
+          opacity: 0.3,
+          lineCap: "round",
+          lineJoin: "round",
+        }).addTo(map);
+
         const routePolyline = L.polyline(latLngs, {
           color: "#38bdf8",
-          weight: 5,
-          opacity: 0.9,
-          dashArray: "8, 10",
+          weight: 4.5,
+          opacity: 0.95,
+          dashArray: "10, 12",
+          className: "animated-campus-route",
           lineCap: "round",
           lineJoin: "round",
         }).addTo(map);
@@ -125,209 +172,271 @@ export function CampusExtendedMapModal({
       }
     }
 
-    // POI Layer Group
+    // POIs Layer
     const poiGroup = L.layerGroup();
     DEFAULT_CAMPUS_CONFIG.pois.forEach((poi) => {
-      const marker = L.marker([poi.coordinates.lat, poi.coordinates.lng], {
+      const poiMarker = L.marker([poi.coordinates.lat, poi.coordinates.lng], {
         icon: createPoiIcon(poi.category, poi.name),
       });
-      if (poi.description) {
-        marker.bindPopup(
-          `<div class="campus-popup"><strong>${poi.name}</strong><p>${poi.description}</p></div>`,
-        );
-      }
-      poiGroup.addLayer(marker);
+      poiMarker.bindPopup(`
+        <div class="campus-popup-content">
+          <h4>${poi.name}</h4>
+          <p class="campus-popup-category">${poi.category}</p>
+          <p>${poi.description ?? "Campus location"}</p>
+        </div>
+      `);
+      poiGroup.addLayer(poiMarker);
     });
     poiGroup.addTo(map);
     poiLayerGroupRef.current = poiGroup;
 
-    // Vehicle Marker
-    const vehicleMarker = L.marker(initialCenter, {
-      icon: createVehicleIcon(vehicle.heading_deg),
-      zIndexOffset: 1000,
-    }).addTo(map);
-    vehicleMarkerRef.current = vehicleMarker;
-
     map.on("dragstart", () => setAutoFollow(false));
-
     mapInstanceRef.current = map;
 
-    // Trigger map invalidation after layout settles
-    const timer = setTimeout(() => {
-      map.invalidateSize();
-    }, 150);
-
     return () => {
-      clearTimeout(timer);
       map.remove();
       mapInstanceRef.current = null;
       vehicleMarkerRef.current = null;
+      peerMarkersRef.current.clear();
       routeLayerRef.current = null;
       poiLayerGroupRef.current = null;
     };
   }, []);
 
-  // Update vehicle position and heading
+  // Update primary vehicle position
   useEffect(() => {
     if (!mapInstanceRef.current || !vehicleMarkerRef.current) return;
 
     const newLatLng: [number, number] = [vehicleCoords.lat, vehicleCoords.lng];
     vehicleMarkerRef.current.setLatLng(newLatLng);
-    vehicleMarkerRef.current.setIcon(createVehicleIcon(vehicle.heading_deg));
+    vehicleMarkerRef.current.setIcon(
+      createPrimaryVehicleIcon(vehicle.heading_deg, vehicle.vehicle_id || "PRIMARY DUMPER"),
+    );
 
     if (autoFollow) {
-      mapInstanceRef.current.panTo(newLatLng, { animate: true, duration: 0.3 });
+      mapInstanceRef.current.panTo(newLatLng, { animate: true, duration: 0.25 });
     }
-  }, [vehicleCoords.lat, vehicleCoords.lng, vehicle.heading_deg, autoFollow]);
+  }, [vehicleCoords.lat, vehicleCoords.lng, vehicle.heading_deg, autoFollow, vehicle.vehicle_id]);
 
-  // Toggle POIs
+  // Update peer driver markers
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    const map = mapInstanceRef.current;
+    const currentPeerIds = new Set<string>();
+
+    activePeers.forEach((peer) => {
+      currentPeerIds.add(peer.vehicle_id);
+      const peerGeo = cartesianToGeodetic(peer.x_m, peer.y_m, DEFAULT_CAMPUS_CONFIG.anchor);
+      const peerLatLng: [number, number] = [peerGeo.lat, peerGeo.lng];
+
+      let marker = peerMarkersRef.current.get(peer.vehicle_id);
+      if (!marker) {
+        marker = L.marker(peerLatLng, {
+          icon: createPeerVehicleIcon(
+            peer.heading_deg,
+            peer.vehicle_id,
+            peer.distance_m,
+            peer.speed_mps,
+            peer.emergency_state,
+          ),
+          zIndexOffset: 800,
+        }).addTo(map);
+        marker.bindPopup(`
+          <div class="campus-popup-content">
+            <h4>${peer.vehicle_id}</h4>
+            <p>Speed: <strong>${(peer.speed_mps * 3.6).toFixed(1)} km/h</strong></p>
+            <p>Distance: <strong>${peer.distance_m} m</strong></p>
+            <p>Status: <strong>${peer.emergency_state}</strong> (${peer.link_status})</p>
+          </div>
+        `);
+        peerMarkersRef.current.set(peer.vehicle_id, marker);
+      } else {
+        marker.setLatLng(peerLatLng);
+        marker.setIcon(
+          createPeerVehicleIcon(
+            peer.heading_deg,
+            peer.vehicle_id,
+            peer.distance_m,
+            peer.speed_mps,
+            peer.emergency_state,
+          ),
+        );
+      }
+    });
+
+    peerMarkersRef.current.forEach((marker, id) => {
+      if (!currentPeerIds.has(id)) {
+        map.removeLayer(marker);
+        peerMarkersRef.current.delete(id);
+      }
+    });
+  }, [activePeers]);
+
+  // Toggle POIs visibility
   useEffect(() => {
     if (!mapInstanceRef.current || !poiLayerGroupRef.current) return;
     if (showPois) {
-      mapInstanceRef.current.addLayer(poiLayerGroupRef.current);
+      poiLayerGroupRef.current.addTo(mapInstanceRef.current);
     } else {
       mapInstanceRef.current.removeLayer(poiLayerGroupRef.current);
     }
   }, [showPois]);
 
-  // Toggle Route
+  // Toggle Route visibility
   useEffect(() => {
     if (!mapInstanceRef.current || !routeLayerRef.current) return;
     if (showRoute) {
-      mapInstanceRef.current.addLayer(routeLayerRef.current);
+      routeLayerRef.current.addTo(mapInstanceRef.current);
     } else {
       mapInstanceRef.current.removeLayer(routeLayerRef.current);
     }
   }, [showRoute]);
 
-  function handleRecenter() {
-    setAutoFollow(true);
+  const handleFocusDriver = (lat: number, lng: number) => {
     if (mapInstanceRef.current) {
-      mapInstanceRef.current.setView(
-        [vehicleCoords.lat, vehicleCoords.lng],
-        DEFAULT_CAMPUS_CONFIG.extendedZoom,
-        { animate: true },
-      );
+      setAutoFollow(false);
+      mapInstanceRef.current.setView([lat, lng], 19, { animate: true });
     }
-  }
-
-  function handleFitCampus() {
-    setAutoFollow(false);
-    if (mapInstanceRef.current) {
-      const allPoints: [number, number][] = DEFAULT_CAMPUS_CONFIG.pois.map((p) => [
-        p.coordinates.lat,
-        p.coordinates.lng,
-      ]);
-      allPoints.push([vehicleCoords.lat, vehicleCoords.lng]);
-      const bounds = L.latLngBounds(allPoints);
-      mapInstanceRef.current.fitBounds(bounds, { padding: [50, 50] });
-    }
-  }
+  };
 
   return (
-    <div className="campus-modal-backdrop" role="dialog" aria-modal="true" aria-label="Extended Campus Navigation Map">
-      <div className="campus-extended-modal">
-        <header className="campus-extended-header">
-          <div className="campus-extended-title">
-            <div className="brand-lockup-mini">
-              <span className="brand-mark-mini">FS</span>
-              <div>
-                <p className="eyebrow">Extended Campus Navigation</p>
-                <h2>{DEFAULT_CAMPUS_CONFIG.campusName}</h2>
-              </div>
-            </div>
-            <span className="source-badge">SIMULATED GPS · CARTO DARK</span>
+    <div className="campus-modal-backdrop" onClick={onClose}>
+      <div
+        className="campus-extended-modal-container"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Extended Campus GPS Map View"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Modal Top Header */}
+        <div className="campus-modal-header">
+          <div className="campus-modal-title-wrap">
+            <span className="source-badge">GPS + V2X FLEET</span>
+            <h2>{DEFAULT_CAMPUS_CONFIG.campusName}</h2>
+            <span className="campus-header-coords">
+              {formatCoordinates(vehicleCoords, 5)}
+            </span>
           </div>
 
-          <div className="campus-extended-telemetry">
-            <div className="campus-telemetry-item">
-              <span>Speed</span>
-              <strong>{telemetryConnected ? formatNumber(vehicle.speed_mps * 3.6, 1) : "--"} km/h</strong>
-            </div>
-            <div className="campus-telemetry-item">
-              <span>Heading</span>
-              <strong>{telemetryConnected ? `${formatNumber(vehicle.heading_deg, 0)}°` : "--"}</strong>
-            </div>
-            <div className="campus-telemetry-item">
-              <span>Coordinates</span>
-              <strong>{formatCoordinates(vehicleCoords, 4)}</strong>
-            </div>
-            <div className="campus-telemetry-item">
-              <span>Safe Corridor</span>
-              <strong className={`corridor-${corridorState.toLowerCase()}`}>{corridorState}</strong>
-            </div>
-          </div>
-
-          <div className="campus-extended-controls">
+          {/* Action Toolbar */}
+          <div className="campus-modal-toolbar">
             <button
               type="button"
               className={`campus-tool-btn ${autoFollow ? "active" : ""}`}
-              onClick={handleRecenter}
-              title="Lock camera to vehicle"
+              onClick={() => {
+                setAutoFollow(true);
+                if (mapInstanceRef.current) {
+                  mapInstanceRef.current.setView(
+                    [vehicleCoords.lat, vehicleCoords.lng],
+                    DEFAULT_CAMPUS_CONFIG.extendedZoom,
+                    { animate: true },
+                  );
+                }
+              }}
             >
-              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2">
-                <circle cx="12" cy="12" r="8" />
-                <line x1="12" y1="2" x2="12" y2="6" />
-                <line x1="12" y1="18" x2="12" y2="22" />
-                <line x1="2" y1="12" x2="6" y2="12" />
-                <line x1="18" y1="12" x2="22" y2="12" />
-              </svg>
-              <span>Recenter</span>
+              {autoFollow ? "Auto-Follow (ON)" : "Recenter (OFF)"}
             </button>
-
-            <button
-              type="button"
-              className="campus-tool-btn"
-              onClick={handleFitCampus}
-              title="Show entire campus view"
-            >
-              <span>Fit Campus</span>
-            </button>
-
-            <button
-              type="button"
-              className={`campus-tool-btn ${showPois ? "active" : ""}`}
-              onClick={() => setShowPois((v) => !v)}
-            >
-              <span>POIs</span>
-            </button>
-
             <button
               type="button"
               className={`campus-tool-btn ${showRoute ? "active" : ""}`}
-              onClick={() => setShowRoute((v) => !v)}
+              onClick={() => setShowRoute(!showRoute)}
             >
-              <span>Route</span>
+              Route {showRoute ? "ON" : "OFF"}
             </button>
-
             <button
               type="button"
-              className="campus-close-btn"
+              className={`campus-tool-btn ${showPois ? "active" : ""}`}
+              onClick={() => setShowPois(!showPois)}
+            >
+              POIs {showPois ? "ON" : "OFF"}
+            </button>
+            <button
+              type="button"
+              className="campus-modal-close-btn"
               onClick={onClose}
-              title="Close extended view (Esc)"
+              title="Close Map (ESC)"
               aria-label="Close extended map"
             >
-              <span>Close ✕</span>
+              ✕
             </button>
           </div>
-        </header>
+        </div>
 
-        <div className="campus-extended-stage">
-          <div ref={mapContainerRef} className="campus-extended-leaflet-container" />
-          <div className="campus-extended-legend">
-            <div className="legend-item">
-              <span className="legend-vehicle-icon">▲</span>
-              <span>FogSen Vehicle</span>
-            </div>
-            <div className="legend-item">
-              <span className="legend-route-line"></span>
-              <span>Active Haul Route</span>
-            </div>
-            <div className="legend-item">
-              <span className="legend-poi-dot"></span>
-              <span>Campus Landmark</span>
+        {/* Modal Map Viewport & Peer Fleet Sidebar */}
+        <div className="campus-extended-body">
+          <div className="campus-modal-map-stage">
+            <div ref={mapContainerRef} className="campus-extended-leaflet-container" />
+
+            {/* Quick telemetry HUD overlay */}
+            <div className="campus-modal-hud-overlay">
+              <div className="campus-hud-item">
+                <span>Speed</span>
+                <strong>{telemetryConnected ? `${formatNumber(vehicle.speed_mps * 3.6, 1)} km/h` : "--"}</strong>
+              </div>
+              <div className="campus-hud-item">
+                <span>Heading</span>
+                <strong>{telemetryConnected ? `${formatNumber(vehicle.heading_deg, 0)}°` : "--"}</strong>
+              </div>
+              <div className="campus-hud-item">
+                <span>Safe Corridor</span>
+                <strong className={`corridor-${corridorState.toLowerCase()}`}>{corridorState}</strong>
+              </div>
+              <div className="campus-hud-item">
+                <span>Active Peers</span>
+                <strong>{activePeers.length} Drivers</strong>
+              </div>
             </div>
           </div>
+
+          {/* Active Drivers List Sidebar */}
+          <aside className="campus-peers-sidebar">
+            <div className="campus-peers-header">
+              <h3>Fleet Drivers ({activePeers.length + 1})</h3>
+              <span className="v2x-stat-pill">V2V Mesh</span>
+            </div>
+
+            <div className="campus-driver-cards-list">
+              {/* Primary Driver */}
+              <div
+                className="campus-driver-row primary-row"
+                onClick={() => handleFocusDriver(vehicleCoords.lat, vehicleCoords.lng)}
+                title="Click to center on your vehicle"
+              >
+                <div className="campus-driver-row-top">
+                  <strong>{vehicle.vehicle_id || "PRIMARY DUMPER"} (YOU)</strong>
+                  <span className="driver-role-badge primary">LEAD</span>
+                </div>
+                <div className="campus-driver-row-stats">
+                  <span>Speed: <strong>{(vehicle.speed_mps * 3.6).toFixed(1)} km/h</strong></span>
+                  <span>Heading: <strong>{Math.round(vehicle.heading_deg)}°</strong></span>
+                </div>
+              </div>
+
+              {/* Peer Drivers */}
+              {activePeers.map((peer) => {
+                const peerGeo = cartesianToGeodetic(peer.x_m, peer.y_m, DEFAULT_CAMPUS_CONFIG.anchor);
+                return (
+                  <div
+                    key={peer.vehicle_id}
+                    className="campus-driver-row"
+                    onClick={() => handleFocusDriver(peerGeo.lat, peerGeo.lng)}
+                    title={`Click to focus map on ${peer.vehicle_id}`}
+                  >
+                    <div className="campus-driver-row-top">
+                      <strong>{peer.vehicle_id}</strong>
+                      <span className={`link-badge link-${peer.link_status.toLowerCase()}`}>
+                        {peer.link_status}
+                      </span>
+                    </div>
+                    <div className="campus-driver-row-stats">
+                      <span>Distance: <strong>{peer.distance_m} m</strong></span>
+                      <span>Speed: <strong>{(peer.speed_mps * 3.6).toFixed(1)} km/h</strong></span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </aside>
         </div>
       </div>
     </div>
