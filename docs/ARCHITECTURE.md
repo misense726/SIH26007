@@ -20,12 +20,19 @@ stall raw capture.
 Pi RGB camera -> Wi-Fi H.264 -> latest raw frame -> visibility metrics
                                       |          -> raw dashboard stream
                                       -> GPU dehazing -> enhanced dashboard stream
+                                      -> RGB false-color -> IR-style dashboard stream
 ```
 
 `CameraState.mode` is `LIVE` when the Pi feed is active even if the rest of the
 Docker demo remains `SIMULATED`. The driver UI labels those sources separately.
-If the camera or model becomes stale, the raw/enhanced availability flags clear
-instead of reusing an old image.
+If the camera or a processing worker becomes stale, its raw, enhanced, or IR
+availability flag clears instead of reusing an old image.
+
+The IR-style branch is a presentation transform of the RGB frame. Its CPU path
+uses OpenCV CLAHE and a color map. Its CUDA path uses PyTorch luminance and a
+GPU color lookup table. It does not read temperature or produce thermal-camera
+data. The raw, dehazed, and IR-style images remain outside the deterministic
+motor-cut decision.
 
 The V1 internal frame uses metres. Vehicle positive X points right and positive Y points forward. The world frame is fixed local Cartesian. Heading increases clockwise from world positive Y.
 
@@ -58,6 +65,42 @@ diagnostics. Serial mode still requires `FOGSEN_SERIAL_PORT`. The runtime
 reconnects after source or read failures. If the stream is absent or stale, it advances the world sequence with
 five invalid ranges, offline or stale health, a grey corridor, and a warning.
 It never freezes the last healthy snapshot. Simulation remains the default.
+
+## Map presentation boundary
+
+The backend `ReferenceMap` is the only operational map used by the simulator,
+spatial reconstruction, corridor logic, and safety state. The supervisor's
+schematic view renders that model directly.
+
+Leaflet provides optional geographic presentation views. The frontend converts
+the backend's local Cartesian vehicle coordinates around the configured campus
+anchor, then draws the primary vehicle and simulated peers over Esri or
+OpenStreetMap tiles. The driver has a circular minimap and an expanded map. The
+supervisor can switch between the schematic and satellite background.
+
+The campus anchor, display points of interest, and external tiles are not a
+second operational twin. They do not update `ReferenceMap`, localize the
+vehicle, change the safe corridor, or trigger emergency logic. If internet
+tiles fail, the backend schematic and all safety functions continue to work.
+
+## Simulated V2X boundary
+
+`V2XManager` consumes the current vehicle pose, safe corridor, emergency state,
+and nearest obstacle. It emits `V2XState` into the same `WorldState` snapshot
+used by both dashboards. The state includes simulated peer vehicles, roadside
+units, basic safety messages, advisories, link estimates, counters, and a
+bounded message log.
+
+```text
+vehicle pose + corridor + emergency -> V2XManager -> WorldState.v2x
+                                                   -> V2X API
+                                                   -> supervisor and map views
+```
+
+The current protocol version is `1.0-DSRC-SIM`. The 5.89 GHz value is simulated
+metadata. No DSRC or C-V2X radio is connected, and API advisory broadcasts only
+change in-memory state. V2X currently observes safety state but does not replace
+ToF evidence or command the emergency output.
 
 ## Canonical map and pose
 

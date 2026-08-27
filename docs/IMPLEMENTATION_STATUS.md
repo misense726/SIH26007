@@ -117,7 +117,7 @@ Verification:
 
 ## Final wired three-controller firmware
 
-Status: compile-verified on 2026-08-27; physical bench verification pending.
+Status: compile-verified on 2026-08-28; physical bench verification pending.
 
 Implemented:
 
@@ -136,15 +136,17 @@ Implemented:
 - dormant Hall odometry and relay-cut implementations behind disabled hardware
   profile flags;
 - unknown-range handling with no maximum-range substitution;
-- wired USB laptop protocol, command sender, and serial monitor;
-- no wireless or cloud dependency.
+- wired USB diagnostic and fallback protocol, command sender, and serial monitor;
+- MAIN Wi-Fi TCP telemetry to the laptop while both sensor-node links remain
+  wired UART;
+- no cloud dependency.
 
 Verification:
 
-- MAIN: 340,019 bytes flash and 35,432 bytes globals;
-- FRONT: 310,782 bytes flash and 15,876 bytes globals;
-- MIDDLE: 338,086 bytes flash and 15,332 bytes globals;
-- 32 firmware and wired protocol contract tests passed;
+- MAIN: 966,003 bytes flash and 60,004 bytes globals;
+- FRONT: 310,802 bytes flash and 15,876 bytes globals;
+- MIDDLE: 317,042 bytes flash and 14,232 bytes globals;
+- 35 firmware and wired protocol contract tests passed;
 - all three targets compiled with warnings enabled through
   `scripts/verify-firmware.ps1`.
 
@@ -265,3 +267,45 @@ dashboard rendering, and GPU inference. It does not prove dehazing quality in
 real fog, long-run Wi-Fi stability, low-light performance, camera thermals, or
 vehicle vibration tolerance. Raw and dehazed images remain driver aids and are
 not braking ground truth.
+
+## Tactical maps, simulated V2X, and RGB-derived IR
+
+Status: locally integrated and software-verified on 2026-08-28. Radio, thermal
+camera, live Pi IR, Docker rebuild, and physical vehicle checks remain pending.
+
+Implemented:
+
+- a circular Leaflet minimap in the driver camera view with primary and peer
+  vehicle markers;
+- an expanded driver map with satellite, dark, and OpenStreetMap layers;
+- a supervisor tactical map with backend schematic and satellite modes,
+  multi-truck selection, speed labels, and matching fleet cards;
+- a local Cartesian to geodetic display conversion around a configured campus
+  anchor without changing the canonical backend `ReferenceMap`;
+- `V2XState` in the shared world snapshot plus peer, roadside-unit, advisory,
+  packet-log, and link-estimate models;
+- V2X state, incoming BSM, and advisory broadcast API endpoints;
+- a supervisor V2X monitor with peer, advisory, and packet-log tabs;
+- a CPU or CUDA false-color IR worker derived from RGB luminance, with status,
+  frame, stream, latency, frame-rate, precision, and VRAM fields;
+- explicit documentation that map tiles are presentation-only, V2X is
+  simulated, and the IR-style stream is not thermal data.
+
+Verification:
+
+- backend: 65 tests passed;
+- frontend: 33 tests passed;
+- TypeScript and Vite production build passed;
+- the CPU IR smoke check produced a `48x64x3` `uint8` frame after syncing the
+  declared OpenCV dependency;
+- local `/api/health`, `/api/v2x/state`, and WebSocket telemetry responded;
+- browser verification showed a connected supervisor, three selectable trucks,
+  eight loaded satellite tiles, zero broken tiles, and no console warnings or
+  errors after repairing an invalid minimap DOM property;
+- Docker Compose configuration validation passed.
+
+Docker Desktop was not running, so the merged containers were not rebuilt in
+this verification. The online tile modes depend on external providers. No DSRC
+or C-V2X radio is connected. The IR worker was not checked against the live Pi
+feed or CUDA in this integration pass. None of these display features replaces
+the ToF safety path.

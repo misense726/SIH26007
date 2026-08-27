@@ -26,8 +26,15 @@ FogSen currently includes:
 - a manually defined semantic mine route with a moving dumper;
 - a camera-first driver dashboard with Auto, Camera, and calibrated ToF spatial views;
 - a Raspberry Pi RGB feed over Wi-Fi with raw and GPU-dehazed driver views;
+- an optional CPU or CUDA false-color IR view derived from the RGB feed, not a
+  thermal camera;
+- a circular Leaflet driver minimap with an expanded satellite, dark, and street
+  map view;
 - saved light and dark themes with neutral surfaces and safety-only status colors;
-- a separate supervisor fleet map with environment, sensor health, and alerts;
+- a supervisor fleet map with selectable backend schematic and satellite views,
+  multi-truck selection, environment, sensor health, and alerts;
+- an in-memory V2V/V2I simulation with peer state, roadside units, advisories,
+  packet history, and API controls;
 - deterministic normal, fog, obstacle, and emergency scenarios with bounded sensor values;
 - backend and frontend tests;
 - wired firmware for one ESP32-WROOM BACK/MAIN, one XIAO ESP32-C6 FRONT, and
@@ -50,7 +57,10 @@ camera video continues if ML enhancement is disabled or unavailable.
 Firmware work also requires Arduino CLI. `scripts/setup-firmware.ps1` installs
 the pinned ESP32 core and libraries once Arduino CLI is on `PATH`.
 
-No cloud service is required.
+The simulator, backend world model, schematic map, and safety logic need no
+cloud service. Leaflet satellite, dark, and street layers load public map tiles
+over the internet. Those tiles are optional display backgrounds and never feed
+localization or safety decisions.
 
 ## Setup
 
@@ -60,7 +70,8 @@ From the repository root:
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 Set-Location frontend
-npm install
+npm ci
+Set-Location ..
 ```
 
 ## Run
@@ -100,6 +111,8 @@ Backend checks:
 - `http://127.0.0.1:8000/api/camera/status`
 - `http://127.0.0.1:8000/api/camera/frame?view=raw`
 - `http://127.0.0.1:8000/api/camera/frame?view=enhanced`
+- `http://127.0.0.1:8000/api/camera/frame?view=ir`
+- `http://127.0.0.1:8000/api/v2x/state`
 - `ws://127.0.0.1:8000/ws/telemetry`
 - `http://127.0.0.1:8000/docs`
 
@@ -115,6 +128,29 @@ and exposes raw and enhanced MJPEG views to every dashboard client. The ML
 worker drops old work instead of queuing frames, so the raw feed stays current.
 Camera data and enhanced imagery remain driver aids; neither can trigger a
 motor cut without the range-sensor safety path.
+
+When `FOGSEN_CAMERA_IR_ENABLED=true`, the backend can create an additional
+false-color IR-style stream with OpenCV on the CPU or PyTorch on CUDA. It uses
+brightness from the normal RGB frame and a configured color map. It does not
+measure temperature, see through fog, or replace a thermal sensor. The endpoint
+is `/api/camera/stream?view=ir`; configuration is documented in `.env.example`.
+
+## Maps and simulated V2X
+
+The backend `ReferenceMap` remains FogSen's operational map. The supervisor can
+render it as the local schematic or place the same vehicle coordinates onto a
+Leaflet satellite background. The driver gets a circular minimap and an
+expanded view with satellite, dark, and OpenStreetMap layers. The frontend
+converts local Cartesian coordinates around the configured display anchor only
+for rendering. External tiles and campus points of interest are not safety
+evidence.
+
+`WorldState.v2x` contains the current software simulation of V2V and V2I. It
+models peer vehicles, roadside units, basic safety messages, link estimates,
+advisories, and a bounded packet log. `GET /api/v2x/state` reads that state.
+`POST /api/v2x/messages/bsm` and `POST /api/v2x/broadcast-advisory` update the
+in-memory simulation. FogSen does not currently connect to a DSRC, C-V2X, or
+other V2X radio.
 
 ## Wired firmware
 
@@ -161,6 +197,8 @@ and a warning instead of leaving the last healthy state on screen.
 Set-Location frontend
 npm test
 npm run build
+Set-Location ..
+.\scripts\verify-firmware.ps1
 ```
 
 ## Coordinate convention

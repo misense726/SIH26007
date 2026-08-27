@@ -12,25 +12,34 @@ that shared state.
    moving dumper, a green corridor, and 88 percent visibility. Use the theme
    control to check both light and dark modes.
 4. Open the supervisor view. Confirm it shows the same vehicle pose, environment,
-   sensor health, corridor, and alerts.
-5. Select `FOG`. Visibility becomes 18 percent and Auto adds the ToF spatial view
+   sensor health, corridor, and alerts. Select each truck and switch between the
+   backend schematic and satellite presentation.
+5. Return to the driver view and expand the circular minimap. Check the satellite,
+   dark, and street layers. These online tiles are display backgrounds only.
+6. In the supervisor V2X panel, inspect peers, advisories, and the packet log.
+   A dispatch button adds an advisory to the in-memory simulation. It does not
+   transmit over a DSRC or C-V2X radio.
+7. Select `FOG`. Visibility becomes 18 percent and Auto adds the ToF spatial view
    over the camera panel. Use Camera or ToF overlay to override Auto, then return
    to Auto.
-6. Select `OBSTACLE`. The simulator enables a fixed obstacle at the configured map
+8. Select `OBSTACLE`. The simulator enables a fixed obstacle at the configured map
    position. ToF and simulated radar observations use the same obstacle geometry.
-7. Select `EMERGENCY`. The simulator places a close obstacle ahead of the vehicle.
+9. Select `EMERGENCY`. The simulator places a close obstacle ahead of the vehicle.
    Deterministic range and speed thresholds progress through the warning states and
    trigger the simulated motor cut. The stop remains latched until the scenario is
    cleared or the route is reset.
-8. Select `NORMAL` to remove the obstacle, clear the motor cut, and return to the
+10. Select `NORMAL` to remove the obstacle, clear the motor cut, and return to the
    normal visibility preset.
-9. Select `Reset route` to move the vehicle back to the start for another run.
+11. Select `Reset route` to move the vehicle back to the start for another run.
 
 The dashboard controls use these endpoints:
 
 ```text
 GET  /api/simulation
 POST /api/simulation/control
+GET  /api/v2x/state
+POST /api/v2x/messages/bsm
+POST /api/v2x/broadcast-advisory
 ```
 
 Example request:
@@ -72,4 +81,7 @@ This demo does not read physical sensors, stream a Pi camera, command a real rel
 or prove operation in mine fog. Simulated radar is not hardware radar. The camera
 frame IDs and enhancement IDs are simulated metadata. BMP280 altitude is relative,
 not precision positioning. The emergency output represents a prototype motor cut,
-not production braking.
+not production braking. V2X peers, RSUs, packet counts, RSSI, and 5.89 GHz channel
+data are simulated. The IR-style camera view is derived from RGB luminance and is
+not thermal imaging. Satellite, dark, and street tiles require internet access and
+do not alter the canonical backend map.
