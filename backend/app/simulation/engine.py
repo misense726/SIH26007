@@ -253,6 +253,7 @@ class FullSimulator:
             rear_scanner_angle_deg=self._rear_scanner_angle_deg,
         )
         self._configure_pipeline()
+        self._v2x_manager.reset()
         self._scenario = self._default_scenario
         await self._apply_scenario(self._default_scenario)
 

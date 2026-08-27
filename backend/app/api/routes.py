@@ -208,7 +208,7 @@ async def replace_reference_map(request: Request, reference_map: ReferenceMap) -
 async def v2x_state(request: Request) -> V2XState:
     v2x_manager = getattr(request.app.state, "v2x_manager", None)
     if v2x_manager is None:
-        return V2XState()
+        raise HTTPException(status_code=503, detail="V2X subsystem is offline")
     return v2x_manager.snapshot()
 
 

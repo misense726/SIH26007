@@ -116,4 +116,17 @@ export const defaultWorldState: WorldState = {
     front_scanner_angle_deg: 0,
     rear_scanner_angle_deg: 0,
   },
+  v2x: {
+    timestamp_ms: 0,
+    enabled: true,
+    node_id: "DUMPER_01",
+    protocol_version: "1.0-DSRC-SIM",
+    tx_packet_count: 0,
+    rx_packet_count: 0,
+    channel_frequency_mhz: 5890,
+    active_peers: [],
+    infrastructure_nodes: [],
+    active_advisories: [],
+    recent_messages: [],
+  },
 };

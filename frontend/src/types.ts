@@ -253,6 +253,7 @@ export interface V2XPeerNode {
   x_m: number;
   y_m: number;
   distance_m: number;
+  bearing_deg?: number;
   speed_mps: number;
   heading_deg: number;
   emergency_state: EmergencyLevel | string;

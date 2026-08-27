@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import time
-from enum import Enum
+from enum import StrEnum
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -15,7 +15,7 @@ class V2XModel(BaseModel):
     model_config = ConfigDict(extra="forbid", validate_assignment=True)
 
 
-class V2XMessageType(str, Enum):
+class V2XMessageType(StrEnum):
     V2V_BSM = "V2V_BSM"
     V2V_PROXIMITY_ALERT = "V2V_PROXIMITY_ALERT"
     V2I_ADVISORY = "V2I_ADVISORY"
@@ -23,7 +23,7 @@ class V2XMessageType(str, Enum):
     V2I_EMERGENCY_BROADCAST = "V2I_EMERGENCY_BROADCAST"
 
 
-class V2IAdvisoryType(str, Enum):
+class V2IAdvisoryType(StrEnum):
     FOG_WARNING = "FOG_WARNING"
     SPEED_RESTRICTION = "SPEED_RESTRICTION"
     HAZARD_ZONE = "HAZARD_ZONE"
@@ -40,11 +40,11 @@ class V2VBasicSafetyMessage(V2XModel):
     vehicle_id: str
     x_m: float
     y_m: float
-    heading_deg: float
-    speed_mps: float = Field(ge=0.0)
+    heading_deg: float = 0.0
+    speed_mps: float = Field(default=0.0, ge=0.0)
     emergency_state: str = "SAFE"
     corridor_state: str = "GREEN"
-    nearest_obstacle_m: float | None = None
+    nearest_obstacle_m: float | None = Field(default=None, ge=0.0)
     brake_applied: bool = False
 
 
@@ -58,11 +58,11 @@ class V2IAdvisoryMessage(V2XModel):
     advisory_type: V2IAdvisoryType = V2IAdvisoryType.FOG_WARNING
     title: str
     detail: str
-    speed_limit_kmh: float | None = None
-    expires_at_ms: int | None = None
+    speed_limit_kmh: float | None = Field(default=None, ge=0.0)
+    expires_at_ms: int | None = Field(default=None, ge=0)
     zone_x_m: float | None = None
     zone_y_m: float | None = None
-    zone_radius_m: float | None = None
+    zone_radius_m: float | None = Field(default=None, ge=0.0)
 
 
 class V2XMessage(V2XModel):
@@ -83,11 +83,12 @@ class V2XPeerNode(V2XModel):
 
     vehicle_id: str
     last_seen_ms: int = Field(default_factory=now_ms, ge=0)
-    x_m: float
-    y_m: float
-    distance_m: float = Field(ge=0.0)
-    speed_mps: float = Field(ge=0.0)
-    heading_deg: float
+    x_m: float = 0.0
+    y_m: float = 0.0
+    distance_m: float = Field(default=0.0, ge=0.0)
+    bearing_deg: float = 0.0
+    speed_mps: float = Field(default=0.0, ge=0.0)
+    heading_deg: float = 0.0
     emergency_state: str = "SAFE"
     rssi_dbm: int = -55
     link_status: Literal["EXCELLENT", "GOOD", "DEGRADED", "LOST"] = "GOOD"
@@ -98,11 +99,11 @@ class V2XInfrastructureNode(V2XModel):
 
     rsu_id: str
     name: str
-    x_m: float
-    y_m: float
+    x_m: float = 0.0
+    y_m: float = 0.0
     status: Literal["ACTIVE", "STANDBY", "OFFLINE"] = "ACTIVE"
-    coverage_radius_m: float = 150.0
-    active_advisories_count: int = 0
+    coverage_radius_m: float = Field(default=150.0, ge=0.0)
+    active_advisories_count: int = Field(default=0, ge=0)
 
 
 class V2XState(V2XModel):
@@ -112,8 +113,8 @@ class V2XState(V2XModel):
     enabled: bool = True
     node_id: str = "PRIMARY-DUMPER"
     protocol_version: str = "1.0-DSRC-SIM"
-    tx_packet_count: int = 0
-    rx_packet_count: int = 0
+    tx_packet_count: int = Field(default=0, ge=0)
+    rx_packet_count: int = Field(default=0, ge=0)
     channel_frequency_mhz: int = 5890
     active_peers: list[V2XPeerNode] = Field(default_factory=list)
     infrastructure_nodes: list[V2XInfrastructureNode] = Field(default_factory=list)
