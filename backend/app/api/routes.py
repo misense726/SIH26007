@@ -102,19 +102,28 @@ async def camera_status(request: Request) -> dict[str, object]:
 @api_router.get("/camera/frame")
 async def camera_frame(
     request: Request,
-    view: Literal["raw", "enhanced"] = "raw",
+    view: Literal["raw", "enhanced", "ir"] = "raw",
 ) -> Response:
     camera_feed = request.app.state.camera_feed
     if camera_feed is None:
         raise HTTPException(status_code=503, detail="FogSen camera is not configured")
     snapshot = camera_feed.snapshot()
-    jpeg = snapshot.enhanced_jpeg if view == "enhanced" else snapshot.raw_jpeg
-    frame_id = snapshot.enhanced_frame_id if view == "enhanced" else snapshot.frame_id
+    if view == "ir":
+        jpeg = snapshot.ir_jpeg
+        frame_id = snapshot.ir_frame_id
+    elif view == "enhanced":
+        jpeg = snapshot.enhanced_jpeg
+        frame_id = snapshot.enhanced_frame_id
+    else:
+        jpeg = snapshot.raw_jpeg
+        frame_id = snapshot.frame_id
     if jpeg is None:
         raise HTTPException(
             status_code=503,
             detail=(
-                snapshot.enhancement_detail
+                snapshot.ir_detail
+                if view == "ir"
+                else snapshot.enhancement_detail
                 if view == "enhanced"
                 else snapshot.detail
             )
@@ -134,7 +143,7 @@ async def camera_frame(
 @api_router.get("/camera/stream")
 async def camera_stream(
     request: Request,
-    view: Literal["raw", "enhanced"] = "raw",
+    view: Literal["raw", "enhanced", "ir"] = "raw",
 ) -> StreamingResponse:
     camera_feed = request.app.state.camera_feed
     if camera_feed is None:
@@ -144,8 +153,15 @@ async def camera_stream(
         last_frame_id: str | None = None
         while True:
             snapshot = camera_feed.snapshot()
-            jpeg = snapshot.enhanced_jpeg if view == "enhanced" else snapshot.raw_jpeg
-            frame_id = snapshot.enhanced_frame_id if view == "enhanced" else snapshot.frame_id
+            if view == "ir":
+                jpeg = snapshot.ir_jpeg
+                frame_id = snapshot.ir_frame_id
+            elif view == "enhanced":
+                jpeg = snapshot.enhanced_jpeg
+                frame_id = snapshot.enhanced_frame_id
+            else:
+                jpeg = snapshot.raw_jpeg
+                frame_id = snapshot.frame_id
             if jpeg is not None and frame_id != last_frame_id:
                 last_frame_id = frame_id
                 yield (
