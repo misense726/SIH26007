@@ -1520,6 +1520,40 @@ h3 {
   gap: 8px;
 }
 
+.campus-layer-switcher {
+  display: flex;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 8px;
+  padding: 2px;
+  gap: 2px;
+}
+
+.campus-layer-btn {
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-family: var(--mono, monospace);
+  font-size: 11px;
+  font-weight: 600;
+  background: transparent;
+  border: 1px solid transparent;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: all 120ms ease;
+}
+
+.campus-layer-btn:hover {
+  color: #f8fafc;
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.campus-layer-btn.active {
+  background: #38bdf8;
+  color: #030712;
+  font-weight: 700;
+  box-shadow: 0 0 10px rgba(56, 189, 248, 0.4);
+}
+
 .campus-tool-btn {
   padding: 6px 12px;
   border-radius: 8px;

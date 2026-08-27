@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import type { VehiclePose, WorldState } from "../types";
-import { DEFAULT_CAMPUS_CONFIG } from "../maps/campusConfig";
+import { DEFAULT_CAMPUS_CONFIG, MAP_TILE_PRESETS } from "../maps/campusConfig";
 import { cartesianToGeodetic, formatCoordinates } from "../maps/locationProvider";
 import { formatNumber } from "../state/selectors";
 
@@ -32,7 +32,13 @@ function createPrimaryVehicleIcon(headingDeg: number, vehicleId: string) {
   });
 }
 
-function createPeerVehicleIcon(headingDeg: number, vehicleId: string, distanceM: number, speedMps: number, emergency: string) {
+function createPeerVehicleIcon(
+  headingDeg: number,
+  vehicleId: string,
+  distanceM: number,
+  speedMps: number,
+  emergency: string,
+) {
   const isEmergency = emergency && emergency !== "SAFE";
   return L.divIcon({
     className: "campus-vehicle-icon-wrap peer-driver-wrap",
@@ -75,10 +81,13 @@ export function CampusExtendedMapModal({
 }: CampusExtendedMapModalProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
+  const tileLayerRef = useRef<L.TileLayer | null>(null);
   const vehicleMarkerRef = useRef<L.Marker | null>(null);
   const peerMarkersRef = useRef<Map<string, L.Marker>>(new Map());
   const routeLayerRef = useRef<L.Polyline | null>(null);
   const poiLayerGroupRef = useRef<L.LayerGroup | null>(null);
+
+  const [activeTileKey, setActiveTileKey] = useState<"satellite" | "dark" | "street">("satellite");
   const [showPois, setShowPois] = useState(true);
   const [showRoute, setShowRoute] = useState(true);
   const [autoFollow, setAutoFollow] = useState(true);
@@ -122,15 +131,16 @@ export function CampusExtendedMapModal({
     L.control.zoom({ position: "topleft" }).addTo(map);
     L.control.scale({ position: "bottomleft", imperial: false }).addTo(map);
 
-    // Fast-loading CARTO Dark Matter Tiles
-    L.tileLayer(DEFAULT_CAMPUS_CONFIG.tiles.url, {
-      subdomains: DEFAULT_CAMPUS_CONFIG.tiles.subdomains,
-      attribution: DEFAULT_CAMPUS_CONFIG.tiles.attribution,
-      maxZoom: DEFAULT_CAMPUS_CONFIG.tiles.maxZoom,
+    // Initial tile layer (Zero API key)
+    const preset = MAP_TILE_PRESETS.satellite;
+    const tileLayer = L.tileLayer(preset.url, {
+      attribution: preset.attribution,
+      maxZoom: preset.maxZoom,
       updateWhenIdle: false,
       updateWhenZooming: true,
       keepBuffer: 8,
     }).addTo(map);
+    tileLayerRef.current = tileLayer;
 
     // Primary Vehicle Marker
     const vehicleMarker = L.marker(initialCenter, {
@@ -154,7 +164,7 @@ export function CampusExtendedMapModal({
         L.polyline(latLngs, {
           color: "#0284c7",
           weight: 10,
-          opacity: 0.3,
+          opacity: 0.35,
           lineCap: "round",
           lineJoin: "round",
         }).addTo(map);
@@ -196,12 +206,31 @@ export function CampusExtendedMapModal({
     return () => {
       map.remove();
       mapInstanceRef.current = null;
+      tileLayerRef.current = null;
       vehicleMarkerRef.current = null;
       peerMarkersRef.current.clear();
       routeLayerRef.current = null;
       poiLayerGroupRef.current = null;
     };
   }, []);
+
+  // Update map tile layer dynamically when user clicks layer switcher
+  useEffect(() => {
+    if (!mapInstanceRef.current) return;
+    if (tileLayerRef.current) {
+      mapInstanceRef.current.removeLayer(tileLayerRef.current);
+    }
+    const preset = MAP_TILE_PRESETS[activeTileKey];
+    const newLayer = L.tileLayer(preset.url, {
+      attribution: preset.attribution,
+      maxZoom: preset.maxZoom,
+      updateWhenIdle: false,
+      updateWhenZooming: true,
+      keepBuffer: 8,
+    }).addTo(mapInstanceRef.current);
+    newLayer.bringToBack();
+    tileLayerRef.current = newLayer;
+  }, [activeTileKey]);
 
   // Update primary vehicle position
   useEffect(() => {
@@ -320,6 +349,31 @@ export function CampusExtendedMapModal({
 
           {/* Action Toolbar */}
           <div className="campus-modal-toolbar">
+            {/* Map Style Layer Switcher */}
+            <div className="campus-layer-switcher" role="group" aria-label="Map style">
+              <button
+                type="button"
+                className={`campus-layer-btn ${activeTileKey === "satellite" ? "active" : ""}`}
+                onClick={() => setActiveTileKey("satellite")}
+              >
+                🛰️ Satellite
+              </button>
+              <button
+                type="button"
+                className={`campus-layer-btn ${activeTileKey === "dark" ? "active" : ""}`}
+                onClick={() => setActiveTileKey("dark")}
+              >
+                🌑 Dark
+              </button>
+              <button
+                type="button"
+                className={`campus-layer-btn ${activeTileKey === "street" ? "active" : ""}`}
+                onClick={() => setActiveTileKey("street")}
+              >
+                🗺️ Street
+              </button>
+            </div>
+
             <button
               type="button"
               className={`campus-tool-btn ${autoFollow ? "active" : ""}`}
