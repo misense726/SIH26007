@@ -202,6 +202,25 @@ class CameraState(TelemetryModel):
     raw_available: bool = False
     enhancement_available: bool = False
     metrics: VisibilityMetrics = Field(default_factory=VisibilityMetrics)
+    visibility_score: float | None = Field(default=None, ge=0.0, le=1.0)
+    visibility_state: VisibilityState | None = None
+    stream_status: Literal[
+        "disabled", "connecting", "live", "stale", "error", "simulated"
+    ] = "disabled"
+    stream_detail: str | None = None
+    width_px: int | None = Field(default=None, gt=0)
+    height_px: int | None = Field(default=None, gt=0)
+    measured_fps: float = Field(default=0.0, ge=0.0)
+    enhancement_status: Literal[
+        "disabled", "loading", "live", "stale", "error"
+    ] = "disabled"
+    enhancement_detail: str | None = None
+    enhancement_model: str | None = None
+    enhancement_device: str | None = None
+    enhancement_precision: str | None = None
+    enhancement_latency_ms: float | None = Field(default=None, ge=0.0)
+    enhancement_fps: float = Field(default=0.0, ge=0.0)
+    enhancement_peak_vram_mb: float = Field(default=0.0, ge=0.0)
     mode: DataMode = DataMode.SIMULATED
 
 
@@ -331,4 +350,6 @@ class SystemStatus(TelemetryModel):
     replaying: bool = False
     runtime_detail: str | None = None
     serial_port: str | None = None
+    telemetry_transport: Literal["SERIAL", "WIFI", "SIMULATED"] = "SIMULATED"
+    telemetry_endpoint: str | None = None
     last_telemetry_ms: int | None = Field(default=None, ge=0)

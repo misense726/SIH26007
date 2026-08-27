@@ -18,7 +18,10 @@ enum class LocalSensorStatus : uint8_t {
 
 struct ImuReading {
   bool hasSample;
+  bool calibrated;
+  bool zeroing;
   uint32_t updatedMs;
+  uint32_t zeroedMs;
   float accelerationXMps2;
   float accelerationYMps2;
   float accelerationZMps2;
@@ -44,6 +47,7 @@ class LocalSensors {
 
   void begin(uint32_t nowMs);
   void poll(uint32_t nowMs);
+  bool zeroImu(uint32_t nowMs);
   bool zeroAltitude();
 
   const ImuReading& imu() const { return imuReading_; }
@@ -64,6 +68,14 @@ class LocalSensors {
   bool initializeBmp(uint32_t nowMs);
   void readImu(uint32_t nowMs);
   void readEnvironment(uint32_t nowMs);
+  void restartImuCalibration(uint32_t nowMs);
+  bool collectImuCalibrationSample(uint32_t nowMs,
+                                   float accelerationX,
+                                   float accelerationY,
+                                   float accelerationZ,
+                                   float gyroX,
+                                   float gyroY,
+                                   float gyroZ);
   void restartAltitudeBaseline();
 
   TwoWire& wire_;
@@ -82,6 +94,23 @@ class LocalSensors {
   uint32_t nextBmpRetryMs_;
   uint32_t lastImuAttemptMs_;
   uint32_t lastBmpAttemptMs_;
+
+  uint16_t imuCalibrationSamples_;
+  float imuAccelerationReferenceX_;
+  float imuAccelerationReferenceY_;
+  float imuAccelerationReferenceZ_;
+  float imuAccelerationSumX_;
+  float imuAccelerationSumY_;
+  float imuAccelerationSumZ_;
+  float imuGyroSumX_;
+  float imuGyroSumY_;
+  float imuGyroSumZ_;
+  float imuAccelerationBiasX_;
+  float imuAccelerationBiasY_;
+  float imuAccelerationBiasZ_;
+  float imuGyroBiasX_;
+  float imuGyroBiasY_;
+  float imuGyroBiasZ_;
 
   float baselinePressureSumHpa_;
   uint8_t baselinePressureSamples_;

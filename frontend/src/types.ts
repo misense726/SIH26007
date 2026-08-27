@@ -101,6 +101,21 @@ export interface CameraState {
   raw_available: boolean;
   enhancement_available: boolean;
   metrics: VisibilityMetrics;
+  visibility_score: number | null;
+  visibility_state: VisibilityState | null;
+  stream_status: "disabled" | "connecting" | "live" | "stale" | "error" | "simulated";
+  stream_detail: string | null;
+  width_px: number | null;
+  height_px: number | null;
+  measured_fps: number;
+  enhancement_status: "disabled" | "loading" | "live" | "stale" | "error";
+  enhancement_detail: string | null;
+  enhancement_model: string | null;
+  enhancement_device: string | null;
+  enhancement_precision: string | null;
+  enhancement_latency_ms: number | null;
+  enhancement_fps: number;
+  enhancement_peak_vram_mb: number;
   mode: DataMode;
 }
 

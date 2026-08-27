@@ -10,8 +10,26 @@ services:
       FOGSEN_HOST: 0.0.0.0
       FOGSEN_PORT: "8000"
       FOGSEN_TELEMETRY_HZ: "10"
+      FOGSEN_MODE: "${FOGSEN_MODE:-SIMULATED}"
+      FOGSEN_TELEMETRY_TRANSPORT: "${FOGSEN_TELEMETRY_TRANSPORT:-WIFI}"
+      FOGSEN_WIFI_LISTEN_HOST: "0.0.0.0"
+      FOGSEN_WIFI_LISTEN_PORT: "${FOGSEN_WIFI_LISTEN_PORT:-8765}"
+      FOGSEN_CAMERA_STREAM_URL: "${FOGSEN_CAMERA_STREAM_URL:-tcp://10.38.143.254:8888}"
+      FOGSEN_CAMERA_STALE_MS: "${FOGSEN_CAMERA_STALE_MS:-1500}"
+      FOGSEN_CAMERA_RECONNECT_MS: "${FOGSEN_CAMERA_RECONNECT_MS:-1000}"
+      FOGSEN_CAMERA_OPEN_TIMEOUT_MS: "${FOGSEN_CAMERA_OPEN_TIMEOUT_MS:-15000}"
+      FOGSEN_CAMERA_READ_TIMEOUT_MS: "${FOGSEN_CAMERA_READ_TIMEOUT_MS:-5000}"
+      FOGSEN_CAMERA_JPEG_QUALITY: "${FOGSEN_CAMERA_JPEG_QUALITY:-88}"
+      FOGSEN_CAMERA_DEHAZE_ENABLED: "${FOGSEN_CAMERA_DEHAZE_ENABLED:-true}"
+      FOGSEN_CAMERA_DEHAZE_MODEL_ROOT: /opt/fogsen-model
+      FOGSEN_CAMERA_DEHAZE_DEVICE: "${FOGSEN_CAMERA_DEHAZE_DEVICE:-cuda}"
+      FOGSEN_CAMERA_DEHAZE_FP16: "${FOGSEN_CAMERA_DEHAZE_FP16:-true}"
+      FOGSEN_CAMERA_DEHAZE_MAX_FPS: "${FOGSEN_CAMERA_DEHAZE_MAX_FPS:-30}"
+      FOGSEN_SENSOR_SETTINGS_PATH: /app/runtime/sensor_display.json
+    gpus: all
     ports:
       - "8000:8000"
+      - "8765:8765"
     healthcheck:
       test:
         - CMD
@@ -26,6 +44,8 @@ services:
     restart: unless-stopped
     security_opt:
       - no-new-privileges:true
+    volumes:
+      - fogsen-runtime:/app/runtime
 
   frontend:
     build:
@@ -49,3 +69,5 @@ services:
     security_opt:
       - no-new-privileges:true
 
+volumes:
+  fogsen-runtime:

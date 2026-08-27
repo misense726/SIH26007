@@ -28,16 +28,16 @@ $python = if (Test-Path -LiteralPath $venvPython) {
 
 Push-Location $projectRoot
 try {
-    Invoke-Checked "arduino-cli" @(
+    Invoke-Checked "C:\Users\niran\.local\bin\arduino-cli.cmd" @(
         "compile", "--warnings", "all", "--fqbn", "esp32:esp32:esp32",
         "firmware/main_esp32"
     )
-    Invoke-Checked "arduino-cli" @(
+    Invoke-Checked "C:\Users\niran\.local\bin\arduino-cli.cmd" @(
         "compile", "--warnings", "all", "--fqbn", "esp32:esp32:XIAO_ESP32C6",
         "firmware/front_xiao_esp32c6"
     )
-    Invoke-Checked "arduino-cli" @(
-        "compile", "--warnings", "all", "--fqbn", "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashMode=dio,FlashFreq=40",
+    Invoke-Checked "C:\Users\niran\.local\bin\arduino-cli.cmd" @(
+        "compile", "--warnings", "all", "--fqbn", "esp32:esp32:nologo_esp32c3_super_mini",
         "firmware/middle_esp32c3_supermini"
     )
     Invoke-Checked $python @(

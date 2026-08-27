@@ -18,6 +18,7 @@
 #include "TimeUtils.h"
 #include "UsbCommandParser.h"
 #include "WheelOdometry.h"
+#include "WifiTelemetry.h"
 
 namespace fogsen {
 namespace {
@@ -33,6 +34,7 @@ WheelOdometry wheelOdometry(config::kWheelCircumferenceM,
                             config::kMaxPlausibleWheelSpeedMps,
                             config::kWheelSpeedHoldMs);
 SerialTxQueue laptopTx;
+WifiTelemetry wifiTelemetry;
 UsbCommandParser commandParser;
 
 SafetyParameters makeSafetyParameters() {
@@ -503,6 +505,13 @@ bool queueTelemetry(uint32_t nowMs) {
   JsonObject imu = telemetryDocument.createNestedObject("imu");
   const ImuReading& imuReading = localSensors.imu();
   imu["state"] = localSensorStatusName(localSensors.imuStatus(nowMs));
+  imu["calibrated"] = imuReading.calibrated;
+  imu["zeroing"] = imuReading.zeroing;
+  if (imuReading.calibrated) {
+    imu["zero_ms"] = imuReading.zeroedMs;
+  } else {
+    imu["zero_ms"] = nullptr;
+  }
   addNullableAge(imu, "age", imuReading.hasSample,
                  localSensors.imuAgeMs(nowMs));
   if (imuReading.hasSample) {
@@ -582,6 +591,10 @@ bool queueTelemetry(uint32_t nowMs) {
 
   JsonObject system = telemetryDocument.createNestedObject("system");
   system["tx_drop"] = laptopTx.droppedFrames();
+  system["wifi_sta"] = wifiTelemetry.stationConnected() ? 1 : 0;
+  system["wifi_backend"] = wifiTelemetry.backendConnected() ? 1 : 0;
+  system["wifi_tx"] = wifiTelemetry.sentFrames();
+  system["wifi_drop"] = wifiTelemetry.droppedFrames();
   system["json_drop"] = telemetryOversizeDrops;
   system["cmd_overflow"] = commandParser.overflowLines();
 
@@ -596,6 +609,7 @@ bool queueTelemetry(uint32_t nowMs) {
   }
   const size_t written =
       serializeJson(telemetryDocument, telemetryLine, sizeof(telemetryLine));
+  wifiTelemetry.enqueueLine(telemetryLine, written);
   return laptopTx.enqueueLine(telemetryLine, written);
 }
 
@@ -627,6 +641,10 @@ void handleCommand(const char* command) {
   if (strcmp(command, "STATUS") == 0) {
     queueCommandReply(command, true, "TELEMETRY_QUEUED");
     queueTelemetry(nowMs);
+  } else if (strcmp(command, "ZERO_IMU") == 0) {
+    const bool ok = localSensors.zeroImu(nowMs);
+    queueCommandReply(command, ok,
+                      ok ? "IMU_ZEROING_STARTED" : "MPU6050_NOT_READY");
   } else if (strcmp(command, "ZERO_ALT") == 0) {
     const bool ok = localSensors.zeroAltitude();
     queueCommandReply(command, ok,
@@ -759,6 +777,7 @@ void setup() {
   initializeHallSensors(nowMs);
   rearScanner.begin(nowMs);
   localSensors.begin(nowMs);
+  wifiTelemetry.begin();
 
   lastWheelMs = nowMs - config::kWheelPeriodMs;
   lastSafetyMs = nowMs - config::kSafetyPeriodMs;

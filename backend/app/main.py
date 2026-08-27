@@ -8,15 +8,20 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from backend.app import __version__
 from backend.app.api.routes import api_router, telemetry_socket
+from backend.app.camera import CameraFeed, LiveCameraStream
+from backend.app.camera.dehaze import DehazeFormerEnhancer
 from backend.app.config import RuntimeSettings, load_project_config, runtime_settings
 from backend.app.live_runtime import LiveSerialRuntime, SerialFactory
+from backend.app.providers.wifi_listener import WifiTelemetryListener
 from backend.app.simulation.engine import FullSimulator
+from backend.app.sensor_settings import SensorSettingsStore
 from backend.app.twin.world_store import WorldStore
 
 
 def create_app(
     settings: RuntimeSettings | None = None,
     serial_factory: SerialFactory | None = None,
+    camera_feed: CameraFeed | None = None,
 ) -> FastAPI:
     active_settings = settings or runtime_settings()
 
@@ -24,19 +29,67 @@ def create_app(
     async def lifespan(app: FastAPI):
         app.state.settings = active_settings
         app.state.world_store = WorldStore()
+        active_camera_feed = camera_feed
+        if active_camera_feed is None and active_settings.camera_stream_url:
+            enhancer = (
+                DehazeFormerEnhancer(
+                    active_settings.camera_dehaze_model_root,
+                    device=active_settings.camera_dehaze_device,
+                    use_fp16=active_settings.camera_dehaze_fp16,
+                )
+                if active_settings.camera_dehaze_enabled
+                else None
+            )
+            active_camera_feed = LiveCameraStream(
+                active_settings.camera_stream_url,
+                stale_ms=active_settings.camera_stale_ms,
+                reconnect_ms=active_settings.camera_reconnect_ms,
+                open_timeout_ms=active_settings.camera_open_timeout_ms,
+                read_timeout_ms=active_settings.camera_read_timeout_ms,
+                jpeg_quality=active_settings.camera_jpeg_quality,
+                metrics_interval_ms=active_settings.camera_metrics_interval_ms,
+                enhancer=enhancer,
+                enhancement_max_fps=active_settings.camera_dehaze_max_fps,
+            )
+        app.state.camera_feed = active_camera_feed
+        if active_camera_feed is not None:
+            await active_camera_feed.start()
         config = load_project_config(active_settings)
+        app.state.sensor_settings = SensorSettingsStore(
+            config,
+            active_settings.sensor_settings_path,
+        )
         if active_settings.runtime_mode == "LIVE":
-            assert active_settings.serial_port is not None
             app.state.simulator = None
+            if active_settings.telemetry_transport == "WIFI":
+                source_port = (
+                    f"{active_settings.wifi_listen_host}:"
+                    f"{active_settings.wifi_listen_port}"
+                )
+                source_factory = serial_factory or (
+                    lambda _port, _baud: WifiTelemetryListener(
+                        active_settings.wifi_listen_host,
+                        active_settings.wifi_listen_port,
+                    )
+                )
+                source_name = "MAIN Wi-Fi"
+            else:
+                assert active_settings.serial_port is not None
+                source_port = active_settings.serial_port
+                source_factory = serial_factory or MainControllerSerial
+                source_name = "MAIN serial"
             app.state.runtime = LiveSerialRuntime(
                 app.state.world_store,
                 config=config,
-                port=active_settings.serial_port,
+                port=source_port,
                 baud=active_settings.serial_baud,
                 stale_timeout_ms=active_settings.serial_stale_ms,
                 poll_interval_ms=active_settings.serial_poll_interval_ms,
                 reconnect_ms=active_settings.serial_reconnect_ms,
-                **({"serial_factory": serial_factory} if serial_factory else {}),
+                camera_feed=active_camera_feed,
+                serial_factory=source_factory,
+                source_name=source_name,
+                transport=active_settings.telemetry_transport,
             )
             app.state.live_runtime = app.state.runtime
         else:
@@ -44,6 +97,7 @@ def create_app(
                 app.state.world_store,
                 config=config,
                 telemetry_hz=active_settings.telemetry_hz,
+                camera_feed=active_camera_feed,
             )
             app.state.runtime = app.state.simulator
             app.state.live_runtime = None
@@ -52,6 +106,8 @@ def create_app(
             yield
         finally:
             await app.state.runtime.stop()
+            if active_camera_feed is not None:
+                await active_camera_feed.stop()
 
     app = FastAPI(
         title="FogSen API",

@@ -5,9 +5,21 @@ The Compose stack runs two containers:
 - `backend` runs FastAPI and the simulator on port 8000.
 - `frontend` serves the built dashboard through nginx on port 8080. Nginx forwards `/api` and `/ws` to the backend, so the browser uses one origin for the dashboard and telemetry.
 
-The stack does not build or flash firmware. It has no cloud dependency and stores no secrets.
-It runs the deterministic simulator. Run the backend directly on Windows for
-`LIVE` mode so it can open the MAIN controller COM port.
+The backend opens the Raspberry Pi H.264 listener over Wi-Fi, shares decoded
+frames through `/api/camera/stream`, and runs DehazeFormer-MCT on the laptop GPU.
+It does not use USB video or USB-LAN. MAIN sends dashboard telemetry over Wi-Fi
+to TCP port `8765`. USB remains available for uploads and diagnostics.
+
+The stack does not build or flash firmware and stores no secrets. Its normal
+runtime has no cloud dependency. The backend image build fetches a pinned,
+checksum-verified MIT-licensed DehazeFormer model from the author's repository.
+Set `FOGSEN_MODE=LIVE` and `FOGSEN_TELEMETRY_TRANSPORT=WIFI` before starting
+Compose to run the network listener in the backend container. The default mode
+remains `SIMULATED`.
+
+Docker Desktop must expose the NVIDIA runtime for GPU dehazing. Check it with
+`docker info` if the backend reports that CUDA is unavailable. Raw video remains
+available even when the ML worker fails.
 
 ## Start the stack
 
@@ -27,7 +39,14 @@ Backend endpoints remain available directly at:
 - `http://127.0.0.1:8000/api/health`
 - `http://127.0.0.1:8000/api/status`
 - `http://127.0.0.1:8000/api/world`
+- `http://127.0.0.1:8000/api/camera/status`
+- `http://127.0.0.1:8000/api/camera/frame?view=raw`
+- `http://127.0.0.1:8000/api/camera/frame?view=enhanced`
 - `http://127.0.0.1:8000/docs`
+
+The default Pi source is `tcp://10.38.143.254:8888`. Set
+`FOGSEN_CAMERA_STREAM_URL` in `.env` if its Wi-Fi address changes. Set
+`FOGSEN_CAMERA_DEHAZE_ENABLED=false` to run raw video without the model.
 
 Check logs if a service does not become healthy:
 

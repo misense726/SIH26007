@@ -2,11 +2,12 @@
 
 This project targets a normal ESP32-WROOM DevKit. It runs the rear VL53L1X and
 rear SG90 locally, receives FRONT and MIDDLE telemetry over separate UARTs,
-reads MPU6050 and BMP280, and sends the five-range packet to the laptop over
-USB. Hall odometry and relay motor-cut code remain compiled but are disabled in
-the current hardware profile.
+reads MPU6050 and BMP280, and sends the same five-range packet over USB and a
+Wi-Fi TCP connection. Hall odometry and relay motor-cut code remain compiled
+but are disabled in the current hardware profile.
 
-It uses no Wi-Fi, BLE, ESP-NOW, cloud service, or software UART.
+Wi-Fi carries laptop telemetry only. The FRONT and MIDDLE controller links stay
+on their wired UARTs. There is no BLE, ESP-NOW, cloud service, or software UART.
 
 ## Toolchain
 
@@ -40,7 +41,7 @@ Match the current board and COM port before upload.
 | GPIO32 | Reserved left Hall input, leave unconnected |
 | GPIO33 | Reserved right Hall input, leave unconnected |
 | GPIO25 | Reserved motor-cut relay output, leave unconnected |
-| USB | Laptop serial connection |
+| USB | Laptop serial fallback and firmware upload |
 | GND | Common ground for every controller and supply |
 
 This mapping assumes ESP32-WROOM. ESP32-WROVER can reserve GPIO16 and GPIO17
@@ -73,6 +74,20 @@ front.scan  front.front  rear.scan  rear.left  rear.right
 Healthy FRONT is mask `0x0B`. Healthy MIDDLE is `0x06`. MAIN publishes rear
 mask `0x0F` only when the local rear scanner and servo are healthy and MIDDLE's
 two fixed-sensor bits are fresh.
+
+## Wi-Fi telemetry
+
+Copy `wifi_secrets.example.h` to the ignored `wifi_secrets.h`, then set the
+private SSID, password, and backend computer IPv4 address. MAIN connects to TCP
+port `8765` and sends newline-delimited `fogsen.main.v1` packets at 10 Hz.
+
+The Wi-Fi sender runs in a bounded FreeRTOS queue on core 0. A slow or missing
+network drops Wi-Fi frames without blocking the core 1 sensor and safety loop.
+USB continues to publish the same packets.
+
+Start the backend with `FOGSEN_MODE=LIVE`,
+`FOGSEN_TELEMETRY_TRANSPORT=WIFI`, `FOGSEN_WIFI_LISTEN_HOST=0.0.0.0`, and
+`FOGSEN_WIFI_LISTEN_PORT=8765`. Do not put the Wi-Fi password in tracked files.
 
 ## Safety
 

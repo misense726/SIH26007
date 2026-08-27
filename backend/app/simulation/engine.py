@@ -5,6 +5,7 @@ import math
 from contextlib import suppress
 from pathlib import Path
 
+from backend.app.camera import CameraFeed
 from backend.app.localization.fusion import LocalizationFusion
 from backend.app.mapping.occupancy import OccupancyAccumulator
 from backend.app.mapping.transforms import transforms_from_config
@@ -53,9 +54,11 @@ class FullSimulator:
         store: WorldStore,
         config: dict,
         telemetry_hz: float = 10.0,
+        camera_feed: CameraFeed | None = None,
     ) -> None:
         self._store = store
         self._config = config
+        self._camera_feed = camera_feed
         self._interval_s = 1.0 / telemetry_hz
         self._control_lock = asyncio.Lock()
         self._task: asyncio.Task[None] | None = None
@@ -455,11 +458,29 @@ class FullSimulator:
         )
         readings = await self.range_provider.read_ranges()
         camera_sample = await self.camera_provider.read_camera()
+        camera_state = CameraState(
+            timestamp_ms=timestamp,
+            raw_frame_id=camera_sample.frame_id,
+            enhanced_frame_id=f"enhanced-{camera_sample.frame_id}",
+            raw_available=True,
+            enhancement_available=True,
+            metrics=self.camera_provider.last_metrics,
+            visibility_score=camera_sample.visibility_score,
+            visibility_state=self._visibility_state(camera_sample.visibility_score),
+            stream_status="simulated",
+            stream_detail="Deterministic simulated camera",
+            mode=DataMode.SIMULATED,
+        )
+        camera_visibility_score = camera_sample.visibility_score
+        if self._camera_feed is not None:
+            camera_state = self._camera_feed.camera_state()
+            if camera_state.raw_available and camera_state.visibility_score is not None:
+                camera_visibility_score = camera_state.visibility_score
         environment = await self.environment_provider.read_environment()
         environment = environment.model_copy(
             update={
-                "visibility_score": camera_sample.visibility_score,
-                "visibility_state": self._visibility_state(camera_sample.visibility_score),
+                "visibility_score": camera_visibility_score,
+                "visibility_state": self._visibility_state(camera_visibility_score),
             }
         )
         radar_detections = await self.radar_provider.read_radar()
@@ -521,14 +542,7 @@ class FullSimulator:
                         "aruco": absolute_pose.position_confidence if absolute_pose else 0.0,
                     },
                 ),
-                camera=CameraState(
-                    timestamp_ms=timestamp,
-                    raw_frame_id=camera_sample.frame_id,
-                    enhanced_frame_id=f"enhanced-{camera_sample.frame_id}",
-                    raw_available=True,
-                    enhancement_available=True,
-                    metrics=self.camera_provider.last_metrics,
-                ),
+                camera=camera_state,
                 environment=environment,
                 live_objects=live_objects,
                 radar_objects=radar_models(radar_detections, DataMode.SIMULATED),

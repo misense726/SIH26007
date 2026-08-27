@@ -6,7 +6,7 @@
 namespace fogsen {
 namespace config {
 
-constexpr char kFirmwareVersion[] = "0.1.0";
+constexpr char kFirmwareVersion[] = "0.2.0";
 constexpr char kTelemetrySchema[] = "fogsen.main.v1";
 constexpr char kDataMode[] = "LIVE";
 
@@ -17,6 +17,11 @@ constexpr bool kMotorCutRelayEnabled = false;
 
 constexpr uint32_t kUsbSerialBaud = 115200;
 constexpr uint32_t kNodeUartBaud = 115200;
+constexpr uint16_t kWifiTelemetryPort = 8765;
+constexpr uint32_t kWifiReconnectMs = 3000;
+constexpr uint32_t kWifiTaskStackBytes = 6144;
+constexpr uint8_t kWifiTaskPriority = 1;
+constexpr uint8_t kWifiTaskCore = 0;
 constexpr uint32_t kI2cClockHz = 100000;
 constexpr uint16_t kI2cTimeoutMs = 20;
 
@@ -70,10 +75,14 @@ constexpr float kBmpMinPressureHpa = 300.0F;
 constexpr float kBmpMaxPressureHpa = 1100.0F;
 constexpr float kMpuMinAccelerationNormMps2 = 2.0F;
 constexpr float kMpuMaxAccelerationNormMps2 = 30.0F;
+constexpr uint16_t kImuZeroSampleCount = 100;
+constexpr float kImuZeroMaxGyroDps = 5.0F;
+constexpr float kImuZeroMaxAccelDeltaMps2 = 0.75F;
 
 constexpr size_t kTelemetryJsonCapacity = 3072;
 constexpr size_t kTelemetryLineCapacity = 1500;
 constexpr size_t kTransmitQueueDepth = 3;
+constexpr size_t kWifiTransmitQueueDepth = 3;
 
 }  // namespace config
 }  // namespace fogsen

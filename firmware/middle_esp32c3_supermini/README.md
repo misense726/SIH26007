@@ -32,8 +32,8 @@ The project uses Espressif's generic ESP32-C3 Dev Module definition from core
 3.3.11. USB CDC is enabled for the Super Mini USB connector.
 
 ```powershell
-arduino-cli compile --warnings all --fqbn "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashMode=dio,FlashFreq=40" firmware/middle_esp32c3_supermini
-arduino-cli upload --port COM8 --fqbn "esp32:esp32:esp32c3:CDCOnBoot=cdc,FlashMode=dio,FlashFreq=40" firmware/middle_esp32c3_supermini
+arduino-cli compile --warnings all --fqbn esp32:esp32:nologo_esp32c3_super_mini firmware/middle_esp32c3_supermini
+arduino-cli upload --port COM8 --fqbn esp32:esp32:nologo_esp32c3_super_mini firmware/middle_esp32c3_supermini
 ```
 
 Replace `COM8` after matching the connected board with `arduino-cli board

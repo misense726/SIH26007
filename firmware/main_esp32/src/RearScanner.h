@@ -46,6 +46,7 @@ class RearScanner {
   bool writeServoAngle(int16_t angleDeg);
   void startMeasurement(uint32_t nowMs);
   void finishMeasurement(uint32_t nowMs);
+  void advanceWithoutRange(uint32_t nowMs);
   void advanceAngle();
 
   TwoWire& wire_;

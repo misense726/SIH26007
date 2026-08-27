@@ -122,9 +122,10 @@ The UART links use 115200 baud and 3.3 V logic. Cross TX to RX. Do not connect
 any UART pin to 5 V or to an RS-232 port. FRONT and MIDDLE do not connect
 directly to each other.
 
-MAIN connects to the Raspberry Pi or computer through its USB programming
-cable. The controller chain does not use Wi-Fi, BLE, ESP-NOW, or a wireless
-fallback.
+MAIN sends dashboard telemetry to the computer over Wi-Fi and keeps its USB
+programming cable available for upload and diagnostics. FRONT-to-MAIN and
+MIDDLE-to-MAIN remain wired UART links. The controller chain does not use BLE
+or ESP-NOW.
 
 ## ToF startup and recovery
 

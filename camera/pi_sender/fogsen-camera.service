@@ -1,0 +1,35 @@
+[Unit]
+Description=FogSen continuous Wi-Fi camera stream
+After=network-online.target
+Wants=network-online.target
+StartLimitIntervalSec=60
+StartLimitBurst=10
+
+[Service]
+Type=simple
+User=misense
+Group=misense
+SupplementaryGroups=video
+WorkingDirectory=/opt/fogsen-camera
+EnvironmentFile=/etc/fogsen/camera.env
+ExecStart=/usr/bin/python3 -u /opt/fogsen-camera/sender.py
+Restart=always
+RestartSec=2
+TimeoutStopSec=15
+Nice=5
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+RestrictSUIDSGID=true
+RestrictRealtime=true
+LockPersonality=true
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+SystemCallArchitectures=native
+
+[Install]
+WantedBy=multi-user.target

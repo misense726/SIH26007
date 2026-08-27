@@ -161,7 +161,7 @@ pending.
 
 Implemented:
 
-- explicit `FOGSEN_MODE=LIVE` runtime with a required MAIN USB serial port;
+- explicit `FOGSEN_MODE=LIVE` runtime with Wi-Fi TCP telemetry and USB serial fallback;
 - MAIN packet ingestion into the canonical backend `WorldStore` used by
   `/api/world` and `/ws/telemetry`;
 - five normalized range readings with distinct timestamps and per-sensor
@@ -220,3 +220,48 @@ Verification:
   warnings or errors.
 
 Physical firmware validation remains separate from this simulated demo.
+
+## Wi-Fi RGB camera and GPU dehazing
+
+Status: network and software bench-verified on 2026-08-27; physical fog and
+vehicle testing pending.
+
+Implemented:
+
+- a project-owned `fogsen-camera.service` on the Raspberry Pi, with the legacy
+  camera service left installed but disabled for rollback;
+- a 1296×972, 30 FPS, 8 Mbit/s H.264 camera listener over Wi-Fi TCP, with no
+  USB video or USB-LAN path;
+- one backend camera connection with latest-frame caching, reconnect and stale
+  handling, visibility metrics, raw JPEG and MJPEG endpoints, and no queued
+  frame backlog;
+- checksum-pinned DehazeFormer-MCT source and weights in the backend image;
+- CUDA FP16 inference on the laptop GPU, with raw video remaining available if
+  model loading or inference fails;
+- Raw and Dehazed controls in the driver view, including live resolution,
+  frame-rate, latency, model, and transport labels;
+- the live camera state in both simulated and serial-backed world snapshots,
+  without allowing camera metrics to replace ToF safety evidence.
+
+Verification:
+
+- the Pi service was active and enabled, its H.264 process matched the checked-in
+  profile, the Docker connection to port 8888 was established, and the Pi
+  reported `throttled=0x0`;
+- both Docker containers were healthy and the camera API reported a live
+  1296×972 source;
+- during concurrent raw ingest and dehazing, the dashboard showed roughly
+  25-29 raw FPS and 18-22 enhanced FPS, typically 40-55 ms enhanced-frame latency,
+  and 638.3 MB peak GPU memory allocation;
+- two-second MJPEG checks received 4.6 MB from the raw stream and 5.0 MB from
+  the enhanced stream;
+- browser checks passed for Raw and Dehazed views with no console warnings or
+  errors;
+- 52 backend tests and 21 frontend tests passed, and the frontend production
+  build, Python compilation, Compose validation, and diff checks passed.
+
+The current indoor, clear-air image proves Wi-Fi transport, decoding, live
+dashboard rendering, and GPU inference. It does not prove dehazing quality in
+real fog, long-run Wi-Fi stability, low-light performance, camera thermals, or
+vehicle vibration tolerance. Raw and dehazed images remain driver aids and are
+not braking ground truth.

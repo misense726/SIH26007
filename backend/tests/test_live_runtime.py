@@ -107,6 +107,34 @@ def test_simulation_is_the_default_and_live_requires_an_explicit_port() -> None:
         RuntimeSettings(runtime_mode="LIVE")
 
 
+def test_wifi_live_mode_uses_listener_without_claiming_a_serial_port() -> None:
+    settings = live_settings(
+        telemetry_transport="WIFI",
+        serial_port=None,
+        wifi_listen_host="127.0.0.1",
+        wifi_listen_port=8765,
+    )
+    readers: list[OnePacketThenSilence] = []
+
+    def factory(port: str, baud: int) -> OnePacketThenSilence:
+        reader = OnePacketThenSilence(port, baud)
+        readers.append(reader)
+        return reader
+
+    app = create_app(settings, serial_factory=factory)
+    with TestClient(app) as client:
+        wait_for_world(
+            client,
+            lambda world: all(reading["is_valid"] for reading in world["ranges"]),
+        )
+        status = client.get("/api/status").json()
+        assert status["telemetry_transport"] == "WIFI"
+        assert status["telemetry_endpoint"] == "127.0.0.1:8765"
+        assert status["serial_port"] is None
+
+    assert readers[0].closed is True
+
+
 def test_live_serial_packet_reaches_api_websocket_and_then_fails_stale() -> None:
     readers: list[OnePacketThenSilence] = []
 

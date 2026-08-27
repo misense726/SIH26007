@@ -94,6 +94,7 @@ void RearScanner::markSensorFailed(uint32_t nowMs) {
   reading_.sampleMs = nowMs;
   holdInReset();
   phase_ = Phase::kSettling;
+  nextActionMs_ = nowMs + settleMs_;
   nextRetryMs_ = nowMs + config::kSensorRetryMs;
 }
 
@@ -133,7 +134,9 @@ void RearScanner::begin(uint32_t nowMs) {
   if (servoHealthy_) {
     servoHealthy_ = writeServoAngle(currentAngleDeg_);
   }
-  initializeSensor(nowMs);
+  if (!initializeSensor(nowMs)) {
+    nextActionMs_ = millis() + settleMs_;
+  }
 }
 
 void RearScanner::startMeasurement(uint32_t nowMs) {
@@ -192,10 +195,31 @@ void RearScanner::advanceAngle() {
   }
 }
 
+void RearScanner::advanceWithoutRange(uint32_t nowMs) {
+  if (!scanEnabled_ || !servoHealthy_ ||
+      !timeReached(nowMs, nextActionMs_)) {
+    return;
+  }
+
+  advanceAngle();
+  if (!writeServoAngle(currentAngleDeg_)) {
+    servoHealthy_ = false;
+    return;
+  }
+  reading_.hasSample = true;
+  reading_.angleDeg = currentAngleDeg_;
+  reading_.rangeMm = -1;
+  reading_.sampleMs = nowMs;
+  nextActionMs_ = nowMs + settleMs_;
+}
+
 void RearScanner::poll(uint32_t nowMs) {
   if (!sensorInitialized_) {
     if (timeReached(nowMs, nextRetryMs_)) {
       initializeSensor(nowMs);
+    }
+    if (!sensorInitialized_) {
+      advanceWithoutRange(nowMs);
     }
     return;
   }

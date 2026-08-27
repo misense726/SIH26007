@@ -121,6 +121,27 @@ def test_current_profile_keeps_hall_and_relay_code_dormant() -> None:
     assert '"RELAY_OUTPUT_DISABLED"' in source
 
 
+def test_imu_zeroing_is_explicit_and_does_not_claim_absolute_position() -> None:
+    config = (FIRMWARE_ROOT / "src" / "FirmwareConfig.h").read_text(
+        encoding="utf-8"
+    )
+    sensors = (FIRMWARE_ROOT / "src" / "LocalSensors.cpp").read_text(
+        encoding="utf-8"
+    )
+    source = (FIRMWARE_ROOT / "src" / "main.cpp").read_text(encoding="utf-8")
+
+    assert "kImuZeroSampleCount = 100" in config
+    assert "restartImuCalibration(nowMs);" in sensors
+    assert "acceleration.acceleration.x - imuAccelerationBiasX_" in sensors
+    assert "gyroZDps - imuGyroBiasZ_" in sensors
+    assert 'imu["calibrated"] = imuReading.calibrated;' in source
+    assert 'imu["zeroing"] = imuReading.zeroing;' in source
+    assert 'strcmp(command, "ZERO_IMU") == 0' in source
+    assert '"IMU_ZEROING_STARTED"' in source
+    for forbidden in ('imu["x"]', 'imu["y"]', 'imu["position"]'):
+        assert forbidden not in source
+
+
 def test_frozen_node_packet_examples_and_unknown_sentinel() -> None:
     front = '{"node":"FRONT","seq":42,"ms":18120,"a":-30,"scan":-1,"scan_ms":18090,"front":620,"front_ms":18118,"ok":11}'
     middle = '{"node":"MIDDLE","seq":43,"ms":18124,"left":-1,"left_ms":18100,"right":510,"right_ms":18122,"ok":6}'
@@ -283,16 +304,35 @@ def test_forward_scanner_cache_expiry_is_wrap_safe() -> None:
     assert _cached_scanner_valid(cached_at, expired, 60, 900) is None
 
 
-def test_source_has_no_wireless_stack_and_all_required_commands() -> None:
+def test_main_keeps_usb_fallback_and_uses_bounded_wifi_telemetry() -> None:
     source = "\n".join(
         path.read_text(encoding="utf-8")
         for path in (FIRMWARE_ROOT / "src").glob("*")
         if path.suffix in {".h", ".cpp"}
     )
-    for forbidden in ("<WiFi.h>", "<BluetoothSerial.h>", "esp_now_init", "BLEDevice"):
+    for forbidden in ("<BluetoothSerial.h>", "esp_now_init", "BLEDevice"):
         assert forbidden not in source
+    assert "<WiFi.h>" in source
+    assert "xQueueCreate" in source
+    assert "xTaskCreatePinnedToCore" in source
+    assert "wifiTelemetry.enqueueLine" in source
+    assert "laptopTx.enqueueLine" in source
+    assert "wifi_secrets.h" in source
+    assert (FIRMWARE_ROOT / "wifi_secrets.example.h").is_file()
+    assert "wifi_secrets.h" in (PROJECT_ROOT / ".gitignore").read_text(
+        encoding="utf-8"
+    )
+
+
+def test_main_keeps_all_required_commands() -> None:
+    source = "\n".join(
+        path.read_text(encoding="utf-8")
+        for path in (FIRMWARE_ROOT / "src").glob("*")
+        if path.suffix in {".h", ".cpp"}
+    )
     for command in (
         "STATUS",
+        "ZERO_IMU",
         "ZERO_ALT",
         "RESET_TICKS",
         "ESTOP_TEST",
@@ -305,3 +345,18 @@ def test_source_has_no_wireless_stack_and_all_required_commands() -> None:
         "REAR_SCAN_OFF",
     ):
         assert f'"{command}"' in source
+
+
+def test_rear_servo_sweep_does_not_depend_on_a_healthy_tof() -> None:
+    header = (FIRMWARE_ROOT / "src" / "RearScanner.h").read_text(
+        encoding="utf-8"
+    )
+    source = (FIRMWARE_ROOT / "src" / "RearScanner.cpp").read_text(
+        encoding="utf-8"
+    )
+
+    assert "void advanceWithoutRange(uint32_t nowMs);" in header
+    assert "void RearScanner::advanceWithoutRange(uint32_t nowMs)" in source
+    assert "if (!sensorInitialized_)" in source
+    assert "advanceWithoutRange(nowMs);" in source
+    assert "reading_.rangeMm = -1;" in source

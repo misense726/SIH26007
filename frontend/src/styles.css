@@ -53,6 +53,11 @@ html[data-theme="dark"] {
   --sensor-soft: rgba(56, 189, 248, 0.09);
   --sensor-line: rgba(56, 189, 248, 0.5);
   --sensor-glow: rgba(56, 189, 248, 0.72);
+  --sensor-front-scanner: #38bdf8;
+  --sensor-front-fixed: #60a5fa;
+  --sensor-rear-scanner: #a78bfa;
+  --sensor-left-side: #f472b6;
+  --sensor-right-side: #2dd4bf;
   --unknown: #94a3b8;
   --camera-top: #334155;
   --camera-middle: #202b3a;
@@ -124,6 +129,11 @@ html[data-theme="light"] {
   --sensor-soft: rgba(3, 105, 161, 0.08);
   --sensor-line: rgba(3, 105, 161, 0.44);
   --sensor-glow: rgba(3, 105, 161, 0.36);
+  --sensor-front-scanner: #0369a1;
+  --sensor-front-fixed: #1d4ed8;
+  --sensor-rear-scanner: #7c3aed;
+  --sensor-left-side: #be185d;
+  --sensor-right-side: #0f766e;
   --unknown: #64748b;
   --camera-top: #dbe4ee;
   --camera-middle: #b9c5d2;
@@ -169,7 +179,8 @@ body {
 }
 
 button,
-input {
+input,
+select {
   font: inherit;
 }
 
@@ -275,7 +286,7 @@ h3 {
 }
 
 .view-switcher button {
-  min-width: 118px;
+  min-width: 92px;
   padding: 8px 16px;
   border: 0;
   border-radius: 7px;
@@ -625,6 +636,20 @@ h3 {
   transition:
     background-color var(--theme-transition),
     border-color var(--theme-transition);
+}
+
+.camera-stage-live {
+  background: #000;
+}
+
+.camera-feed {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  background: #000;
 }
 
 .mine-silhouette,
@@ -1696,5 +1721,669 @@ footer {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
+  }
+}
+
+/* Spatial view and sensor display settings */
+
+.page-heading {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 16px;
+  padding: 5px 2px;
+}
+
+.page-heading h2 {
+  margin-top: 4px;
+  font-size: clamp(1.55rem, 3vw, 2.35rem);
+}
+
+.page-heading p:last-child {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.74rem;
+}
+
+.spatial-heading-badges {
+  display: flex;
+  gap: 7px;
+}
+
+.source-live {
+  color: var(--safe);
+  border-color: var(--safe-line);
+  background: var(--safe-soft);
+}
+
+.source-offline {
+  color: var(--warning);
+  border-color: var(--warning-line);
+  background: var(--warning-soft);
+}
+
+.spatial-alert {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+  padding: 11px 14px;
+  border: 1px solid var(--danger-line);
+  border-radius: 11px;
+  color: var(--danger);
+  background: var(--danger-soft);
+  font-size: 0.72rem;
+}
+
+.spatial-alert span {
+  color: var(--text-soft);
+}
+
+.spatial-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.3fr);
+  gap: 16px;
+}
+
+.spatial-scene-card,
+.spatial-sensor-panel,
+.settings-panel,
+.sensor-setting-card {
+  border: 1px solid var(--border);
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.spatial-scene-card {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: 19px;
+  padding: 10px;
+}
+
+.spatial-scene {
+  display: block;
+  width: 100%;
+  min-height: 540px;
+  border: 1px solid var(--border-soft);
+  border-radius: 14px;
+  background: var(--map-bg);
+}
+
+.spatial-sky-top { stop-color: var(--map-bg); }
+.spatial-sky-bottom { stop-color: var(--surface-inset); }
+.spatial-floor-near { stop-color: var(--surface-inset); }
+.spatial-floor-far { stop-color: var(--map-bg); }
+
+.spatial-horizon {
+  stroke: var(--border-strong);
+  stroke-width: 1;
+}
+
+.spatial-floor-grid line {
+  stroke: var(--visual-grid);
+  stroke-width: 1.1;
+  vector-effect: non-scaling-stroke;
+}
+
+.sensor-front-scanner { --sensor-source: var(--sensor-front-scanner); }
+.sensor-front-fixed { --sensor-source: var(--sensor-front-fixed); }
+.sensor-rear-scanner { --sensor-source: var(--sensor-rear-scanner); }
+.sensor-left-side { --sensor-source: var(--sensor-left-side); }
+.sensor-right-side { --sensor-source: var(--sensor-right-side); }
+
+.sensor-beam,
+.sensor-head-direction {
+  stroke: var(--sensor-source);
+  stroke-linecap: round;
+  vector-effect: non-scaling-stroke;
+}
+
+.sensor-beam {
+  stroke-width: 1.7;
+  opacity: 0.62;
+  transition: x2 190ms linear, y2 190ms linear, stroke var(--theme-transition);
+}
+
+.sensor-beam-unknown {
+  stroke-dasharray: 4 6;
+  opacity: 0.28;
+}
+
+.beam-hit,
+.spatial-sensor-heads circle,
+.sensor-swatch,
+.spatial-dot {
+  fill: var(--sensor-source);
+  background: var(--sensor-source);
+}
+
+.beam-hit {
+  opacity: 0.92;
+}
+
+.beam-alert .sensor-beam,
+.beam-alert .beam-hit,
+.spatial-dot-alert {
+  fill: var(--danger);
+  stroke: var(--danger);
+}
+
+.spatial-dot {
+  opacity: 0.82;
+  transition: cx 90ms linear, cy 90ms linear, fill 90ms linear;
+}
+
+.spatial-dot-low {
+  fill: var(--unknown);
+  opacity: 0.52;
+}
+
+.spatial-vehicle path:first-child {
+  fill: var(--vehicle-fill);
+  stroke: var(--vehicle-outline);
+  stroke-width: 2;
+}
+
+.spatial-vehicle-front {
+  fill: var(--accent);
+}
+
+.spatial-vehicle line {
+  stroke: var(--vehicle-outline);
+  stroke-width: 1;
+  opacity: 0.45;
+}
+
+.spatial-sensor-heads circle {
+  stroke: var(--surface-inset);
+  stroke-width: 2;
+}
+
+.sensor-head-direction {
+  stroke-width: 3.5;
+  opacity: 0.9;
+  transition: x2 190ms linear, y2 190ms linear;
+}
+
+.spatial-front-label {
+  fill: var(--visual-label);
+  font-family: var(--mono);
+  font-size: 13px;
+  letter-spacing: 0.14em;
+}
+
+.spatial-empty-overlay {
+  position: absolute;
+  inset: 50% auto auto 50%;
+  display: grid;
+  gap: 5px;
+  width: max-content;
+  max-width: calc(100% - 48px);
+  padding: 14px 17px;
+  transform: translate(-50%, -50%);
+  border: 1px solid var(--camera-callout-border);
+  border-radius: 11px;
+  background: var(--camera-callout);
+  backdrop-filter: blur(10px);
+  text-align: center;
+}
+
+.spatial-empty-overlay span {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.spatial-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  padding: 10px 7px 3px;
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.spatial-legend span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.spatial-legend i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.legend-dot-live { background: var(--sensor-front-scanner); }
+.legend-line-beam { width: 15px !important; height: 2px !important; border-radius: 2px !important; background: var(--sensor-rear-scanner); }
+.legend-dot-alert { background: var(--danger); }
+
+.spatial-truth-note {
+  position: absolute;
+  right: 17px;
+  bottom: 14px;
+  color: var(--footer);
+  font-size: 0.58rem;
+}
+
+.spatial-sensor-panel {
+  align-self: start;
+  border-radius: 19px;
+  padding: 16px;
+}
+
+.spatial-sensor-list {
+  display: grid;
+  gap: 7px;
+}
+
+.spatial-sensor-row {
+  display: grid;
+  grid-template-columns: 7px minmax(0, 1fr) auto;
+  gap: 9px;
+  align-items: center;
+  padding: 11px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-subtle);
+}
+
+.spatial-sensor-row-alert {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+}
+
+.sensor-swatch {
+  width: 6px;
+  height: 30px;
+  border-radius: 999px;
+}
+
+.spatial-sensor-row strong,
+.spatial-sensor-row small {
+  display: block;
+}
+
+.spatial-sensor-row strong {
+  font-size: 0.68rem;
+}
+
+.spatial-sensor-row small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.54rem;
+}
+
+.spatial-range-value {
+  text-align: right;
+}
+
+.spatial-summary-list {
+  display: grid;
+  margin: 15px 0 0;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.spatial-summary-list div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 2px;
+}
+
+.spatial-summary-list dt,
+.spatial-summary-list dd {
+  margin: 0;
+  font-size: 0.64rem;
+}
+
+.spatial-summary-list dt { color: var(--muted); }
+.spatial-summary-list dd { font-family: var(--mono); }
+
+.settings-heading {
+  align-items: center;
+}
+
+.settings-overview-grid {
+  display: grid;
+  grid-template-columns: minmax(300px, 0.78fr) minmax(430px, 1.22fr);
+  gap: 16px;
+}
+
+.settings-panel {
+  border-radius: 18px;
+  padding: 17px;
+}
+
+.settings-panel > p {
+  margin: 8px 0 17px;
+  color: var(--text-soft);
+  font-size: 0.72rem;
+  line-height: 1.55;
+}
+
+.settings-panel > small {
+  display: block;
+  margin-top: 10px;
+  color: var(--muted);
+  font-size: 0.62rem;
+}
+
+.settings-status {
+  padding: 5px 8px;
+  border: 1px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: 0.58rem;
+}
+
+.settings-status-zeroed {
+  color: var(--safe);
+  border-color: var(--safe-line);
+  background: var(--safe-soft);
+}
+
+.settings-status-zeroing {
+  color: var(--warning);
+  border-color: var(--warning-line);
+  background: var(--warning-soft);
+}
+
+.settings-status-error {
+  color: var(--danger);
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+}
+
+.primary-action,
+.secondary-action {
+  min-height: 36px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 650;
+}
+
+.primary-action {
+  padding: 7px 13px;
+  border: 1px solid var(--accent);
+  color: var(--accent-contrast);
+  background: var(--accent);
+}
+
+.secondary-action {
+  padding: 6px 12px;
+  border: 1px solid var(--border-strong);
+  color: var(--text-soft);
+  background: var(--surface-control);
+}
+
+.primary-action:hover,
+.secondary-action:hover {
+  border-color: var(--accent-line);
+  box-shadow: 0 6px 18px var(--accent-glow);
+}
+
+.primary-action:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.sensor-placement-preview {
+  display: block;
+  width: 100%;
+  height: 200px;
+}
+
+.settings-preview-bg {
+  fill: var(--map-bg);
+  stroke: var(--border-soft);
+}
+
+.settings-grid-line {
+  fill: none;
+  stroke: var(--visual-grid);
+  stroke-width: 1;
+}
+
+.settings-vehicle {
+  fill: var(--vehicle-fill);
+  stroke: var(--vehicle-outline);
+  stroke-width: 1.8;
+}
+
+.settings-vehicle-front { fill: var(--accent); }
+
+.settings-sensor-marker line {
+  stroke: var(--sensor);
+  stroke-dasharray: 3 4;
+  stroke-width: 1.5;
+}
+
+.settings-sensor-marker circle {
+  fill: var(--sensor);
+  stroke: var(--surface-inset);
+  stroke-width: 1.5;
+}
+
+.settings-preview-front {
+  fill: var(--visual-label);
+  font-family: var(--mono);
+  font-size: 8px;
+  letter-spacing: 0.12em;
+}
+
+.settings-note {
+  margin: 14px 0;
+  padding: 10px 13px;
+  border: 1px solid var(--warning-line);
+  border-radius: 10px;
+  color: var(--text-soft);
+  background: var(--warning-soft);
+  font-size: 0.68rem;
+}
+
+.sensor-settings-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.sensor-setting-card {
+  display: grid;
+  gap: 14px;
+  border-radius: 16px;
+  padding: 15px;
+}
+
+.sensor-setting-card header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.sensor-live-summary {
+  display: grid;
+  grid-template-columns: 7px auto;
+  gap: 3px 7px;
+  align-items: center;
+  text-align: right;
+}
+
+.sensor-live-summary strong {
+  font-family: var(--mono);
+  font-size: 0.68rem;
+}
+
+.sensor-live-summary small {
+  grid-column: 2;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.55rem;
+}
+
+.setting-field-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.setting-field {
+  display: grid;
+  gap: 5px;
+}
+
+.setting-field > span:first-child {
+  color: var(--muted);
+  font-size: 0.58rem;
+}
+
+.setting-input-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  overflow: hidden;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  background: var(--surface-inset);
+}
+
+.setting-input-wrap:focus-within {
+  border-color: var(--accent-line);
+  box-shadow: 0 0 0 2px var(--accent-soft);
+}
+
+.setting-input-wrap input {
+  width: 100%;
+  min-width: 0;
+  padding: 8px;
+  border: 0;
+  outline: 0;
+  color: var(--text-strong);
+  background: transparent;
+  font-family: var(--mono);
+  font-size: 0.67rem;
+}
+
+.setting-input-wrap small {
+  padding-right: 8px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.55rem;
+}
+
+.sensor-setting-card .secondary-action {
+  justify-self: end;
+}
+
+.settings-save-state {
+  min-height: 34px;
+  margin-top: 12px;
+  padding: 9px 12px;
+  color: var(--muted);
+  font-size: 0.64rem;
+  text-align: right;
+}
+
+.settings-save-state-error { color: var(--danger); }
+.settings-save-state-saved { color: var(--safe); }
+.settings-save-state-local_only { color: var(--warning); }
+
+@media (max-width: 1180px) {
+  .spatial-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .spatial-sensor-panel {
+    width: 100%;
+  }
+
+  .spatial-sensor-list {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+
+  .spatial-sensor-row {
+    grid-template-columns: 6px minmax(0, 1fr);
+  }
+
+  .spatial-range-value {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .spatial-summary-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .spatial-summary-list div {
+    display: grid;
+  }
+}
+
+@media (max-width: 900px) {
+  .page-heading {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .settings-overview-grid,
+  .sensor-settings-list {
+    grid-template-columns: 1fr;
+  }
+
+  .spatial-sensor-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .setting-field-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 620px) {
+  .view-switcher {
+    overflow-x: auto;
+  }
+
+  .view-switcher button {
+    min-width: max-content;
+    flex: 0 0 auto;
+    padding-inline: 12px;
+  }
+
+  .spatial-scene {
+    min-height: 390px;
+  }
+
+  .spatial-legend {
+    padding-bottom: 22px;
+  }
+
+  .spatial-truth-note {
+    left: 17px;
+    right: auto;
+  }
+
+  .spatial-alert {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .spatial-sensor-list,
+  .spatial-summary-list {
+    grid-template-columns: 1fr;
+  }
+
+  .setting-field-grid {
+    grid-template-columns: 1fr 1fr;
   }
 }

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { RangeReading, SpatialPoint, VehiclePose, WorldState } from "../types";
 import type { ConnectionState } from "../state/useTelemetry";
 import { TofRangePlot } from "./ProximityWidget";
@@ -36,12 +37,23 @@ export function CameraAwareness({
   onModeChange,
   connection,
 }: CameraAwarenessProps) {
+  const [cameraView, setCameraView] = useState<"RAW" | "ENHANCED">("RAW");
   const telemetryConnected = connection === "CONNECTED";
-  const visibility = Math.round(world.environment.visibility_score * 100);
+  const cameraVisibilityScore = world.camera.raw_available
+    ? world.camera.visibility_score ?? world.environment.visibility_score
+    : world.environment.visibility_score;
+  const cameraVisibilityState = world.camera.raw_available
+    ? world.camera.visibility_state ?? world.environment.visibility_state
+    : world.environment.visibility_state;
+  const visibility = Math.round(cameraVisibilityScore * 100);
   const corridorState = telemetryConnected ? world.safe_corridor.state : "GREY";
+  const showLiveCamera =
+    telemetryConnected && world.camera.mode === "LIVE" && world.camera.raw_available;
+  const showEnhancedCamera =
+    showLiveCamera && cameraView === "ENHANCED" && world.camera.enhancement_available;
   const showSimulatedCamera =
-    telemetryConnected && world.mode === "SIMULATED" && world.camera.raw_available;
-  const autoWantsTof = shouldShowTofOverlay(mode, world.environment.visibility_state);
+    telemetryConnected && world.camera.mode === "SIMULATED" && world.camera.raw_available;
+  const autoWantsTof = shouldShowTofOverlay(mode, cameraVisibilityState);
   const showTofOverlay = mode === "TOF_OVERLAY" || (telemetryConnected && autoWantsTof);
   const usableReadings = usableRangeReadings(readings);
   const nearestRange = usableReadings.length
@@ -61,6 +73,22 @@ export function CameraAwareness({
         : showTofOverlay
           ? "ToF overlay active"
           : "Camera view";
+  const sourceLabel = showLiveCamera
+    ? showEnhancedCamera
+      ? "DEHAZED LIVE · GPU"
+      : "CAMERA LIVE · WI-FI"
+    : showSimulatedCamera
+      ? "CAMERA SIMULATED"
+      : telemetryConnected
+        ? "CAMERA UNAVAILABLE"
+        : connection === "CONNECTING"
+          ? "CONNECTING"
+          : "NO TELEMETRY";
+  const frameDetail = showLiveCamera && world.camera.width_px && world.camera.height_px
+    ? showEnhancedCamera
+      ? `${world.camera.enhancement_model ?? "ML dehazing"} · ${world.camera.enhancement_fps.toFixed(1)} FPS · ${Math.round(world.camera.enhancement_latency_ms ?? 0)} ms`
+      : `${world.camera.width_px}×${world.camera.height_px} · ${world.camera.measured_fps.toFixed(1)} FPS`
+    : null;
 
   return (
     <article className="camera-awareness">
@@ -71,7 +99,7 @@ export function CameraAwareness({
         </div>
         <div className="camera-badges">
           <span className="source-badge">
-            {telemetryConnected ? world.mode : connection === "CONNECTING" ? "CONNECTING" : "NO TELEMETRY"}
+            {sourceLabel}
           </span>
           <span className="visibility-badge">
             {telemetryConnected ? `Visibility ${visibility}%` : "Visibility unavailable"}
@@ -93,6 +121,28 @@ export function CameraAwareness({
             </button>
           ))}
         </div>
+        {showLiveCamera && (
+          <div className="awareness-mode-switcher" role="group" aria-label="Camera processing">
+            <button
+              type="button"
+              className={!showEnhancedCamera ? "active" : ""}
+              aria-pressed={!showEnhancedCamera}
+              onClick={() => setCameraView("RAW")}
+            >
+              Raw
+            </button>
+            <button
+              type="button"
+              className={showEnhancedCamera ? "active" : ""}
+              aria-pressed={showEnhancedCamera}
+              disabled={!world.camera.enhancement_available}
+              title={world.camera.enhancement_detail ?? undefined}
+              onClick={() => setCameraView("ENHANCED")}
+            >
+              Dehazed
+            </button>
+          </div>
+        )}
         <span
           className={`awareness-mode-status ${showTofOverlay && telemetryConnected ? "active" : ""}`}
           role="status"
@@ -102,32 +152,48 @@ export function CameraAwareness({
         </span>
       </div>
 
-      <div className="camera-stage">
-        <div className="mine-silhouette" aria-hidden="true">
-          <span className="ridge ridge-left" />
-          <span className="ridge ridge-right" />
-        </div>
-        <div
-          className={`perspective-road corridor-visual-${corridorState.toLowerCase()}`}
-          aria-hidden="true"
-        >
-          <span className="corridor-fill" />
-          <span className="lane-edge lane-edge-left" />
-          <span className="lane-edge lane-edge-right" />
-          <span className="lane-center" />
-        </div>
-        <div
-          className="fog-layer"
-          style={{ opacity: overlayStrength(world.environment.visibility_score) }}
-          aria-hidden="true"
-        />
-        {showSimulatedCamera ? (
+      <div className={`camera-stage ${showLiveCamera ? "camera-stage-live" : ""}`}>
+        {showLiveCamera ? (
+          <img
+            className="camera-feed"
+            src={showEnhancedCamera ? "/api/camera/stream?view=enhanced" : "/api/camera/stream?view=raw"}
+            alt={showEnhancedCamera
+              ? "ML-dehazed forward view from the Raspberry Pi camera"
+              : "Raw forward view from the Raspberry Pi camera"}
+          />
+        ) : (
+          <>
+            <div className="mine-silhouette" aria-hidden="true">
+              <span className="ridge ridge-left" />
+              <span className="ridge ridge-right" />
+            </div>
+            <div
+              className={`perspective-road corridor-visual-${corridorState.toLowerCase()}`}
+              aria-hidden="true"
+            >
+              <span className="corridor-fill" />
+              <span className="lane-edge lane-edge-left" />
+              <span className="lane-edge lane-edge-right" />
+              <span className="lane-center" />
+            </div>
+            <div
+              className="fog-layer"
+              style={{ opacity: overlayStrength(world.environment.visibility_score) }}
+              aria-hidden="true"
+            />
+          </>
+        )}
+        {showLiveCamera && frameDetail ? (
+          <span className="camera-preview-label">{frameDetail}</span>
+        ) : showSimulatedCamera ? (
           <span className="camera-preview-label">Simulated camera</span>
         ) : (
           <div className="camera-unavailable">
             <strong>{telemetryConnected ? "Camera preview unavailable" : "Camera telemetry unavailable"}</strong>
             <span>
-              {telemetryConnected ? "Synthetic awareness remains active" : "Waiting for live telemetry"}
+              {telemetryConnected
+                ? world.camera.stream_detail ?? "Synthetic awareness remains active"
+                : "Waiting for live telemetry"}
             </span>
           </div>
         )}

@@ -3,16 +3,27 @@ import { ConnectionPill, ModePill } from "./components/StatusPill";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { DriverDashboard } from "./driver/DriverDashboard";
 import type { AwarenessMode } from "./driver/driverAwareness";
+import { SensorSettingsPage } from "./settings/SensorSettingsPage";
+import { useSensorSettings } from "./settings/useSensorSettings";
 import { SimulationControls } from "./simulation/SimulationControls";
+import { SpatialDashboard } from "./spatial/SpatialDashboard";
 import { useTelemetry } from "./state/useTelemetry";
 import { SupervisorDashboard } from "./supervisor/SupervisorDashboard";
 import { applyTheme, readInitialTheme, saveTheme, type Theme } from "./theme";
 import "./styles.css";
 
-type DashboardView = "DRIVER" | "SUPERVISOR";
+type DashboardView = "DRIVER" | "SPATIAL" | "SUPERVISOR" | "SETTINGS";
+
+const dashboardViews: Array<{ value: DashboardView; label: string }> = [
+  { value: "DRIVER", label: "Driver" },
+  { value: "SPATIAL", label: "Spatial view" },
+  { value: "SUPERVISOR", label: "Supervisor" },
+  { value: "SETTINGS", label: "Settings" },
+];
 
 export default function App() {
   const { world, connection } = useTelemetry();
+  const sensorSettings = useSensorSettings();
   const [view, setView] = useState<DashboardView>("DRIVER");
   const [awarenessMode, setAwarenessMode] = useState<AwarenessMode>("AUTO");
   const [theme, setTheme] = useState<Theme>(() => {
@@ -40,22 +51,17 @@ export default function App() {
         </div>
 
         <nav className="view-switcher" aria-label="Dashboard view">
-          <button
-            type="button"
-            className={view === "DRIVER" ? "active" : ""}
-            aria-pressed={view === "DRIVER"}
-            onClick={() => setView("DRIVER")}
-          >
-            Driver
-          </button>
-          <button
-            type="button"
-            className={view === "SUPERVISOR" ? "active" : ""}
-            aria-pressed={view === "SUPERVISOR"}
-            onClick={() => setView("SUPERVISOR")}
-          >
-            Supervisor
-          </button>
+          {dashboardViews.map((dashboardView) => (
+            <button
+              key={dashboardView.value}
+              type="button"
+              className={view === dashboardView.value ? "active" : ""}
+              aria-pressed={view === dashboardView.value}
+              onClick={() => setView(dashboardView.value)}
+            >
+              {dashboardView.label}
+            </button>
+          ))}
         </nav>
 
         <div className="status-row">
@@ -65,19 +71,39 @@ export default function App() {
         </div>
       </header>
 
-      {connection === "CONNECTED" && world.mode === "SIMULATED" && (
+      {connection === "CONNECTED" && world.mode === "SIMULATED" && view !== "SETTINGS" && (
         <SimulationControls simulation={world.simulation} />
       )}
 
-      {view === "DRIVER" ? (
+      {view === "DRIVER" && (
         <DriverDashboard
           world={world}
           awarenessMode={awarenessMode}
           onAwarenessModeChange={setAwarenessMode}
           connection={connection}
         />
-      ) : (
+      )}
+      {view === "SPATIAL" && (
+        <SpatialDashboard
+          world={world}
+          connection={connection}
+          sensorSettings={sensorSettings.settings.sensors}
+        />
+      )}
+      {view === "SUPERVISOR" && (
         <SupervisorDashboard world={world} connection={connection} />
+      )}
+      {view === "SETTINGS" && (
+        <SensorSettingsPage
+          world={world}
+          telemetryConnection={connection}
+          settings={sensorSettings.settings}
+          settingsConnection={sensorSettings.connection}
+          message={sensorSettings.message}
+          onSensorChange={sensorSettings.updateSensor}
+          onSensorSave={sensorSettings.saveSensor}
+          onZeroImu={sensorSettings.zeroImuNow}
+        />
       )}
 
       <footer>

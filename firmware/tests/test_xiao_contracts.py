@@ -20,6 +20,21 @@ def _source_text() -> str:
     )
 
 
+def _sensor_node_source_text() -> str:
+    suffixes = {".h", ".cpp", ".ino"}
+    roots = (
+        FIRMWARE_ROOT / "xiao_shared",
+        FIRMWARE_ROOT / "front_xiao_esp32c6",
+        MIDDLE_ROOT,
+    )
+    return "\n".join(
+        path.read_text(encoding="utf-8")
+        for root in roots
+        for path in root.rglob("*")
+        if path.suffix in suffixes
+    )
+
+
 def _config(node: str) -> str:
     return (FIRMWARE_ROOT / f"{node}_xiao_esp32c6" / "node_config.h").read_text(
         encoding="utf-8"
@@ -76,7 +91,7 @@ def test_front_xiao_and_middle_c3_pin_contracts_are_frozen() -> None:
 
 
 def test_xiao_source_uses_bounded_wired_state_machines() -> None:
-    source = _source_text()
+    source = _sensor_node_source_text()
     for forbidden in (
         "<WiFi.h>",
         "<BluetoothSerial.h>",
@@ -175,6 +190,6 @@ def test_build_targets_and_library_versions_are_pinned() -> None:
     middle_platformio = (MIDDLE_ROOT / "platformio.ini").read_text(
         encoding="utf-8"
     )
-    assert "esp32:esp32:esp32c3:CDCOnBoot=cdc" in middle_readme
+    assert "esp32:esp32:nologo_esp32c3_super_mini" in middle_readme
     assert "board = esp32-c3-devkitm-1" in middle_platformio
     assert "pololu/VL53L0X @ 1.3.1" in middle_platformio

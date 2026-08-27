@@ -7,10 +7,12 @@ from contextlib import suppress
 from pathlib import Path
 from typing import Protocol
 
+from backend.app.camera import CameraFeed
 from backend.app.mapping.occupancy import OccupancyAccumulator
 from backend.app.mapping.transforms import transforms_from_config
 from backend.app.models import (
     CorridorState,
+    CameraState,
     DataMode,
     EmergencyLevel,
     EmergencyState,
@@ -75,7 +77,10 @@ class LiveSerialRuntime:
         stale_timeout_ms: int = 750,
         poll_interval_ms: int = 10,
         reconnect_ms: int = 1_000,
+        camera_feed: CameraFeed | None = None,
         serial_factory: SerialFactory = MainControllerSerial,
+        source_name: str = "MAIN serial",
+        transport: str = "SERIAL",
     ) -> None:
         self._store = store
         self._config = config
@@ -85,6 +90,9 @@ class LiveSerialRuntime:
         self._poll_interval_s = poll_interval_ms / 1000.0
         self._reconnect_s = reconnect_ms / 1000.0
         self._serial_factory = serial_factory
+        self._source_name = source_name
+        self._transport = transport
+        self._camera_feed = camera_feed
         self._serial: SerialReader | None = None
         self._task: asyncio.Task[None] | None = None
         self._running = False
@@ -92,10 +100,12 @@ class LiveSerialRuntime:
         self._last_telemetry_ms: int | None = None
         self._stale_published = False
         self._status = "degraded"
-        self._status_detail = f"Waiting for MAIN telemetry on {port}"
+        self._status_detail = f"Waiting for {source_name} telemetry on {port}"
         self._last_wheel_distances: tuple[float, float] | None = None
         self._last_controller_ms: int | None = None
         self._last_packet_sequence: int | None = None
+        self._last_camera_signature: tuple[object, ...] | None = None
+        self._last_camera_publish_ms = 0
 
         demo = config["demo"]["demo"]
         self._map_path = Path(demo["map_file"])
@@ -149,7 +159,15 @@ class LiveSerialRuntime:
         return self._status_detail
 
     @property
-    def serial_port(self) -> str:
+    def serial_port(self) -> str | None:
+        return self._port if self._transport == "SERIAL" else None
+
+    @property
+    def telemetry_transport(self) -> str:
+        return self._transport
+
+    @property
+    def telemetry_endpoint(self) -> str:
         return self._port
 
     @property
@@ -182,7 +200,7 @@ class LiveSerialRuntime:
         self._running = True
         await self._publish_unavailable(
             SensorStatus.OFFLINE,
-            f"Waiting for MAIN telemetry on {self._port}",
+            f"Waiting for {self._source_name} telemetry on {self._port}",
         )
         self._task = asyncio.create_task(self._run(), name="fogsen-live-serial")
 
@@ -208,6 +226,9 @@ class LiveSerialRuntime:
                     except Exception as exc:
                         detail = (
                             f"Could not open MAIN serial port {self._port}: {exc}"
+                            if self._transport == "SERIAL"
+                            else f"Could not open {self._source_name} listener "
+                            f"{self._port}: {exc}"
                         )
                         if detail != self._status_detail:
                             await self._publish_unavailable(
@@ -217,14 +238,22 @@ class LiveSerialRuntime:
                         await asyncio.sleep(self._reconnect_s)
                         continue
                     self._status = "degraded"
-                    self._status_detail = f"Waiting for MAIN telemetry on {self._port}"
+                    self._status_detail = (
+                        f"Waiting for {self._source_name} telemetry on {self._port}"
+                    )
 
                 try:
                     packets = await asyncio.to_thread(self._serial.poll)
                 except Exception as exc:
+                    failure_detail = (
+                        f"MAIN serial read failed on {self._port}: {exc}"
+                        if self._transport == "SERIAL"
+                        else f"{self._source_name} read failed on "
+                        f"{self._port}: {exc}"
+                    )
                     await self._publish_unavailable(
                         SensorStatus.OFFLINE,
-                        f"MAIN serial read failed on {self._port}: {exc}",
+                        failure_detail,
                     )
                     await self._close_serial()
                     await asyncio.sleep(self._reconnect_s)
@@ -251,9 +280,11 @@ class LiveSerialRuntime:
                 ):
                     await self._publish_unavailable(
                         SensorStatus.STALE,
-                        f"MAIN telemetry exceeded {self._stale_timeout_ms} ms",
+                        f"{self._source_name} telemetry exceeded "
+                        f"{self._stale_timeout_ms} ms",
                     )
                     self._stale_published = True
+                await self._publish_camera_update()
                 await asyncio.sleep(self._poll_interval_s)
         finally:
             await self._close_serial()
@@ -264,6 +295,60 @@ class LiveSerialRuntime:
             return
         with suppress(Exception):
             await asyncio.to_thread(serial.close)
+
+    def _camera_state(self, current: CameraState) -> CameraState:
+        if self._camera_feed is None:
+            return current.model_copy(update={"mode": DataMode.LIVE})
+        return self._camera_feed.camera_state()
+
+    @staticmethod
+    def _environment_with_camera(environment, camera: CameraState):
+        if camera.raw_available and camera.visibility_score is not None:
+            return environment.model_copy(
+                update={
+                    "visibility_score": camera.visibility_score,
+                    "visibility_state": camera.visibility_state,
+                    "mode": DataMode.LIVE,
+                }
+            )
+        return environment.model_copy(
+            update={
+                "visibility_score": 0.0,
+                "visibility_state": VisibilityState.VERY_LOW,
+                "mode": DataMode.LIVE,
+            }
+        )
+
+    async def _publish_camera_update(self) -> None:
+        if self._camera_feed is None:
+            return
+        timestamp_ms = now_ms()
+        if timestamp_ms - self._last_camera_publish_ms < 90:
+            return
+        camera = self._camera_feed.camera_state()
+        signature = (
+            camera.raw_frame_id,
+            camera.raw_available,
+            camera.stream_status,
+            camera.stream_detail,
+        )
+        if signature == self._last_camera_signature:
+            return
+        async with self._control_lock:
+            current = await self._store.snapshot()
+            environment = self._environment_with_camera(current.environment, camera)
+            await self._store.replace(
+                current.model_copy(
+                    update={
+                        "generated_at_ms": timestamp_ms,
+                        "sequence": current.sequence + 1,
+                        "camera": camera,
+                        "environment": environment,
+                    }
+                )
+            )
+        self._last_camera_signature = signature
+        self._last_camera_publish_ms = timestamp_ms
 
     @staticmethod
     def _counter_advanced(current: int, previous: int) -> bool:
@@ -392,6 +477,12 @@ class LiveSerialRuntime:
             self._last_telemetry_ms = received_at_ms
             self._stale_published = False
 
+            camera = self._camera_state(current.camera)
+            environment = (
+                self._environment_with_camera(sample.environment, camera)
+                if self._camera_feed is not None
+                else sample.environment
+            )
             return await self._store.replace(
                 WorldState(
                     generated_at_ms=received_at_ms,
@@ -401,8 +492,8 @@ class LiveSerialRuntime:
                     reference_map=self._reference_map,
                     ranges=sample.ranges,
                     motion=sample.motion,
-                    camera=current.camera.model_copy(update={"mode": DataMode.LIVE}),
-                    environment=sample.environment,
+                    camera=camera,
+                    environment=environment,
                     live_objects=live_objects,
                     radar_objects=[],
                     emergency=sample.emergency,
@@ -532,6 +623,24 @@ class LiveSerialRuntime:
                     },
                     mode=DataMode.LIVE,
                 )
+            if self._camera_feed is not None:
+                camera = self._camera_feed.camera_state()
+                environment = self._environment_with_camera(current.environment, camera)
+            else:
+                camera = current.camera.model_copy(
+                    update={
+                        "raw_available": False,
+                        "enhancement_available": False,
+                        "mode": DataMode.LIVE,
+                    }
+                )
+                environment = current.environment.model_copy(
+                    update={
+                        "visibility_score": 0.0,
+                        "visibility_state": VisibilityState.VERY_LOW,
+                        "mode": DataMode.LIVE,
+                    }
+                )
             return await self._store.replace(
                 WorldState(
                     generated_at_ms=timestamp_ms,
@@ -548,20 +657,8 @@ class LiveSerialRuntime:
                     reference_map=self._reference_map,
                     ranges=ranges,
                     motion=motion,
-                    camera=current.camera.model_copy(
-                        update={
-                            "raw_available": False,
-                            "enhancement_available": False,
-                            "mode": DataMode.LIVE,
-                        }
-                    ),
-                    environment=current.environment.model_copy(
-                        update={
-                            "visibility_score": 0.0,
-                            "visibility_state": VisibilityState.VERY_LOW,
-                            "mode": DataMode.LIVE,
-                        }
-                    ),
+                    camera=camera,
+                    environment=environment,
                     live_objects=[],
                     radar_objects=[],
                     emergency=emergency,

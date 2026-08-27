@@ -36,9 +36,26 @@ LocalSensors::LocalSensors(TwoWire& wire)
       nextBmpRetryMs_(0),
       lastImuAttemptMs_(0),
       lastBmpAttemptMs_(0),
+      imuCalibrationSamples_(0),
+      imuAccelerationReferenceX_(0.0F),
+      imuAccelerationReferenceY_(0.0F),
+      imuAccelerationReferenceZ_(0.0F),
+      imuAccelerationSumX_(0.0F),
+      imuAccelerationSumY_(0.0F),
+      imuAccelerationSumZ_(0.0F),
+      imuGyroSumX_(0.0F),
+      imuGyroSumY_(0.0F),
+      imuGyroSumZ_(0.0F),
+      imuAccelerationBiasX_(0.0F),
+      imuAccelerationBiasY_(0.0F),
+      imuAccelerationBiasZ_(0.0F),
+      imuGyroBiasX_(0.0F),
+      imuGyroBiasY_(0.0F),
+      imuGyroBiasZ_(0.0F),
       baselinePressureSumHpa_(0.0F),
       baselinePressureSamples_(0),
-      imuReading_{false, 0, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F, 0.0F},
+      imuReading_{false, false, true, 0, 0, 0.0F, 0.0F, 0.0F,
+                  0.0F, 0.0F, 0.0F, 0.0F},
       environmentReading_{false, false, 0, 0.0F, 0.0F, 0.0F, 0.0F} {}
 
 void LocalSensors::begin(uint32_t nowMs) {
@@ -70,11 +87,94 @@ bool LocalSensors::initializeImu(uint32_t nowMs) {
       imuAddress_ = address;
       imuInitialized_ = true;
       imuConsecutiveFailures_ = 0;
+      restartImuCalibration(nowMs);
       return true;
     }
   }
   nextImuRetryMs_ = nowMs + config::kSensorRetryMs;
   return false;
+}
+
+void LocalSensors::restartImuCalibration(uint32_t nowMs) {
+  imuCalibrationSamples_ = 0;
+  imuAccelerationReferenceX_ = 0.0F;
+  imuAccelerationReferenceY_ = 0.0F;
+  imuAccelerationReferenceZ_ = 0.0F;
+  imuAccelerationSumX_ = 0.0F;
+  imuAccelerationSumY_ = 0.0F;
+  imuAccelerationSumZ_ = 0.0F;
+  imuGyroSumX_ = 0.0F;
+  imuGyroSumY_ = 0.0F;
+  imuGyroSumZ_ = 0.0F;
+  imuAccelerationBiasX_ = 0.0F;
+  imuAccelerationBiasY_ = 0.0F;
+  imuAccelerationBiasZ_ = 0.0F;
+  imuGyroBiasX_ = 0.0F;
+  imuGyroBiasY_ = 0.0F;
+  imuGyroBiasZ_ = 0.0F;
+  imuReading_.calibrated = false;
+  imuReading_.zeroing = true;
+  imuReading_.zeroedMs = 0;
+  imuReading_.updatedMs = nowMs;
+  imuReading_.accelerationXMps2 = 0.0F;
+  imuReading_.accelerationYMps2 = 0.0F;
+  imuReading_.accelerationZMps2 = 0.0F;
+  imuReading_.gyroXDps = 0.0F;
+  imuReading_.gyroYDps = 0.0F;
+  imuReading_.gyroZDps = 0.0F;
+}
+
+bool LocalSensors::collectImuCalibrationSample(uint32_t nowMs,
+                                               float accelerationX,
+                                               float accelerationY,
+                                               float accelerationZ,
+                                               float gyroX,
+                                               float gyroY,
+                                               float gyroZ) {
+  const float gyroMaximum =
+      fmaxf(fabsf(gyroX), fmaxf(fabsf(gyroY), fabsf(gyroZ)));
+  if (gyroMaximum > config::kImuZeroMaxGyroDps) {
+    restartImuCalibration(nowMs);
+    return false;
+  }
+
+  if (imuCalibrationSamples_ == 0) {
+    imuAccelerationReferenceX_ = accelerationX;
+    imuAccelerationReferenceY_ = accelerationY;
+    imuAccelerationReferenceZ_ = accelerationZ;
+  } else {
+    const float deltaX = accelerationX - imuAccelerationReferenceX_;
+    const float deltaY = accelerationY - imuAccelerationReferenceY_;
+    const float deltaZ = accelerationZ - imuAccelerationReferenceZ_;
+    const float delta = sqrtf(deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ);
+    if (delta > config::kImuZeroMaxAccelDeltaMps2) {
+      restartImuCalibration(nowMs);
+      return false;
+    }
+  }
+
+  imuAccelerationSumX_ += accelerationX;
+  imuAccelerationSumY_ += accelerationY;
+  imuAccelerationSumZ_ += accelerationZ;
+  imuGyroSumX_ += gyroX;
+  imuGyroSumY_ += gyroY;
+  imuGyroSumZ_ += gyroZ;
+  ++imuCalibrationSamples_;
+  if (imuCalibrationSamples_ < config::kImuZeroSampleCount) {
+    return false;
+  }
+
+  const float sampleCount = static_cast<float>(imuCalibrationSamples_);
+  imuAccelerationBiasX_ = imuAccelerationSumX_ / sampleCount;
+  imuAccelerationBiasY_ = imuAccelerationSumY_ / sampleCount;
+  imuAccelerationBiasZ_ = imuAccelerationSumZ_ / sampleCount;
+  imuGyroBiasX_ = imuGyroSumX_ / sampleCount;
+  imuGyroBiasY_ = imuGyroSumY_ / sampleCount;
+  imuGyroBiasZ_ = imuGyroSumZ_ / sampleCount;
+  imuReading_.calibrated = true;
+  imuReading_.zeroing = false;
+  imuReading_.zeroedMs = nowMs;
+  return true;
 }
 
 void LocalSensors::restartAltitudeBaseline() {
@@ -142,12 +242,33 @@ void LocalSensors::readImu(uint32_t nowMs) {
   imuConsecutiveFailures_ = 0;
   imuReading_.hasSample = true;
   imuReading_.updatedMs = nowMs;
-  imuReading_.accelerationXMps2 = acceleration.acceleration.x;
-  imuReading_.accelerationYMps2 = acceleration.acceleration.y;
-  imuReading_.accelerationZMps2 = acceleration.acceleration.z;
-  imuReading_.gyroXDps = gyro.gyro.x * kRadiansToDegrees;
-  imuReading_.gyroYDps = gyro.gyro.y * kRadiansToDegrees;
-  imuReading_.gyroZDps = gyro.gyro.z * kRadiansToDegrees;
+  const float gyroXDps = gyro.gyro.x * kRadiansToDegrees;
+  const float gyroYDps = gyro.gyro.y * kRadiansToDegrees;
+  const float gyroZDps = gyro.gyro.z * kRadiansToDegrees;
+  if (imuReading_.zeroing) {
+    collectImuCalibrationSample(nowMs, acceleration.acceleration.x,
+                                acceleration.acceleration.y,
+                                acceleration.acceleration.z, gyroXDps,
+                                gyroYDps, gyroZDps);
+  }
+  if (imuReading_.calibrated) {
+    imuReading_.accelerationXMps2 =
+        acceleration.acceleration.x - imuAccelerationBiasX_;
+    imuReading_.accelerationYMps2 =
+        acceleration.acceleration.y - imuAccelerationBiasY_;
+    imuReading_.accelerationZMps2 =
+        acceleration.acceleration.z - imuAccelerationBiasZ_;
+    imuReading_.gyroXDps = gyroXDps - imuGyroBiasX_;
+    imuReading_.gyroYDps = gyroYDps - imuGyroBiasY_;
+    imuReading_.gyroZDps = gyroZDps - imuGyroBiasZ_;
+  } else {
+    imuReading_.accelerationXMps2 = 0.0F;
+    imuReading_.accelerationYMps2 = 0.0F;
+    imuReading_.accelerationZMps2 = 0.0F;
+    imuReading_.gyroXDps = 0.0F;
+    imuReading_.gyroYDps = 0.0F;
+    imuReading_.gyroZDps = 0.0F;
+  }
   imuReading_.temperatureC = temperature.temperature;
 }
 
@@ -228,6 +349,14 @@ bool LocalSensors::zeroAltitude() {
   return true;
 }
 
+bool LocalSensors::zeroImu(uint32_t nowMs) {
+  if (!imuInitialized_ || !imuReading_.hasSample) {
+    return false;
+  }
+  restartImuCalibration(nowMs);
+  return true;
+}
+
 uint32_t LocalSensors::imuAgeMs(uint32_t nowMs) const {
   return imuReading_.hasSample ? elapsedMs(nowMs, imuReading_.updatedMs)
                                : UINT32_MAX;
@@ -244,6 +373,9 @@ LocalSensorStatus LocalSensors::imuStatus(uint32_t nowMs) const {
     return LocalSensorStatus::kOffline;
   }
   if (!imuReading_.hasSample) {
+    return LocalSensorStatus::kInitializing;
+  }
+  if (imuReading_.zeroing || !imuReading_.calibrated) {
     return LocalSensorStatus::kInitializing;
   }
   if (imuAgeMs(nowMs) > kImuStaleMs) {
