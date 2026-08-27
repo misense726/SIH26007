@@ -1,13 +1,5 @@
 import type { GeoCoordinates } from "./locationProvider";
 
-export interface CampusPoi {
-  id: string;
-  name: string;
-  category: "GATE" | "BUILDING" | "DEPOT" | "HAZARD" | "CHECKPOINT";
-  coordinates: GeoCoordinates;
-  description?: string;
-}
-
 export interface MapTileLayer {
   name: string;
   url: string;
@@ -18,6 +10,9 @@ export interface MapTileLayer {
 
 export interface CampusMapConfig {
   campusName: string;
+  locationLabel: string;
+  locationCode: string;
+  siteCenter: GeoCoordinates;
   anchor: GeoCoordinates;
   defaultZoom: number;
   minimapZoom: number;
@@ -25,103 +20,42 @@ export interface CampusMapConfig {
   maxZoom: number;
   minZoom: number;
   tiles: MapTileLayer;
-  pois: CampusPoi[];
 }
 
-/**
- * 100% Free, Zero-API-Key, High-Performance Tile Providers.
- */
-export const MAP_TILE_PRESETS: Record<"satellite" | "dark" | "street", MapTileLayer> = {
-  satellite: {
-    name: "Satellite Aerial",
-    url: "https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}",
-    subdomains: [],
-    attribution: "&copy; Esri, Maxar, Earthstar Geographics",
-    maxZoom: 20,
-  },
-  dark: {
-    name: "Dark Tactical",
-    url: "https://services.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}",
-    subdomains: [],
-    attribution: "&copy; Esri &copy; OpenStreetMap contributors",
-    maxZoom: 19,
-  },
-  street: {
-    name: "OpenStreetMap",
-    url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
-    subdomains: [],
-    attribution: "&copy; OpenStreetMap contributors",
-    maxZoom: 19,
-  },
+export const ROAD_MAP_TILES: MapTileLayer = {
+  name: "Road map",
+  url: "https://tile.openstreetmap.org/{z}/{x}/{y}.png",
+  subdomains: [],
+  attribution: "&copy; OpenStreetMap contributors",
+  maxZoom: 18,
 };
 
+// A transparent fallback prevents browser image errors from covering the route.
+export const EMPTY_MAP_TILE =
+  "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
+
 /**
- * Configurable Campus Map Configuration.
- * Anchored at a high-detail test campus location.
+ * The local Cartesian origin is tied to the V699+X9 Chennai site. The anchor is
+ * offset slightly west so the canonical route starts on the nearest mapped
+ * campus road while remaining inside the requested site area.
  */
 export const DEFAULT_CAMPUS_CONFIG: CampusMapConfig = {
-  campusName: "FogSen Test Facility & Campus",
-  anchor: {
-    lat: 28.5458,
-    lng: 77.1926,
-    altitude_m: 218.0,
+  campusName: "FogSen Chennai route",
+  locationLabel: "V699+X9, Chennai, Tamil Nadu",
+  locationCode: "V699+X9",
+  siteCenter: {
+    lat: 12.86965,
+    lng: 80.219921875,
   },
-  defaultZoom: 18,
-  minimapZoom: 18,
+  anchor: {
+    lat: 12.8696442659944,
+    lng: 80.2197883739638,
+    altitude_m: 18.0,
+  },
+  defaultZoom: 17,
+  minimapZoom: 17,
   extendedZoom: 17,
-  minZoom: 13,
-  maxZoom: 20,
-  tiles: MAP_TILE_PRESETS.satellite,
-  pois: [
-    {
-      id: "poi-gate-1",
-      name: "Main Campus Gate",
-      category: "GATE",
-      coordinates: { lat: 28.5453, lng: 77.1918 },
-      description: "Entry / Exit Access Control",
-    },
-    {
-      id: "poi-engineering",
-      name: "Autonomous Systems Center",
-      category: "BUILDING",
-      coordinates: { lat: 28.5461, lng: 77.1932 },
-      description: "Teleoperation & Telemetry Hub",
-    },
-    {
-      id: "poi-depot",
-      name: "Fleet Depot & Workshop",
-      category: "DEPOT",
-      coordinates: { lat: 28.5451, lng: 77.1934 },
-      description: "Vehicle staging and sensor calibration bay",
-    },
-    {
-      id: "poi-pit-junction",
-      name: "Haul Road Checkpoint",
-      category: "CHECKPOINT",
-      coordinates: { lat: 28.5468, lng: 77.1924 },
-      description: "Low-visibility haul corridor entrance",
-    },
-  ],
+  minZoom: 15,
+  maxZoom: 18,
+  tiles: ROAD_MAP_TILES,
 };
-
-/**
- * Helper to fetch calculated routes from OSRM demo server
- */
-export async function fetchOsrmRoute(
-  start: GeoCoordinates,
-  end: GeoCoordinates,
-): Promise<[number, number][] | null> {
-  try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${start.lng},${start.lat};${end.lng},${end.lat}?overview=full&geometries=geojson`;
-    const response = await fetch(url);
-    if (!response.ok) return null;
-    const data = await response.json();
-    if (data.code === "Ok" && data.routes && data.routes.length > 0) {
-      const coords = data.routes[0].geometry.coordinates as [number, number][];
-      return coords.map(([lng, lat]) => [lat, lng]);
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}

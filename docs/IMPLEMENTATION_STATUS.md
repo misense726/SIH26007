@@ -268,44 +268,50 @@ real fog, long-run Wi-Fi stability, low-light performance, camera thermals, or
 vehicle vibration tolerance. Raw and dehazed images remain driver aids and are
 not braking ground truth.
 
-## Tactical maps, simulated V2X, and RGB-derived IR
+## Chennai road navigation, V2X, and main ToF display
 
 Status: locally integrated and software-verified on 2026-08-28. Radio, thermal
 camera, live Pi IR, Docker rebuild, and physical vehicle checks remain pending.
 
 Implemented:
 
-- a circular Leaflet minimap in the driver camera view with primary and peer
-  vehicle markers;
-- an expanded driver map with satellite, dark, and OpenStreetMap layers;
-- a supervisor tactical map with backend schematic and satellite modes,
-  multi-truck selection, speed labels, and matching fleet cards;
-- a local Cartesian to geodetic display conversion around a configured campus
-  anchor without changing the canonical backend `ReferenceMap`;
+- a compact rectangular road map in the driver camera view with stable primary
+  and peer vehicle arrows;
+- an expanded OpenStreetMap road view capped at zoom 18, with a transparent tile
+  fallback instead of provider error artwork;
+- a supervisor map with backend schematic and road modes, multi-truck selection,
+  speed labels, and matching fleet cards;
+- no radar sweep, pulsing marker, blinking marker, animated route, or terrain
+  layer;
+- a Chennai display anchor for `V699+X9`, with the canonical demo route aligned
+  to mapped campus roads;
+- `DUMPER_02` placed on the west campus road about 61 metres from the primary
+  route start;
+- a five-channel ToF list in the main `360° proximity` card, showing each
+  sensor's distance, health, and scanner angle or quality;
+- stale, offline, invalid, or disconnected range channels display `Unknown`
+  instead of a maximum-distance value;
 - `V2XState` in the shared world snapshot plus peer, roadside-unit, advisory,
   packet-log, and link-estimate models;
 - V2X state, incoming BSM, and advisory broadcast API endpoints;
-- a supervisor V2X monitor with peer, advisory, and packet-log tabs;
-- a CPU or CUDA false-color IR worker derived from RGB luminance, with status,
+- a CPU or CUDA false-colour IR worker derived from RGB luminance, with status,
   frame, stream, latency, frame-rate, precision, and VRAM fields;
-- explicit documentation that map tiles are presentation-only, V2X is
+- explicit documentation that road tiles are presentation-only, V2X is
   simulated, and the IR-style stream is not thermal data.
 
 Verification:
 
-- backend: 65 tests passed;
-- frontend: 33 tests passed;
+- backend: 66 tests passed;
+- frontend: 36 tests passed;
 - TypeScript and Vite production build passed;
-- the CPU IR smoke check produced a `48x64x3` `uint8` frame after syncing the
-  declared OpenCV dependency;
 - local `/api/health`, `/api/v2x/state`, and WebSocket telemetry responded;
-- browser verification showed a connected supervisor, three selectable trucks,
-  eight loaded satellite tiles, zero broken tiles, and no console warnings or
-  errors after repairing an invalid minimap DOM property;
-- Docker Compose configuration validation passed.
+- browser verification showed all five named ToFs with numeric values, healthy
+  status, and independently changing scanner angles;
+- the expanded map showed Chennai road tiles, the separate `DUMPER_02` marker,
+  the configured zoom cap, and no marker animations;
+- a clean browser reload added no console warnings or errors.
 
-Docker Desktop was not running, so the merged containers were not rebuilt in
-this verification. The online tile modes depend on external providers. No DSRC
-or C-V2X radio is connected. The IR worker was not checked against the live Pi
-feed or CUDA in this integration pass. None of these display features replaces
-the ToF safety path.
+The dashboard proves that normalized backend readings reach the five visible
+sensor rows. Simulated values do not prove physical ToF accuracy, UART delivery,
+or Wi-Fi delivery from MAIN. No DSRC or C-V2X radio is connected. None of the map,
+V2X, camera, or IR display features replaces the ToF safety path.

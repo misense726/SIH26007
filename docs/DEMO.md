@@ -13,9 +13,10 @@ that shared state.
    control to check both light and dark modes.
 4. Open the supervisor view. Confirm it shows the same vehicle pose, environment,
    sensor health, corridor, and alerts. Select each truck and switch between the
-   backend schematic and satellite presentation.
-5. Return to the driver view and expand the circular minimap. Check the satellite,
-   dark, and street layers. These online tiles are display backgrounds only.
+   backend schematic and road-map views.
+5. Return to the driver view and expand the road map. Confirm that `DUMPER_01`
+   follows the route near `V699+X9, Chennai` and that `DUMPER_02` starts on the
+   west campus road within 100 metres.
 6. In the supervisor V2X panel, inspect peers, advisories, and the packet log.
    A dispatch button adds an advisory to the in-memory simulation. It does not
    transmit over a DSRC or C-V2X radio.
@@ -83,5 +84,5 @@ frame IDs and enhancement IDs are simulated metadata. BMP280 altitude is relativ
 not precision positioning. The emergency output represents a prototype motor cut,
 not production braking. V2X peers, RSUs, packet counts, RSSI, and 5.89 GHz channel
 data are simulated. The IR-style camera view is derived from RGB luminance and is
-not thermal imaging. Satellite, dark, and street tiles require internet access and
-do not alter the canonical backend map.
+not thermal imaging. OpenStreetMap tiles require internet access and do not alter
+the canonical backend map.

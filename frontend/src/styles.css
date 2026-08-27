@@ -1120,7 +1120,7 @@ h3 {
 }
 
 /* ========================================================================== */
-/* 2D Campus Navigation Radar Minimap (Round Tactical Porthole)               */
+/* Road navigation map                                                       */
 /* ========================================================================== */
 
 .camera-minimap-overlay {
@@ -1169,45 +1169,6 @@ h3 {
   height: 100%;
   border-radius: 50%;
   background: #020617;
-}
-
-/* Tactical Radar Sweep Beam Animation */
-.campus-radar-sweep-beam {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  pointer-events: none;
-  z-index: 400;
-  background: conic-gradient(
-    from 0deg,
-    rgba(56, 189, 248, 0.35) 0deg,
-    rgba(56, 189, 248, 0.08) 35deg,
-    transparent 80deg,
-    transparent 360deg
-  );
-  animation: radar-sweep-spin 3s linear infinite;
-}
-
-@keyframes radar-sweep-spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-/* Concentric Distance Rings */
-.campus-radar-range-ring {
-  position: absolute;
-  border-radius: 50%;
-  border: 1px dashed rgba(56, 189, 248, 0.22);
-  pointer-events: none;
-  z-index: 390;
-}
-
-.campus-radar-range-ring.ring-1 {
-  inset: 22%;
-}
-
-.campus-radar-range-ring.ring-2 {
-  inset: 44%;
 }
 
 /* Compass Rose Cardinal Points */
@@ -1338,17 +1299,6 @@ h3 {
   box-shadow: 0 0 12px rgba(56, 189, 248, 0.6);
 }
 
-/* Animated Route Flow */
-.animated-campus-route {
-  stroke-dasharray: 8, 10;
-  animation: campus-route-flow 1.2s linear infinite;
-}
-
-@keyframes campus-route-flow {
-  from { stroke-dashoffset: 36; }
-  to { stroke-dashoffset: 0; }
-}
-
 /* Driver & Vehicle Markers on Maps */
 .campus-vehicle-icon-wrap {
   background: transparent !important;
@@ -1363,20 +1313,6 @@ h3 {
   display: grid;
   place-items: center;
   transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
-}
-
-.campus-vehicle-pulse {
-  position: absolute;
-  inset: -6px;
-  border-radius: 50%;
-  background: rgba(56, 189, 248, 0.4);
-  animation: campus-pulse 1.8s infinite ease-out;
-  pointer-events: none;
-}
-
-@keyframes campus-pulse {
-  0% { transform: scale(0.6); opacity: 0.95; }
-  100% { transform: scale(2.4); opacity: 0; }
 }
 
 .campus-driver-label {
@@ -1449,6 +1385,119 @@ h3 {
 .campus-poi-depot .campus-poi-dot { background: #4ade80; }
 .campus-poi-checkpoint .campus-poi-dot { background: #fbbf24; }
 
+.campus-navigation-widget {
+  display: grid;
+  justify-items: end;
+  gap: 7px;
+  user-select: none;
+}
+
+.campus-navigation-map {
+  position: relative;
+  width: 236px;
+  height: 164px;
+  overflow: hidden;
+  border: 2px solid rgba(255, 255, 255, 0.9);
+  border-radius: 16px;
+  background: #d8dde3;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.48);
+  cursor: pointer;
+  transition: border-color 140ms ease, box-shadow 140ms ease;
+}
+
+.campus-navigation-map:hover {
+  border-color: #38bdf8;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+.campus-navigation-map-canvas {
+  width: 100%;
+  height: 100%;
+  background: #d8dde3;
+}
+
+.campus-navigation-location {
+  position: absolute;
+  z-index: 500;
+  left: 9px;
+  bottom: 9px;
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 8px;
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: 7px;
+  color: #ffffff;
+  background: rgba(15, 23, 42, 0.9);
+  box-shadow: 0 3px 9px rgba(0, 0, 0, 0.3);
+  pointer-events: none;
+}
+
+.campus-navigation-location strong {
+  font-family: var(--mono);
+  font-size: 0.67rem;
+}
+
+.campus-navigation-location span {
+  color: #cbd5e1;
+  font-size: 0.62rem;
+}
+
+.campus-navigation-expand,
+.campus-navigation-recenter {
+  display: inline-grid;
+  place-items: center;
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  color: #ffffff;
+  background: rgba(15, 23, 42, 0.9);
+  cursor: pointer;
+}
+
+.campus-navigation-expand {
+  position: absolute;
+  z-index: 500;
+  top: 9px;
+  right: 9px;
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+}
+
+.campus-navigation-recenter {
+  padding: 5px 10px;
+  border-radius: 7px;
+  font-size: 0.65rem;
+}
+
+.campus-navigation-expand:hover,
+.campus-navigation-recenter:hover {
+  border-color: #38bdf8;
+  color: #38bdf8;
+}
+
+.leaflet-marker-icon.campus-vehicle-icon-wrap {
+  transition: transform 180ms linear;
+  will-change: transform;
+}
+
+.campus-navigation-pointer {
+  display: grid;
+  place-items: center;
+  transform-origin: 50% 50%;
+  filter: drop-shadow(0 2px 3px rgba(15, 23, 42, 0.72));
+  transition: transform 180ms linear;
+  will-change: transform;
+}
+
+.campus-navigation-pointer.marker-selected {
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.95));
+}
+
+.campus-navigation-pointer-large {
+  width: 36px;
+  height: 36px;
+}
+
 /* ========================================================================== */
 /* Extended Campus Map View Modal                                             */
 /* ========================================================================== */
@@ -1500,6 +1549,11 @@ h3 {
   gap: 12px;
 }
 
+.campus-modal-title-wrap > div {
+  display: grid;
+  gap: 4px;
+}
+
 .campus-modal-title-wrap h2 {
   font-size: 1.15rem;
   margin: 0;
@@ -1519,6 +1573,8 @@ h3 {
 .campus-modal-toolbar {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   gap: 8px;
 }
 
@@ -1582,8 +1638,10 @@ h3 {
 }
 
 .campus-modal-close-btn {
-  width: 32px;
+  width: auto;
+  min-width: 58px;
   height: 32px;
+  padding: 0 11px;
   border-radius: 8px;
   display: grid;
   place-items: center;
@@ -1683,6 +1741,7 @@ h3 {
 }
 
 .campus-driver-row {
+  width: 100%;
   padding: 10px 12px;
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.03);
@@ -1691,6 +1750,9 @@ h3 {
   flex-direction: column;
   gap: 6px;
   cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
   transition: all 140ms ease;
 }
 
@@ -2030,6 +2092,81 @@ h3 {
   text-align: center;
 }
 
+.proximity-sensor-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+  margin-top: 7px;
+}
+
+.proximity-sensor-reading {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  padding: 8px 9px;
+  border: 1px solid var(--border-soft);
+  border-radius: 10px;
+  background: var(--surface-subtle);
+}
+
+.proximity-sensor-reading:last-child:nth-child(odd) {
+  grid-column: 1 / -1;
+}
+
+.proximity-sensor-heading,
+.proximity-sensor-value {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.proximity-sensor-heading strong {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 0.61rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.proximity-sensor-heading small {
+  margin-left: auto;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.47rem;
+}
+
+.proximity-sensor-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--unknown);
+}
+
+.sensor-status-healthy .proximity-sensor-dot { background: var(--safe); }
+.sensor-status-degraded .proximity-sensor-dot { background: var(--warning); }
+.sensor-status-stale .proximity-sensor-dot,
+.sensor-status-offline .proximity-sensor-dot { background: var(--unknown); }
+
+.proximity-sensor-value {
+  justify-content: space-between;
+  align-items: baseline;
+}
+
+.proximity-sensor-value strong {
+  color: var(--text-strong);
+  font-family: var(--mono);
+  font-size: 0.72rem;
+}
+
+.proximity-sensor-value span {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.49rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .proximity-key span {
   display: flex;
   align-items: center;
@@ -2195,7 +2332,7 @@ h3 {
 }
 
 /* ========================================================================== */
-/* Supervisor Tactical Fleet Map & Multi-Truck Tracking                       */
+/* Supervisor fleet map and multi-truck tracking                              */
 /* ========================================================================== */
 
 .supervisor-fleet-map-container {
@@ -2310,7 +2447,7 @@ h3 {
   padding: 8px;
 }
 
-.twin-map-satellite-wrap {
+.twin-map-road-wrap {
   position: relative;
   height: 440px;
   border: 3px solid #000000;
@@ -2325,7 +2462,7 @@ h3 {
   background: #020617;
 }
 
-.fleet-satellite-hud {
+.fleet-road-hud {
   position: absolute;
   top: 12px;
   left: 12px;
@@ -2356,14 +2493,7 @@ h3 {
   transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
-.truck-selection-ring {
-  animation: radar-track-rotate 4s linear infinite;
-}
-
-@keyframes radar-track-rotate {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
+.truck-selection-ring { opacity: 0.92; }
 
 .map-feature {
   vector-effect: non-scaling-stroke;
@@ -4079,4 +4209,3 @@ footer {
   white-space: nowrap;
   font-size: 0.66rem;
 }
-

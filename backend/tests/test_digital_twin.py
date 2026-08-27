@@ -3,6 +3,7 @@ from __future__ import annotations
 import math
 
 import pytest
+from shapely.geometry import Point, Polygon
 
 from backend.app.models import MapFeatureType, Point2D, VehiclePose, WorldState
 from backend.app.simulation.foundation import FoundationSimulator
@@ -23,6 +24,21 @@ def test_reference_map_contains_required_base_features() -> None:
         MapFeatureType.START,
         MapFeatureType.DESTINATION,
     } <= feature_types
+
+
+def test_chennai_route_stays_inside_the_canonical_road() -> None:
+    reference_map = load_reference_map("maps/test_route.json")
+    road_feature = reference_map.feature(MapFeatureType.ROAD)
+    route_feature = reference_map.feature(MapFeatureType.ROUTE)
+    assert road_feature is not None
+    assert route_feature is not None
+    assert route_feature.properties["location_code"] == "V699+X9"
+
+    road = Polygon([(point.x_m, point.y_m) for point in road_feature.points])
+    assert all(
+        road.covers(Point(point.x_m, point.y_m))
+        for point in route_feature.points
+    )
 
 
 def test_route_heading_uses_clockwise_degrees_from_positive_y() -> None:

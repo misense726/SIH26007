@@ -103,7 +103,7 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
     <section className="dashboard supervisor-dashboard" aria-label="Supervisor dashboard">
       <div className="supervisor-summary">
         <div>
-          <p className="eyebrow">Fleet operations & tactical tracking</p>
+          <p className="eyebrow">Fleet operations</p>
           <h2>{world.reference_map?.name ?? "Haul Road & Facility Reference"}</h2>
         </div>
         <div className="summary-metrics">
@@ -118,7 +118,7 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Live fleet map</p>
-              <h2>Tactical Truck Positioning</h2>
+              <h2>Vehicle positions</h2>
             </div>
             <span className="source-badge">
               {allTrucks.length} Trucks Active

@@ -248,7 +248,7 @@ export function CameraAwareness({
           </div>
         )}
 
-        {/* GTA-Style Campus Minimap in the bottom-left corner of the camera stage */}
+        {/* Compact road navigation map */}
         <div className="camera-minimap-overlay">
           <CampusMinimap
             world={world}

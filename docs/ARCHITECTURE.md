@@ -72,16 +72,17 @@ The backend `ReferenceMap` is the only operational map used by the simulator,
 spatial reconstruction, corridor logic, and safety state. The supervisor's
 schematic view renders that model directly.
 
-Leaflet provides optional geographic presentation views. The frontend converts
-the backend's local Cartesian vehicle coordinates around the configured campus
-anchor, then draws the primary vehicle and simulated peers over Esri or
-OpenStreetMap tiles. The driver has a circular minimap and an expanded map. The
-supervisor can switch between the schematic and satellite background.
+Leaflet provides optional geographic presentation views. The configured site
+is `V699+X9, Chennai, Tamil Nadu`. The frontend converts the backend's local
+Cartesian vehicle coordinates around that anchor, then draws the primary
+vehicle, the canonical road-aligned route, and simulated peers over
+OpenStreetMap road tiles. The driver has compact and expanded maps. The
+supervisor can switch between the schematic and road-map views.
 
-The campus anchor, display points of interest, and external tiles are not a
-second operational twin. They do not update `ReferenceMap`, localize the
-vehicle, change the safe corridor, or trigger emergency logic. If internet
-tiles fail, the backend schematic and all safety functions continue to work.
+The site anchor and external tiles are not a second operational twin. They do
+not update `ReferenceMap`, localize the vehicle, change the safe corridor, or
+trigger emergency logic. Failed tiles become transparent instead of covering
+the route. The backend schematic and all safety functions continue to work.
 
 ## Simulated V2X boundary
 

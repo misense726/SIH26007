@@ -134,14 +134,14 @@ class V2XManager:
         peer_02 = V2XPeerNode(
             vehicle_id="DUMPER_02",
             last_seen_ms=current_time,
-            x_m=12.5,
-            y_m=28.0,
-            distance_m=32.0,
-            bearing_deg=24.0,
+            x_m=-43.0,
+            y_m=38.0,
+            distance_m=57.4,
+            bearing_deg=311.5,
             speed_mps=3.2,
-            heading_deg=85.0,
+            heading_deg=270.0,
             emergency_state="SAFE",
-            rssi_dbm=-62,
+            rssi_dbm=-71,
             link_status="GOOD",
         )
         peer_03 = V2XPeerNode(

@@ -135,16 +135,19 @@ export function DriverDashboard({
             </article>
           </div>
 
-          {/* 360° Proximity Radar Widget */}
+          {/* ToF proximity view */}
           <ProximityWidget
             points={points}
             vehicle={vehicle}
             validReadingCount={ranges.length}
+            readings={world.ranges}
+            sensorHealth={world.sensor_health}
+            telemetryConnected={telemetryConnected}
           />
         </aside>
       </div>
 
-      {/* Extended Campus Map View Modal (Bigger Box) */}
+      {/* Expanded road map */}
       {isMapExtended && (
         <CampusExtendedMapModal
           world={world}

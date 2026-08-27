@@ -109,7 +109,7 @@ def test_v2x_manager_peer_distance_and_bearing_calculation() -> None:
     emergency = EmergencyState(state=EmergencyLevel.SAFE)
     corridor = SafeCorridor(state=CorridorState.GREEN)
 
-    # Test peer DUMPER_02 at (12.5, 28.0)
+    # DUMPER_02 is on the west campus road, separate from the primary route.
     mgr.update_from_vehicle(primary, emergency, corridor)
     snap = mgr.snapshot()
 
@@ -117,12 +117,12 @@ def test_v2x_manager_peer_distance_and_bearing_calculation() -> None:
     assert "DUMPER_02" in peer_map
     peer_02 = peer_map["DUMPER_02"]
 
-    # Expected distance: hypot(12.5, 28.0) ≈ 30.7 m
-    expected_dist = round(math.hypot(12.5, 28.0), 1)
+    expected_dist = round(math.hypot(-43.0, 38.0), 1)
     assert peer_02.distance_m == expected_dist
-    expected_bearing = round(math.degrees(math.atan2(12.5, 28.0)) % 360.0, 1)
+    assert 0.0 < peer_02.distance_m < 100.0
+    expected_bearing = round(math.degrees(math.atan2(-43.0, 38.0)) % 360.0, 1)
     assert peer_02.bearing_deg == expected_bearing
-    assert peer_02.link_status == "EXCELLENT"  # dist < 40m
+    assert peer_02.link_status == "GOOD"
 
 
 def test_v2x_manager_proximity_alert_and_rate_limiting() -> None:

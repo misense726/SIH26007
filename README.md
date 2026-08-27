@@ -23,15 +23,14 @@ FogSen currently includes:
 - configuration for the vehicle, five ToFs, calibration, safety, and the demo;
 - provider interfaces for simulated, wired live, replay, and future hardware;
 - a React and TypeScript dashboard connected to backend telemetry;
-- a manually defined semantic mine route with a moving dumper;
+- a road-aligned Chennai campus route with a moving dumper;
 - a camera-first driver dashboard with Auto, Camera, and calibrated ToF spatial views;
 - a Raspberry Pi RGB feed over Wi-Fi with raw and GPU-dehazed driver views;
 - an optional CPU or CUDA false-color IR view derived from the RGB feed, not a
   thermal camera;
-- a circular Leaflet driver minimap with an expanded satellite, dark, and street
-  map view;
+- a compact Leaflet road map with a solid route and stable heading pointers;
 - saved light and dark themes with neutral surfaces and safety-only status colors;
-- a supervisor fleet map with selectable backend schematic and satellite views,
+- a supervisor fleet map with selectable backend schematic and road-map views,
   multi-truck selection, environment, sensor health, and alerts;
 - an in-memory V2V/V2I simulation with peer state, roadside units, advisories,
   packet history, and API controls;
@@ -58,9 +57,9 @@ Firmware work also requires Arduino CLI. `scripts/setup-firmware.ps1` installs
 the pinned ESP32 core and libraries once Arduino CLI is on `PATH`.
 
 The simulator, backend world model, schematic map, and safety logic need no
-cloud service. Leaflet satellite, dark, and street layers load public map tiles
-over the internet. Those tiles are optional display backgrounds and never feed
-localization or safety decisions.
+cloud service. Leaflet loads OpenStreetMap road tiles over the internet. Those
+tiles are an optional display background and never feed localization or safety
+decisions.
 
 ## Setup
 
@@ -137,13 +136,12 @@ is `/api/camera/stream?view=ir`; configuration is documented in `.env.example`.
 
 ## Maps and simulated V2X
 
-The backend `ReferenceMap` remains FogSen's operational map. The supervisor can
-render it as the local schematic or place the same vehicle coordinates onto a
-Leaflet satellite background. The driver gets a circular minimap and an
-expanded view with satellite, dark, and OpenStreetMap layers. The frontend
-converts local Cartesian coordinates around the configured display anchor only
-for rendering. External tiles and campus points of interest are not safety
-evidence.
+The backend `ReferenceMap` remains FogSen's operational map. Its route starts
+near `V699+X9, Chennai, Tamil Nadu` and follows mapped campus roads. The driver
+gets a compact road map and an expanded route view. The supervisor can switch
+between the backend schematic and the same road map. The frontend converts
+local Cartesian coordinates around the configured site anchor only for
+rendering. OpenStreetMap tiles are not localization or safety evidence.
 
 `WorldState.v2x` contains the current software simulation of V2V and V2I. It
 models peer vehicles, roadside units, basic safety messages, link estimates,

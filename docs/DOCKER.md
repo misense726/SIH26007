@@ -24,9 +24,8 @@ Docker Desktop must expose the NVIDIA runtime for GPU dehazing. Check it with
 available even when the ML worker fails.
 
 The core simulator and schematic map work without internet access. Leaflet
-satellite, dark, and street layers are requested directly by the browser from
-Esri or OpenStreetMap. They are optional presentation layers and do not affect
-the backend twin or safety state.
+requests OpenStreetMap road tiles directly from the browser. They are an
+optional presentation layer and do not affect the backend twin or safety state.
 
 ## Start the stack
 

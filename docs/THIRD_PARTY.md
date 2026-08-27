@@ -19,11 +19,7 @@ The driver and supervisor geographic views use
 
 ## Online map tiles
 
-The optional geographic views request tiles from:
-
-- Esri World Imagery for the satellite layer;
-- Esri World Dark Gray Canvas for the dark layer;
-- OpenStreetMap for the street layer.
+The optional geographic views request road tiles from OpenStreetMap.
 
 The browser loads these tiles from the providers at runtime. Provider
 attribution is configured in `frontend/src/maps/campusConfig.ts`. These services

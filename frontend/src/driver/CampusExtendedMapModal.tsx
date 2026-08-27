@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import type { VehiclePose, WorldState } from "../types";
-import { DEFAULT_CAMPUS_CONFIG, MAP_TILE_PRESETS } from "../maps/campusConfig";
+import { DEFAULT_CAMPUS_CONFIG, EMPTY_MAP_TILE } from "../maps/campusConfig";
 import { cartesianToGeodetic, formatCoordinates } from "../maps/locationProvider";
 import { formatNumber } from "../state/selectors";
 
@@ -12,65 +12,69 @@ interface CampusExtendedMapModalProps {
   onClose: () => void;
 }
 
-function createPrimaryVehicleIcon(headingDeg: number, vehicleId: string) {
-  return L.divIcon({
-    className: "campus-vehicle-icon-wrap",
-    html: `
-      <div class="campus-vehicle-marker campus-vehicle-marker-large primary-driver" style="transform: rotate(${headingDeg}deg);">
-        <div class="campus-vehicle-pulse"></div>
-        <svg viewBox="0 0 32 32" width="32" height="32" class="campus-vehicle-svg">
-          <path d="M16 2 L26 26 L16 20 L6 26 Z" fill="#38bdf8" stroke="#030712" stroke-width="2" />
-          <circle cx="16" cy="14" r="4" fill="#ffffff" />
-        </svg>
-      </div>
-      <div class="campus-driver-label primary-label extended-driver-label">
-        <strong>${vehicleId} (YOU)</strong>
-      </div>
-    `,
-    iconSize: [40, 40],
-    iconAnchor: [20, 20],
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>"']/g, (character) => {
+    const entities: Record<string, string> = {
+      "&": "&amp;",
+      "<": "&lt;",
+      ">": "&gt;",
+      '"': "&quot;",
+      "'": "&#039;",
+    };
+    return entities[character];
   });
 }
 
-function createPeerVehicleIcon(
+function normalizedHeading(headingDeg: number): number {
+  return ((headingDeg % 360) + 360) % 360;
+}
+
+function createVehicleIcon(
   headingDeg: number,
   vehicleId: string,
-  distanceM: number,
-  speedMps: number,
-  emergency: string,
+  kind: "primary" | "peer",
+  isEmergency = false,
 ) {
-  const isEmergency = emergency && emergency !== "SAFE";
+  const primary = kind === "primary";
+  const fill = isEmergency ? "#dc2626" : primary ? "#0284c7" : "#d97706";
+  const labelClass = primary ? "primary-label" : "peer-label";
+  const pointerClass = primary ? "primary-driver" : "peer-driver";
+  const html =
+    '<div class="campus-navigation-pointer campus-navigation-pointer-large ' +
+    pointerClass +
+    '" style="transform: rotate(' +
+    normalizedHeading(headingDeg) +
+    'deg);"><svg viewBox="0 0 36 36" width="36" height="36" aria-hidden="true">' +
+    '<path d="M18 3 L31 32 L18 26 L5 32 Z" fill="' +
+    fill +
+    '" stroke="#ffffff" stroke-width="2.4" stroke-linejoin="round" /></svg></div>' +
+    '<span class="campus-driver-label ' +
+    labelClass +
+    ' extended-driver-label">' +
+    escapeHtml(vehicleId) +
+    "</span>";
+
   return L.divIcon({
-    className: "campus-vehicle-icon-wrap peer-driver-wrap",
-    html: `
-      <div class="campus-vehicle-marker campus-vehicle-marker-large peer-driver ${isEmergency ? "peer-alert" : ""}" style="transform: rotate(${headingDeg}deg);">
-        <svg viewBox="0 0 28 28" width="28" height="28" class="campus-vehicle-svg">
-          <path d="M14 2 L22 22 L14 17 L6 22 Z" fill="${isEmergency ? "#ef4444" : "#f59e0b"}" stroke="#030712" stroke-width="1.8" />
-          <circle cx="14" cy="12" r="3.5" fill="#ffffff" />
-        </svg>
-      </div>
-      <div class="campus-driver-label peer-label extended-driver-label">
-        <strong>${vehicleId}</strong>
-        <span>${(speedMps * 3.6).toFixed(0)} km/h | ${Math.round(distanceM)}m</span>
-      </div>
-    `,
-    iconSize: [36, 36],
-    iconAnchor: [18, 18],
+    className: "campus-vehicle-icon-wrap",
+    html,
+    iconSize: [92, 58],
+    iconAnchor: [46, 18],
   });
 }
 
-function createPoiIcon(category: string, label: string) {
-  return L.divIcon({
-    className: "campus-poi-icon-wrap",
-    html: `
-      <div class="campus-poi-marker campus-poi-marker-extended campus-poi-${category.toLowerCase()}">
-        <span class="campus-poi-dot"></span>
-        <span class="campus-poi-label">${label}</span>
-      </div>
-    `,
-    iconSize: [110, 28],
-    iconAnchor: [55, 14],
-  });
+function updateMarkerHeading(marker: L.Marker, headingDeg: number): void {
+  const pointer = marker
+    .getElement()
+    ?.querySelector<HTMLElement>(".campus-navigation-pointer");
+  if (pointer) {
+    pointer.style.transform = "rotate(" + normalizedHeading(headingDeg) + "deg)";
+  }
+}
+
+function updatePeerMarkerAppearance(marker: L.Marker, emergencyState: string): void {
+  const isEmergency = Boolean(emergencyState && emergencyState !== "SAFE");
+  const path = marker.getElement()?.querySelector<SVGPathElement>(".campus-navigation-pointer path");
+  path?.setAttribute("fill", isEmergency ? "#dc2626" : "#d97706");
 }
 
 export function CampusExtendedMapModal({
@@ -81,14 +85,9 @@ export function CampusExtendedMapModal({
 }: CampusExtendedMapModalProps) {
   const mapContainerRef = useRef<HTMLDivElement | null>(null);
   const mapInstanceRef = useRef<L.Map | null>(null);
-  const tileLayerRef = useRef<L.TileLayer | null>(null);
   const vehicleMarkerRef = useRef<L.Marker | null>(null);
   const peerMarkersRef = useRef<Map<string, L.Marker>>(new Map());
-  const routeLayerRef = useRef<L.Polyline | null>(null);
-  const poiLayerGroupRef = useRef<L.LayerGroup | null>(null);
-
-  const [activeTileKey, setActiveTileKey] = useState<"satellite" | "dark" | "street">("satellite");
-  const [showPois, setShowPois] = useState(true);
+  const routeLayerRef = useRef<L.LayerGroup | null>(null);
   const [showRoute, setShowRoute] = useState(true);
   const [autoFollow, setAutoFollow] = useState(true);
 
@@ -97,22 +96,17 @@ export function CampusExtendedMapModal({
     vehicle.y_m,
     DEFAULT_CAMPUS_CONFIG.anchor,
   );
-
   const activePeers = world.v2x?.active_peers ?? [];
   const corridorState = telemetryConnected ? world.safe_corridor.state : "GREY";
 
-  // ESC key to close modal
   useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (e.key === "Escape") {
-        onClose();
-      }
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") onClose();
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [onClose]);
 
-  // Initialize Leaflet Map
   useEffect(() => {
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
@@ -127,78 +121,58 @@ export function CampusExtendedMapModal({
       preferCanvas: true,
     });
 
-    // Custom Zoom & Scale control
     L.control.zoom({ position: "topleft" }).addTo(map);
     L.control.scale({ position: "bottomleft", imperial: false }).addTo(map);
-
-    // Initial tile layer (Zero API key)
-    const preset = MAP_TILE_PRESETS.satellite;
-    const tileLayer = L.tileLayer(preset.url, {
-      attribution: preset.attribution,
-      maxZoom: preset.maxZoom,
-      updateWhenIdle: false,
-      updateWhenZooming: true,
-      keepBuffer: 8,
+    L.tileLayer(DEFAULT_CAMPUS_CONFIG.tiles.url, {
+      attribution: DEFAULT_CAMPUS_CONFIG.tiles.attribution,
+      subdomains: DEFAULT_CAMPUS_CONFIG.tiles.subdomains,
+      maxNativeZoom: DEFAULT_CAMPUS_CONFIG.tiles.maxZoom,
+      maxZoom: DEFAULT_CAMPUS_CONFIG.maxZoom,
+      errorTileUrl: EMPTY_MAP_TILE,
+      updateWhenIdle: true,
+      keepBuffer: 4,
     }).addTo(map);
-    tileLayerRef.current = tileLayer;
 
-    // Primary Vehicle Marker
     const vehicleMarker = L.marker(initialCenter, {
-      icon: createPrimaryVehicleIcon(vehicle.heading_deg, vehicle.vehicle_id || "PRIMARY DUMPER"),
+      icon: createVehicleIcon(
+        vehicle.heading_deg,
+        vehicle.vehicle_id || "DUMPER_01",
+        "primary",
+      ),
       zIndexOffset: 1000,
     }).addTo(map);
     vehicleMarkerRef.current = vehicleMarker;
 
-    // Reference Route
-    if (world.reference_map?.features) {
-      const routeFeature = world.reference_map.features.find(
-        (f) => f.feature_type === "ROUTE" || f.feature_type === "CENTERLINE",
-      );
-      if (routeFeature && routeFeature.points.length > 0) {
-        const latLngs: [number, number][] = routeFeature.points.map((pt) => {
-          const geo = cartesianToGeodetic(pt.x_m, pt.y_m, DEFAULT_CAMPUS_CONFIG.anchor);
-          return [geo.lat, geo.lng];
-        });
-
-        // Glow backing
-        L.polyline(latLngs, {
-          color: "#0284c7",
-          weight: 10,
-          opacity: 0.35,
-          lineCap: "round",
-          lineJoin: "round",
-        }).addTo(map);
-
-        const routePolyline = L.polyline(latLngs, {
-          color: "#38bdf8",
-          weight: 4.5,
-          opacity: 0.95,
-          dashArray: "10, 12",
-          className: "animated-campus-route",
-          lineCap: "round",
-          lineJoin: "round",
-        }).addTo(map);
-        routeLayerRef.current = routePolyline;
-      }
-    }
-
-    // POIs Layer
-    const poiGroup = L.layerGroup();
-    DEFAULT_CAMPUS_CONFIG.pois.forEach((poi) => {
-      const poiMarker = L.marker([poi.coordinates.lat, poi.coordinates.lng], {
-        icon: createPoiIcon(poi.category, poi.name),
+    const routeFeature = world.reference_map?.features.find(
+      (feature) => feature.feature_type === "ROUTE",
+    );
+    if (routeFeature && routeFeature.points.length > 1) {
+      const route = routeFeature.points.map((point): [number, number] => {
+        const coordinates = cartesianToGeodetic(
+          point.x_m,
+          point.y_m,
+          DEFAULT_CAMPUS_CONFIG.anchor,
+        );
+        return [coordinates.lat, coordinates.lng];
       });
-      poiMarker.bindPopup(`
-        <div class="campus-popup-content">
-          <h4>${poi.name}</h4>
-          <p class="campus-popup-category">${poi.category}</p>
-          <p>${poi.description ?? "Campus location"}</p>
-        </div>
-      `);
-      poiGroup.addLayer(poiMarker);
-    });
-    poiGroup.addTo(map);
-    poiLayerGroupRef.current = poiGroup;
+      const routeBacking = L.polyline(route, {
+        color: "#ffffff",
+        weight: 9,
+        opacity: 0.9,
+        lineCap: "round",
+        lineJoin: "round",
+        interactive: false,
+      });
+      const routeLine = L.polyline(route, {
+        color: "#0284c7",
+        weight: 5,
+        opacity: 1,
+        lineCap: "round",
+        lineJoin: "round",
+        interactive: false,
+      });
+      routeLayerRef.current = L.layerGroup([routeBacking, routeLine]).addTo(map);
+    }
 
     map.on("dragstart", () => setAutoFollow(false));
     mapInstanceRef.current = map;
@@ -206,90 +180,57 @@ export function CampusExtendedMapModal({
     return () => {
       map.remove();
       mapInstanceRef.current = null;
-      tileLayerRef.current = null;
       vehicleMarkerRef.current = null;
       peerMarkersRef.current.clear();
       routeLayerRef.current = null;
-      poiLayerGroupRef.current = null;
     };
   }, []);
 
-  // Update map tile layer dynamically when user clicks layer switcher
   useEffect(() => {
-    if (!mapInstanceRef.current) return;
-    if (tileLayerRef.current) {
-      mapInstanceRef.current.removeLayer(tileLayerRef.current);
-    }
-    const preset = MAP_TILE_PRESETS[activeTileKey];
-    const newLayer = L.tileLayer(preset.url, {
-      attribution: preset.attribution,
-      maxZoom: preset.maxZoom,
-      updateWhenIdle: false,
-      updateWhenZooming: true,
-      keepBuffer: 8,
-    }).addTo(mapInstanceRef.current);
-    newLayer.bringToBack();
-    tileLayerRef.current = newLayer;
-  }, [activeTileKey]);
-
-  // Update primary vehicle position
-  useEffect(() => {
-    if (!mapInstanceRef.current || !vehicleMarkerRef.current) return;
-
-    const newLatLng: [number, number] = [vehicleCoords.lat, vehicleCoords.lng];
-    vehicleMarkerRef.current.setLatLng(newLatLng);
-    vehicleMarkerRef.current.setIcon(
-      createPrimaryVehicleIcon(vehicle.heading_deg, vehicle.vehicle_id || "PRIMARY DUMPER"),
-    );
-
-    if (autoFollow) {
-      mapInstanceRef.current.panTo(newLatLng, { animate: true, duration: 0.25 });
-    }
-  }, [vehicleCoords.lat, vehicleCoords.lng, vehicle.heading_deg, autoFollow, vehicle.vehicle_id]);
-
-  // Update peer driver markers
-  useEffect(() => {
-    if (!mapInstanceRef.current) return;
     const map = mapInstanceRef.current;
-    const currentPeerIds = new Set<string>();
+    const marker = vehicleMarkerRef.current;
+    if (!map || !marker) return;
 
+    const nextPosition = L.latLng(vehicleCoords.lat, vehicleCoords.lng);
+    marker.setLatLng(nextPosition);
+    updateMarkerHeading(marker, vehicle.heading_deg);
+
+    if (autoFollow && map.getCenter().distanceTo(nextPosition) > 12) {
+      map.panTo(nextPosition, { animate: true, duration: 0.4 });
+    }
+  }, [vehicleCoords.lat, vehicleCoords.lng, vehicle.heading_deg, autoFollow]);
+
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const currentPeerIds = new Set<string>();
     activePeers.forEach((peer) => {
       currentPeerIds.add(peer.vehicle_id);
-      const peerGeo = cartesianToGeodetic(peer.x_m, peer.y_m, DEFAULT_CAMPUS_CONFIG.anchor);
-      const peerLatLng: [number, number] = [peerGeo.lat, peerGeo.lng];
-
+      const peerCoordinates = cartesianToGeodetic(
+        peer.x_m,
+        peer.y_m,
+        DEFAULT_CAMPUS_CONFIG.anchor,
+      );
+      const peerPosition: [number, number] = [peerCoordinates.lat, peerCoordinates.lng];
+      const isEmergency = Boolean(peer.emergency_state && peer.emergency_state !== "SAFE");
       let marker = peerMarkersRef.current.get(peer.vehicle_id);
+
       if (!marker) {
-        marker = L.marker(peerLatLng, {
-          icon: createPeerVehicleIcon(
+        marker = L.marker(peerPosition, {
+          icon: createVehicleIcon(
             peer.heading_deg,
             peer.vehicle_id,
-            peer.distance_m,
-            peer.speed_mps,
-            peer.emergency_state,
+            "peer",
+            isEmergency,
           ),
           zIndexOffset: 800,
         }).addTo(map);
-        marker.bindPopup(`
-          <div class="campus-popup-content">
-            <h4>${peer.vehicle_id}</h4>
-            <p>Speed: <strong>${(peer.speed_mps * 3.6).toFixed(1)} km/h</strong></p>
-            <p>Distance: <strong>${peer.distance_m} m</strong></p>
-            <p>Status: <strong>${peer.emergency_state}</strong> (${peer.link_status})</p>
-          </div>
-        `);
         peerMarkersRef.current.set(peer.vehicle_id, marker);
       } else {
-        marker.setLatLng(peerLatLng);
-        marker.setIcon(
-          createPeerVehicleIcon(
-            peer.heading_deg,
-            peer.vehicle_id,
-            peer.distance_m,
-            peer.speed_mps,
-            peer.emergency_state,
-          ),
-        );
+        marker.setLatLng(peerPosition);
+        updateMarkerHeading(marker, peer.heading_deg);
+        updatePeerMarkerAppearance(marker, String(peer.emergency_state));
       }
     });
 
@@ -301,32 +242,22 @@ export function CampusExtendedMapModal({
     });
   }, [activePeers]);
 
-  // Toggle POIs visibility
   useEffect(() => {
-    if (!mapInstanceRef.current || !poiLayerGroupRef.current) return;
-    if (showPois) {
-      poiLayerGroupRef.current.addTo(mapInstanceRef.current);
-    } else {
-      mapInstanceRef.current.removeLayer(poiLayerGroupRef.current);
-    }
-  }, [showPois]);
-
-  // Toggle Route visibility
-  useEffect(() => {
-    if (!mapInstanceRef.current || !routeLayerRef.current) return;
-    if (showRoute) {
-      routeLayerRef.current.addTo(mapInstanceRef.current);
-    } else {
-      mapInstanceRef.current.removeLayer(routeLayerRef.current);
-    }
+    const map = mapInstanceRef.current;
+    const route = routeLayerRef.current;
+    if (!map || !route) return;
+    if (showRoute) route.addTo(map);
+    else map.removeLayer(route);
   }, [showRoute]);
 
-  const handleFocusDriver = (lat: number, lng: number) => {
-    if (mapInstanceRef.current) {
-      setAutoFollow(false);
-      mapInstanceRef.current.setView([lat, lng], 19, { animate: true });
-    }
-  };
+  function focusVehicle(lat: number, lng: number) {
+    setAutoFollow(false);
+    mapInstanceRef.current?.setView(
+      [lat, lng],
+      DEFAULT_CAMPUS_CONFIG.extendedZoom,
+      { animate: true },
+    );
+  }
 
   return (
     <div className="campus-modal-backdrop" onClick={onClose}>
@@ -334,159 +265,122 @@ export function CampusExtendedMapModal({
         className="campus-extended-modal-container"
         role="dialog"
         aria-modal="true"
-        aria-label="Extended Campus GPS Map View"
-        onClick={(e) => e.stopPropagation()}
+        aria-label={"Route map for " + DEFAULT_CAMPUS_CONFIG.locationLabel}
+        onClick={(event) => event.stopPropagation()}
       >
-        {/* Modal Top Header */}
         <div className="campus-modal-header">
           <div className="campus-modal-title-wrap">
-            <span className="source-badge">GPS + V2X FLEET</span>
-            <h2>{DEFAULT_CAMPUS_CONFIG.campusName}</h2>
-            <span className="campus-header-coords">
-              {formatCoordinates(vehicleCoords, 5)}
-            </span>
+            <span className="source-badge">Navigation</span>
+            <div>
+              <h2>{DEFAULT_CAMPUS_CONFIG.locationLabel}</h2>
+              <span className="campus-header-coords">
+                {formatCoordinates(vehicleCoords, 5)}
+              </span>
+            </div>
           </div>
 
-          {/* Action Toolbar */}
           <div className="campus-modal-toolbar">
-            {/* Map Style Layer Switcher */}
-            <div className="campus-layer-switcher" role="group" aria-label="Map style">
-              <button
-                type="button"
-                className={`campus-layer-btn ${activeTileKey === "satellite" ? "active" : ""}`}
-                onClick={() => setActiveTileKey("satellite")}
-              >
-                🛰️ Satellite
-              </button>
-              <button
-                type="button"
-                className={`campus-layer-btn ${activeTileKey === "dark" ? "active" : ""}`}
-                onClick={() => setActiveTileKey("dark")}
-              >
-                🌑 Dark
-              </button>
-              <button
-                type="button"
-                className={`campus-layer-btn ${activeTileKey === "street" ? "active" : ""}`}
-                onClick={() => setActiveTileKey("street")}
-              >
-                🗺️ Street
-              </button>
-            </div>
-
             <button
               type="button"
-              className={`campus-tool-btn ${autoFollow ? "active" : ""}`}
+              className={"campus-tool-btn " + (autoFollow ? "active" : "")}
               onClick={() => {
                 setAutoFollow(true);
-                if (mapInstanceRef.current) {
-                  mapInstanceRef.current.setView(
-                    [vehicleCoords.lat, vehicleCoords.lng],
-                    DEFAULT_CAMPUS_CONFIG.extendedZoom,
-                    { animate: true },
-                  );
-                }
+                mapInstanceRef.current?.setView(
+                  [vehicleCoords.lat, vehicleCoords.lng],
+                  DEFAULT_CAMPUS_CONFIG.extendedZoom,
+                  { animate: true },
+                );
               }}
             >
-              {autoFollow ? "Auto-Follow (ON)" : "Recenter (OFF)"}
+              {autoFollow ? "Following vehicle" : "Follow vehicle"}
             </button>
             <button
               type="button"
-              className={`campus-tool-btn ${showRoute ? "active" : ""}`}
-              onClick={() => setShowRoute(!showRoute)}
+              className={"campus-tool-btn " + (showRoute ? "active" : "")}
+              onClick={() => setShowRoute((visible) => !visible)}
             >
-              Route {showRoute ? "ON" : "OFF"}
-            </button>
-            <button
-              type="button"
-              className={`campus-tool-btn ${showPois ? "active" : ""}`}
-              onClick={() => setShowPois(!showPois)}
-            >
-              POIs {showPois ? "ON" : "OFF"}
+              {showRoute ? "Hide route" : "Show route"}
             </button>
             <button
               type="button"
               className="campus-modal-close-btn"
               onClick={onClose}
-              title="Close Map (ESC)"
-              aria-label="Close extended map"
+              aria-label="Close route map"
             >
-              ✕
+              Close
             </button>
           </div>
         </div>
 
-        {/* Modal Map Viewport & Peer Fleet Sidebar */}
         <div className="campus-extended-body">
           <div className="campus-modal-map-stage">
             <div ref={mapContainerRef} className="campus-extended-leaflet-container" />
-
-            {/* Quick telemetry HUD overlay */}
             <div className="campus-modal-hud-overlay">
               <div className="campus-hud-item">
                 <span>Speed</span>
-                <strong>{telemetryConnected ? `${formatNumber(vehicle.speed_mps * 3.6, 1)} km/h` : "--"}</strong>
+                <strong>{telemetryConnected ? formatNumber(vehicle.speed_mps * 3.6, 1) + " km/h" : "--"}</strong>
               </div>
               <div className="campus-hud-item">
                 <span>Heading</span>
-                <strong>{telemetryConnected ? `${formatNumber(vehicle.heading_deg, 0)}°` : "--"}</strong>
+                <strong>{telemetryConnected ? formatNumber(vehicle.heading_deg, 0) + "°" : "--"}</strong>
               </div>
               <div className="campus-hud-item">
-                <span>Safe Corridor</span>
-                <strong className={`corridor-${corridorState.toLowerCase()}`}>{corridorState}</strong>
+                <span>Safe corridor</span>
+                <strong className={"corridor-" + corridorState.toLowerCase()}>{corridorState}</strong>
               </div>
               <div className="campus-hud-item">
-                <span>Active Peers</span>
-                <strong>{activePeers.length} Drivers</strong>
+                <span>Nearby vehicles</span>
+                <strong>{activePeers.length}</strong>
               </div>
             </div>
           </div>
 
-          {/* Active Drivers List Sidebar */}
           <aside className="campus-peers-sidebar">
             <div className="campus-peers-header">
-              <h3>Fleet Drivers ({activePeers.length + 1})</h3>
-              <span className="v2x-stat-pill">V2V Mesh</span>
+              <h3>Nearby vehicles</h3>
+              <span className="v2x-stat-pill">{activePeers.length + 1} tracked</span>
             </div>
 
             <div className="campus-driver-cards-list">
-              {/* Primary Driver */}
-              <div
+              <button
+                type="button"
                 className="campus-driver-row primary-row"
-                onClick={() => handleFocusDriver(vehicleCoords.lat, vehicleCoords.lng)}
-                title="Click to center on your vehicle"
+                onClick={() => focusVehicle(vehicleCoords.lat, vehicleCoords.lng)}
               >
                 <div className="campus-driver-row-top">
-                  <strong>{vehicle.vehicle_id || "PRIMARY DUMPER"} (YOU)</strong>
-                  <span className="driver-role-badge primary">LEAD</span>
+                  <strong>{vehicle.vehicle_id || "DUMPER_01"}</strong>
+                  <span className="driver-role-badge primary">This vehicle</span>
                 </div>
                 <div className="campus-driver-row-stats">
-                  <span>Speed: <strong>{(vehicle.speed_mps * 3.6).toFixed(1)} km/h</strong></span>
-                  <span>Heading: <strong>{Math.round(vehicle.heading_deg)}°</strong></span>
+                  <span>{(vehicle.speed_mps * 3.6).toFixed(1)} km/h</span>
+                  <span>{Math.round(vehicle.heading_deg)}°</span>
                 </div>
-              </div>
+              </button>
 
-              {/* Peer Drivers */}
               {activePeers.map((peer) => {
-                const peerGeo = cartesianToGeodetic(peer.x_m, peer.y_m, DEFAULT_CAMPUS_CONFIG.anchor);
+                const peerCoordinates = cartesianToGeodetic(
+                  peer.x_m,
+                  peer.y_m,
+                  DEFAULT_CAMPUS_CONFIG.anchor,
+                );
                 return (
-                  <div
+                  <button
+                    type="button"
                     key={peer.vehicle_id}
                     className="campus-driver-row"
-                    onClick={() => handleFocusDriver(peerGeo.lat, peerGeo.lng)}
-                    title={`Click to focus map on ${peer.vehicle_id}`}
+                    onClick={() => focusVehicle(peerCoordinates.lat, peerCoordinates.lng)}
                   >
                     <div className="campus-driver-row-top">
                       <strong>{peer.vehicle_id}</strong>
-                      <span className={`link-badge link-${peer.link_status.toLowerCase()}`}>
+                      <span className={"link-badge link-" + peer.link_status.toLowerCase()}>
                         {peer.link_status}
                       </span>
                     </div>
                     <div className="campus-driver-row-stats">
-                      <span>Distance: <strong>{peer.distance_m} m</strong></span>
-                      <span>Speed: <strong>{(peer.speed_mps * 3.6).toFixed(1)} km/h</strong></span>
+                      <span>{peer.distance_m} m away</span>
+                      <span>{(peer.speed_mps * 3.6).toFixed(1)} km/h</span>
                     </div>
-                  </div>
+                  </button>
                 );
               })}
             </div>

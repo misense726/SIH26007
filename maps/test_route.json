@@ -1,7 +1,7 @@
 {
   "map_id": "FOGSEN_TEST_ROUTE_01",
-  "name": "FogSen mine test route",
-  "version": 1,
+  "name": "FogSen Chennai campus road route",
+  "version": 2,
   "created_at_ms": 1787556000000,
   "coordinate_frame": "LOCAL_CARTESIAN_METRES",
   "source": "MANUAL",
@@ -10,19 +10,34 @@
       "feature_id": "road-main",
       "feature_type": "ROAD",
       "geometry_type": "POLYGON",
-      "label": "Main haul road",
-      "properties": { "surface": "compacted_demo", "width_m": 6.0 },
+      "label": "Campus road",
+      "properties": { "surface": "paved", "width_m": 8.0 },
       "points": [
-        { "x_m": 2.0, "y_m": 0.0 },
-        { "x_m": 2.0, "y_m": 8.0 },
-        { "x_m": 5.0, "y_m": 13.0 },
-        { "x_m": 10.0, "y_m": 17.0 },
-        { "x_m": 11.0, "y_m": 30.0 },
-        { "x_m": 17.0, "y_m": 30.0 },
-        { "x_m": 16.0, "y_m": 14.0 },
-        { "x_m": 10.0, "y_m": 9.0 },
-        { "x_m": 8.0, "y_m": 7.0 },
-        { "x_m": 8.0, "y_m": 0.0 }
+        { "x_m": 1.0, "y_m": 0.0 },
+        { "x_m": 9.0, "y_m": 0.0 },
+        { "x_m": 9.0, "y_m": 30.0 },
+        { "x_m": 25.0, "y_m": 29.0 },
+        { "x_m": 45.0, "y_m": 28.0 },
+        { "x_m": 65.0, "y_m": 26.0 },
+        { "x_m": 85.0, "y_m": 24.0 },
+        { "x_m": 86.0, "y_m": 32.0 },
+        { "x_m": 65.0, "y_m": 34.0 },
+        { "x_m": 45.0, "y_m": 36.0 },
+        { "x_m": 25.0, "y_m": 37.0 },
+        { "x_m": 1.0, "y_m": 38.0 }
+      ]
+    },
+    {
+      "feature_id": "road-peer-west",
+      "feature_type": "ROAD",
+      "geometry_type": "POLYGON",
+      "label": "West campus road",
+      "properties": { "surface": "paved", "width_m": 8.0 },
+      "points": [
+        { "x_m": -48.0, "y_m": 34.0 },
+        { "x_m": 1.0, "y_m": 30.0 },
+        { "x_m": 1.0, "y_m": 38.0 },
+        { "x_m": -48.0, "y_m": 42.0 }
       ]
     },
     {
@@ -33,78 +48,95 @@
       "properties": {},
       "points": [
         { "x_m": 5.0, "y_m": 1.0 },
-        { "x_m": 5.0, "y_m": 8.0 },
-        { "x_m": 7.5, "y_m": 11.5 },
-        { "x_m": 13.0, "y_m": 15.5 },
-        { "x_m": 14.0, "y_m": 28.0 }
+        { "x_m": 5.0, "y_m": 12.0 },
+        { "x_m": 5.0, "y_m": 24.0 },
+        { "x_m": 5.0, "y_m": 34.0 },
+        { "x_m": 25.0, "y_m": 33.0 },
+        { "x_m": 45.0, "y_m": 32.0 },
+        { "x_m": 65.0, "y_m": 30.0 },
+        { "x_m": 85.0, "y_m": 28.0 }
+      ]
+    },
+    {
+      "feature_id": "centerline-peer-west",
+      "feature_type": "CENTERLINE",
+      "geometry_type": "POLYLINE",
+      "label": "West road centerline",
+      "properties": {},
+      "points": [
+        { "x_m": -43.0, "y_m": 38.0 },
+        { "x_m": 5.0, "y_m": 34.0 }
       ]
     },
     {
       "feature_id": "berm-west",
       "feature_type": "BERM",
       "geometry_type": "POLYLINE",
-      "label": "West berm",
-      "properties": { "height_hint_m": 1.4 },
+      "label": "West road edge",
+      "properties": { "height_hint_m": 0.2 },
       "points": [
-        { "x_m": 2.0, "y_m": 0.0 },
-        { "x_m": 2.0, "y_m": 8.0 },
-        { "x_m": 5.0, "y_m": 13.0 },
-        { "x_m": 10.0, "y_m": 17.0 },
-        { "x_m": 11.0, "y_m": 30.0 }
+        { "x_m": 1.0, "y_m": 0.0 },
+        { "x_m": 1.0, "y_m": 38.0 },
+        { "x_m": 25.0, "y_m": 37.0 },
+        { "x_m": 45.0, "y_m": 36.0 },
+        { "x_m": 65.0, "y_m": 34.0 },
+        { "x_m": 86.0, "y_m": 32.0 }
       ]
     },
     {
       "feature_id": "berm-east",
       "feature_type": "BERM",
       "geometry_type": "POLYLINE",
-      "label": "East berm",
-      "properties": { "height_hint_m": 1.4 },
+      "label": "East road edge",
+      "properties": { "height_hint_m": 0.2 },
       "points": [
-        { "x_m": 8.0, "y_m": 0.0 },
-        { "x_m": 8.0, "y_m": 7.0 },
-        { "x_m": 10.0, "y_m": 9.0 },
-        { "x_m": 16.0, "y_m": 14.0 },
-        { "x_m": 17.0, "y_m": 30.0 }
+        { "x_m": 9.0, "y_m": 0.0 },
+        { "x_m": 9.0, "y_m": 30.0 },
+        { "x_m": 25.0, "y_m": 29.0 },
+        { "x_m": 45.0, "y_m": 28.0 },
+        { "x_m": 65.0, "y_m": 26.0 },
+        { "x_m": 85.0, "y_m": 24.0 }
       ]
     },
     {
       "feature_id": "route-demo",
       "feature_type": "ROUTE",
       "geometry_type": "POLYLINE",
-      "label": "SIH demo route",
-      "properties": { "direction": "forward" },
+      "label": "Chennai campus road route",
+      "properties": { "direction": "forward", "location_code": "V699+X9" },
       "points": [
         { "x_m": 5.0, "y_m": 1.0 },
-        { "x_m": 5.0, "y_m": 8.0 },
-        { "x_m": 7.5, "y_m": 11.5 },
-        { "x_m": 13.0, "y_m": 15.5 },
-        { "x_m": 14.0, "y_m": 28.0 }
+        { "x_m": 5.0, "y_m": 12.0 },
+        { "x_m": 5.0, "y_m": 24.0 },
+        { "x_m": 5.0, "y_m": 34.0 },
+        { "x_m": 20.0, "y_m": 33.0 }
       ]
     },
     {
       "feature_id": "hazard-slope-edge",
       "feature_type": "HAZARD_ZONE",
       "geometry_type": "POLYGON",
-      "label": "Unstable slope edge",
+      "label": "Restricted roadside area",
       "properties": { "severity": "high" },
       "points": [
-        { "x_m": 10.3, "y_m": 19.0 },
-        { "x_m": 11.7, "y_m": 19.0 },
-        { "x_m": 11.9, "y_m": 22.0 },
-        { "x_m": 10.5, "y_m": 22.0 }
+        { "x_m": 58.0, "y_m": 34.0 },
+        { "x_m": 64.0, "y_m": 33.5 },
+        { "x_m": 65.0, "y_m": 37.0 },
+        { "x_m": 59.0, "y_m": 38.0 }
       ]
     },
     {
       "feature_id": "speed-zone-bend",
       "feature_type": "SPEED_ZONE",
       "geometry_type": "POLYGON",
-      "label": "Reduced speed bend",
+      "label": "Reduced speed junction",
       "properties": { "max_speed_mps": 1.0 },
       "points": [
-        { "x_m": 5.0, "y_m": 10.0 },
-        { "x_m": 9.0, "y_m": 10.0 },
-        { "x_m": 14.5, "y_m": 16.5 },
-        { "x_m": 10.0, "y_m": 17.0 }
+        { "x_m": 1.0, "y_m": 27.0 },
+        { "x_m": 12.0, "y_m": 27.0 },
+        { "x_m": 26.0, "y_m": 29.0 },
+        { "x_m": 26.0, "y_m": 37.0 },
+        { "x_m": 1.0, "y_m": 38.0 }
       ]
     },
     {
@@ -113,24 +145,23 @@
       "geometry_type": "POINT",
       "label": "Survey marker barrel",
       "properties": { "radius_m": 0.25 },
-      "points": [{ "x_m": 6.2, "y_m": 6.4 }]
+      "points": [{ "x_m": 5.8, "y_m": 14.0 }]
     },
     {
       "feature_id": "start",
       "feature_type": "START",
       "geometry_type": "POINT",
-      "label": "Workshop gate",
-      "properties": {},
+      "label": "Route start",
+      "properties": { "location_code": "V699+X9" },
       "points": [{ "x_m": 5.0, "y_m": 1.0 }]
     },
     {
       "feature_id": "destination",
       "feature_type": "DESTINATION",
       "geometry_type": "POINT",
-      "label": "Loading point",
+      "label": "Route destination",
       "properties": {},
-      "points": [{ "x_m": 14.0, "y_m": 28.0 }]
+      "points": [{ "x_m": 20.0, "y_m": 33.0 }]
     }
   ]
 }
-

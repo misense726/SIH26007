@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import type { MapFeature, Point2D, WorldState } from "../types";
-import { DEFAULT_CAMPUS_CONFIG, MAP_TILE_PRESETS } from "../maps/campusConfig";
+import { DEFAULT_CAMPUS_CONFIG, EMPTY_MAP_TILE } from "../maps/campusConfig";
 import { cartesianToGeodetic, formatCoordinates } from "../maps/locationProvider";
 import { formatNumber } from "../state/selectors";
 
@@ -29,7 +29,7 @@ interface TwinMapProps {
 }
 
 export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps) {
-  const [viewMode, setViewMode] = useState<"schematic" | "satellite">("schematic");
+  const [viewMode, setViewMode] = useState<"schematic" | "road">("schematic");
   const leafletContainerRef = useRef<HTMLDivElement | null>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
@@ -71,9 +71,9 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
     })),
   ];
 
-  // Leaflet Satellite View Initialization
+  // Initialize the road map only while that view is visible.
   useEffect(() => {
-    if (viewMode !== "satellite" || !leafletContainerRef.current || leafletMapRef.current) return;
+    if (viewMode !== "road" || !leafletContainerRef.current || leafletMapRef.current) return;
 
     const primaryGeo = cartesianToGeodetic(
       primaryVehicle.x_m,
@@ -83,19 +83,21 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
 
     const map = L.map(leafletContainerRef.current, {
       center: [primaryGeo.lat, primaryGeo.lng],
-      zoom: 18,
-      minZoom: 14,
-      maxZoom: 20,
+      zoom: DEFAULT_CAMPUS_CONFIG.extendedZoom,
+      minZoom: DEFAULT_CAMPUS_CONFIG.minZoom,
+      maxZoom: DEFAULT_CAMPUS_CONFIG.maxZoom,
       zoomControl: false,
       attributionControl: false,
       preferCanvas: true,
     });
 
-    L.tileLayer(MAP_TILE_PRESETS.satellite.url, {
-      attribution: MAP_TILE_PRESETS.satellite.attribution,
-      maxZoom: 20,
-      updateWhenIdle: false,
-      keepBuffer: 6,
+    L.tileLayer(DEFAULT_CAMPUS_CONFIG.tiles.url, {
+      attribution: DEFAULT_CAMPUS_CONFIG.tiles.attribution,
+      maxNativeZoom: DEFAULT_CAMPUS_CONFIG.tiles.maxZoom,
+      maxZoom: DEFAULT_CAMPUS_CONFIG.maxZoom,
+      errorTileUrl: EMPTY_MAP_TILE,
+      updateWhenIdle: true,
+      keepBuffer: 4,
     }).addTo(map);
 
     leafletMapRef.current = map;
@@ -107,9 +109,9 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
     };
   }, [viewMode]);
 
-  // Update Leaflet satellite markers for all trucks
+  // Update positions without recreating marker nodes, which avoids label flicker.
   useEffect(() => {
-    if (viewMode !== "satellite" || !leafletMapRef.current) return;
+    if (viewMode !== "road" || !leafletMapRef.current) return;
     const map = leafletMapRef.current;
     const currentIds = new Set<string>();
 
@@ -119,33 +121,45 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
       const latLng: [number, number] = [geo.lat, geo.lng];
       const isSelected = selectedTruckId === truck.vehicle_id;
 
-      const icon = L.divIcon({
-        className: "campus-vehicle-icon-wrap",
-        html: `
-          <div class="campus-vehicle-marker ${truck.is_primary ? "primary-driver" : "peer-driver"} ${isSelected ? "marker-selected" : ""}" style="transform: rotate(${truck.heading_deg}deg);">
-            ${truck.is_primary ? '<div class="campus-vehicle-pulse"></div>' : ""}
-            <svg viewBox="0 0 28 28" width="28" height="28">
-              <path d="M14 2 L22 22 L14 17 L6 22 Z" fill="${truck.color}" stroke="#030712" stroke-width="1.8" />
-              <circle cx="14" cy="12" r="3.5" fill="#ffffff" />
-            </svg>
-          </div>
-          <div class="campus-driver-label ${truck.is_primary ? "primary-label" : "peer-label"}">
-            <strong>${truck.label}</strong>
-            <span>${(truck.speed_mps * 3.6).toFixed(0)} km/h</span>
-          </div>
-        `,
-        iconSize: [36, 36],
-        iconAnchor: [18, 18],
-      });
-
       let marker = markersRef.current.get(truck.vehicle_id);
       if (!marker) {
+        const icon = L.divIcon({
+          className: "campus-vehicle-icon-wrap",
+          html:
+            '<div class="campus-navigation-pointer ' +
+            (truck.is_primary ? "primary-driver" : "peer-driver") +
+            (isSelected ? " marker-selected" : "") +
+            '" style="transform: rotate(' +
+            truck.heading_deg +
+            'deg);"><svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">' +
+            '<path d="M16 3 L27 28 L16 23 L5 28 Z" fill="' +
+            truck.color +
+            '" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round" /></svg></div>' +
+            '<div class="campus-driver-label ' +
+            (truck.is_primary ? "primary-label" : "peer-label") +
+            '"><strong>' +
+            truck.label +
+            '</strong><span class="campus-marker-speed">' +
+            (truck.speed_mps * 3.6).toFixed(0) +
+            " km/h</span></div>",
+          iconSize: [92, 54],
+          iconAnchor: [46, 16],
+        });
         marker = L.marker(latLng, { icon, zIndexOffset: truck.is_primary ? 1000 : 800 }).addTo(map);
         marker.on("click", () => onSelectTruck?.(truck.vehicle_id));
         markersRef.current.set(truck.vehicle_id, marker);
       } else {
         marker.setLatLng(latLng);
-        marker.setIcon(icon);
+        const element = marker.getElement();
+        const pointer = element?.querySelector<HTMLElement>(".campus-navigation-pointer");
+        if (pointer) {
+          pointer.style.transform = `rotate(${truck.heading_deg}deg)`;
+          pointer.classList.toggle("marker-selected", isSelected);
+        }
+        element?.querySelector<SVGPathElement>(".campus-navigation-pointer path")
+          ?.setAttribute("fill", truck.color);
+        const speed = element?.querySelector<HTMLElement>(".campus-marker-speed");
+        if (speed) speed.textContent = `${(truck.speed_mps * 3.6).toFixed(0)} km/h`;
       }
     });
 
@@ -158,7 +172,7 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
   }, [viewMode, allTrucks, selectedTruckId, onSelectTruck]);
 
   return (
-    <div className="supervisor-fleet-map-container" aria-label="Tactical Fleet Operations Map">
+    <div className="supervisor-fleet-map-container" aria-label="Fleet map">
       {/* Top Map Control Bar */}
       <div className="fleet-map-top-bar">
         {/* Quick Truck Selector Pills */}
@@ -189,7 +203,7 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
           })}
         </div>
 
-        {/* View Mode Switcher (Schematic vs Satellite) */}
+        {/* View mode switcher */}
         <div className="fleet-view-mode-toggle" role="group" aria-label="Map display mode">
           <button
             type="button"
@@ -197,15 +211,15 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
             onClick={() => setViewMode("schematic")}
             title="Digital Twin 2.5D schematic view"
           >
-            📐 Twin Schematic
+            Twin schematic
           </button>
           <button
             type="button"
-            className={`fleet-mode-btn ${viewMode === "satellite" ? "active" : ""}`}
-            onClick={() => setViewMode("satellite")}
-            title="Real-world satellite aerial fleet tracking"
+            className={`fleet-mode-btn ${viewMode === "road" ? "active" : ""}`}
+            onClick={() => setViewMode("road")}
+            title="Road map fleet tracking"
           >
-            🛰️ Satellite GPS
+            Road map
           </button>
         </div>
       </div>
@@ -239,7 +253,7 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
               </filter>
             </defs>
 
-            {/* Tactical Grid Background */}
+            {/* Digital twin grid */}
             <rect width={WIDTH} height={HEIGHT} fill="url(#twin-grid)" rx="16" />
 
             {/* Map Reference Features (Road, Berms, Hazard Zones) */}
@@ -395,11 +409,11 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
           </div>
         </div>
       ) : (
-        <div className="twin-map-satellite-wrap">
+        <div className="twin-map-road-wrap">
           <div ref={leafletContainerRef} className="fleet-leaflet-container" />
-          <div className="fleet-satellite-hud">
-            <span>🛰️ Live Satellite Fleet GPS</span>
-            <span>{allTrucks.length} Trucks Tracked</span>
+          <div className="fleet-road-hud">
+            <span>{DEFAULT_CAMPUS_CONFIG.locationLabel}</span>
+            <span>{allTrucks.length} trucks tracked</span>
           </div>
         </div>
       )}
