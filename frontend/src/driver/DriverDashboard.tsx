@@ -7,6 +7,7 @@ import { availableRangeReadings } from "../state/rangeReadings";
 import { availableSpatialPoints } from "../state/spatialPoints";
 import { formatNumber, nearestRange, primaryVehicle } from "../state/selectors";
 import type { ConnectionState } from "../state/useTelemetry";
+import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
 import type { WorldState } from "../types";
 
 interface DriverDashboardProps {
@@ -14,6 +15,7 @@ interface DriverDashboardProps {
   awarenessMode: AwarenessMode;
   onAwarenessModeChange: (mode: AwarenessMode) => void;
   connection: ConnectionState;
+  sensorSettings: SensorDisplaySetting[];
 }
 
 export function DriverDashboard({
@@ -21,6 +23,7 @@ export function DriverDashboard({
   awarenessMode,
   onAwarenessModeChange,
   connection,
+  sensorSettings,
 }: DriverDashboardProps) {
   const [isMapExtended, setIsMapExtended] = useState(false);
   const telemetryConnected = connection === "CONNECTED";
@@ -77,6 +80,7 @@ export function DriverDashboard({
           readings={ranges}
           points={points}
           vehicle={vehicle}
+          sensorSettings={sensorSettings}
           mode={awarenessMode}
           onModeChange={onAwarenessModeChange}
           connection={connection}
@@ -142,6 +146,7 @@ export function DriverDashboard({
             validReadingCount={ranges.length}
             readings={world.ranges}
             sensorHealth={world.sensor_health}
+            sensorSettings={sensorSettings}
             telemetryConnected={telemetryConnected}
           />
         </aside>

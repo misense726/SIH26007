@@ -289,6 +289,8 @@ Implemented:
   route start;
 - a five-channel ToF list in the main `360° proximity` card, showing each
   sensor's distance, health, and scanner angle or quality;
+- the physical five-sensor display layout: level front and rear servo heads,
+  plus fixed front, left, and right heads pitched about 50 degrees down;
 - stale, offline, invalid, or disconnected range channels display `Unknown`
   instead of a maximum-distance value;
 - `V2XState` in the shared world snapshot plus peer, roadside-unit, advisory,
@@ -302,7 +304,7 @@ Implemented:
 Verification:
 
 - backend: 66 tests passed;
-- frontend: 36 tests passed;
+- frontend: 37 tests passed;
 - TypeScript and Vite production build passed;
 - local `/api/health`, `/api/v2x/state`, and WebSocket telemetry responded;
 - browser verification showed all five named ToFs with numeric values, healthy

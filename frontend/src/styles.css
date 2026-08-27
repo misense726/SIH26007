@@ -2076,6 +2076,39 @@ h3 {
   stroke: var(--accent);
 }
 
+.tof-sensor-layout {
+  pointer-events: none;
+}
+
+.tof-sensor-marker {
+  color: var(--sensor-source, var(--accent));
+}
+
+.tof-sensor-direction {
+  stroke: currentColor;
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  opacity: 0.82;
+}
+
+.tof-sensor-origin {
+  fill: currentColor;
+  stroke: var(--surface-inset);
+  stroke-width: 1.1;
+}
+
+.tof-sensor-marker-down .tof-sensor-direction {
+  stroke-dasharray: 2 2;
+  opacity: 0.62;
+}
+
+.tof-sensor-down-point {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1;
+  opacity: 0.72;
+}
+
 .proximity-key {
   display: flex;
   justify-content: center;
@@ -3518,13 +3551,13 @@ footer {
 .settings-vehicle-front { fill: var(--accent); }
 
 .settings-sensor-marker line {
-  stroke: var(--sensor);
+  stroke: var(--sensor-source, var(--sensor));
   stroke-dasharray: 3 4;
   stroke-width: 1.5;
 }
 
 .settings-sensor-marker circle {
-  fill: var(--sensor);
+  fill: var(--sensor-source, var(--sensor));
   stroke: var(--surface-inset);
   stroke-width: 1.5;
 }

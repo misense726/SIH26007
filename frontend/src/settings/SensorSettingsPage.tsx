@@ -67,9 +67,13 @@ function SensorPlacementPreview({ sensors }: { sensors: SensorDisplaySetting[] }
       {sensors.map((sensor) => {
         const x = 160 + sensor.display_pose.x_m * 88;
         const y = 116 - sensor.display_pose.y_m * 88;
-        const length = Math.min(sensor.visual_range_m, 4) * 20;
+        const pitchRadians = (sensor.display_pose.pitch_deg * Math.PI) / 180;
+        const length = Math.min(sensor.visual_range_m, 4) * 20 * Math.cos(pitchRadians);
         return (
-          <g key={sensor.sensor_id} className="settings-sensor-marker">
+          <g
+            key={sensor.sensor_id}
+            className={`settings-sensor-marker sensor-${sensor.sensor_id.replaceAll("_", "-")} ${sensor.display_pose.pitch_deg < -5 ? "settings-sensor-marker-down" : ""}`}
+          >
             <line
               x1={x}
               y1={y}
@@ -78,7 +82,9 @@ function SensorPlacementPreview({ sensors }: { sensors: SensorDisplaySetting[] }
               transform={`rotate(${sensor.display_pose.yaw_deg} ${x} ${y})`}
             />
             <circle cx={x} cy={y} r={sensor.scanner ? 6 : 4} />
-            <title>{sensor.label}</title>
+            <title>
+              {`${sensor.label}: ${sensor.display_pose.yaw_deg.toFixed(0)}° yaw, ${sensor.display_pose.pitch_deg.toFixed(0)}° pitch`}
+            </title>
           </g>
         );
       })}

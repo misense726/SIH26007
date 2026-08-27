@@ -259,7 +259,11 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                   </div>
                   <div className="spatial-range-value">
                     <strong>{reading ? `${formatNumber(reading.range_m, 2)} m` : "Unknown"}</strong>
-                    <small>{sensor.scanner ? `${formatNumber(latestReading?.angle_deg ?? Number.NaN, 0)}° head` : `${formatNumber(sensor.display_pose.yaw_deg, 0)}° fixed`}</small>
+                    <small>
+                      {sensor.scanner
+                        ? `${formatNumber(latestReading?.angle_deg ?? Number.NaN, 0)}° head · ${formatNumber(sensor.display_pose.pitch_deg, 0)}° pitch`
+                        : `${formatNumber(sensor.display_pose.yaw_deg, 0)}° yaw · ${formatNumber(sensor.display_pose.pitch_deg, 0)}° pitch`}
+                    </small>
                   </div>
                 </article>
               );

@@ -81,6 +81,7 @@ export default function App() {
           awarenessMode={awarenessMode}
           onAwarenessModeChange={setAwarenessMode}
           connection={connection}
+          sensorSettings={sensorSettings.settings.sensors}
         />
       )}
       {view === "SPATIAL" && (

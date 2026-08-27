@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { RangeReading, SpatialPoint, VehiclePose, WorldState } from "../types";
 import type { ConnectionState } from "../state/useTelemetry";
+import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
 import { CampusMinimap } from "./CampusMinimap";
 import { TofRangePlot } from "./ProximityWidget";
 import {
@@ -24,6 +25,7 @@ interface CameraAwarenessProps {
   readings: RangeReading[];
   points: SpatialPoint[];
   vehicle: VehiclePose;
+  sensorSettings: SensorDisplaySetting[];
   mode: AwarenessMode;
   onModeChange: (mode: AwarenessMode) => void;
   connection: ConnectionState;
@@ -35,6 +37,7 @@ export function CameraAwareness({
   readings,
   points,
   vehicle,
+  sensorSettings,
   mode,
   onModeChange,
   connection,
@@ -241,6 +244,8 @@ export function CameraAwareness({
               <TofRangePlot
                 points={points}
                 vehicle={vehicle}
+                sensors={sensorSettings}
+                readings={readings}
                 className="proximity-svg tof-overlay-grid"
                 label={rangeLabel}
               />

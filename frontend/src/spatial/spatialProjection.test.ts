@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { RangeReading, SpatialPoint, VehiclePose } from "../types";
-import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
+import { defaultSensorSettings, type SensorDisplaySetting } from "../settings/sensorSettingsApi";
 import { rangeEndpoint, worldPointToVehicle } from "./spatialProjection";
 
 const vehicle: VehiclePose = {
@@ -67,5 +67,17 @@ describe("spatial display projection", () => {
     const endpoint = rangeEndpoint(setting, undefined);
     expect(endpoint.x_m).toBeLessThan(-0.8);
     expect(endpoint.y_m).toBeCloseTo(0);
+  });
+
+  it("keeps the fixed front and side heads pitched down by default", () => {
+    const sensors = defaultSensorSettings().sensors;
+    const front = sensors.find((sensor) => sensor.sensor_id === "front_fixed");
+    const left = sensors.find((sensor) => sensor.sensor_id === "left_side");
+    expect(front?.display_pose.pitch_deg).toBe(-50);
+    expect(left?.display_pose.pitch_deg).toBe(-50);
+
+    const endpoint = rangeEndpoint(front!, undefined);
+    expect(endpoint.z_m).toBeLessThan(front!.display_pose.z_m);
+    expect(endpoint.y_m).toBeGreaterThan(front!.display_pose.y_m);
   });
 });

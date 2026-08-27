@@ -1,5 +1,6 @@
 # Simulation-only global staggering. Physical ToF timing is
 # configured independently in FRONT, MIDDLE, and BACK/MAIN firmware.
+# display pitch is in degrees; negative values point down from the sensor.
 acquisition:
   stagger_ms: 8
   sequence:
@@ -12,8 +13,9 @@ acquisition:
 sensors:
   front_scanner:
     type: VL53L1X
-    position_m: [0.0, 0.5]
+    position_m: [0.0, 0.32]
     orientation_deg: 0.0
+    pitch_deg: 0.0
     servo_min_deg: -80.0
     servo_max_deg: 80.0
     servo_center_deg: 0.0
@@ -21,8 +23,9 @@ sensors:
     max_range_m: 4.0
   rear_scanner:
     type: VL53L1X
-    position_m: [0.0, -0.5]
+    position_m: [0.0, -0.55]
     orientation_deg: 180.0
+    pitch_deg: 0.0
     servo_min_deg: -80.0
     servo_max_deg: 80.0
     servo_center_deg: 0.0
@@ -30,20 +33,23 @@ sensors:
     max_range_m: 4.0
   front_fixed:
     type: VL53L0X
-    position_m: [0.0, 0.48]
+    position_m: [0.0, 0.55]
     orientation_deg: 0.0
+    pitch_deg: -50.0
     range_offset_m: 0.0
     max_range_m: 2.0
   left_side:
     type: VL53L0X
-    position_m: [-0.32, 0.0]
+    position_m: [-0.36, 0.0]
     orientation_deg: -90.0
+    pitch_deg: -50.0
     range_offset_m: 0.0
     max_range_m: 2.0
   right_side:
     type: VL53L0X
-    position_m: [0.32, 0.0]
+    position_m: [0.36, 0.0]
     orientation_deg: 90.0
+    pitch_deg: -50.0
     range_offset_m: 0.0
     max_range_m: 2.0
 

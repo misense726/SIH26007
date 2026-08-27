@@ -2,6 +2,7 @@ import { createElement } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import type { RangeReading, SensorHealth, SpatialPoint, VehiclePose } from "../types";
+import { defaultSensorSettings } from "../settings/sensorSettingsApi";
 import { ProximityWidget, spatialPointToPlot } from "./ProximityWidget";
 
 const vehicle: VehiclePose = {
@@ -78,6 +79,7 @@ describe("proximity point projection", () => {
         validReadingCount: 1,
         readings,
         sensorHealth,
+        sensorSettings: defaultSensorSettings().sensors,
         telemetryConnected: true,
       }),
     );

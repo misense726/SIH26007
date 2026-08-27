@@ -30,11 +30,20 @@ def test_sensor_configuration_matches_the_five_tof_layout() -> None:
     assert set(config["sensors"]) == set(expected_ids)
     assert config["sensors"]["front_fixed"] == {
         "type": "VL53L0X",
-        "position_m": [0.0, 0.48],
+        "position_m": [0.0, 0.55],
         "orientation_deg": 0.0,
+        "pitch_deg": -50.0,
         "range_offset_m": 0.0,
         "max_range_m": 2.0,
     }
+    assert config["sensors"]["front_scanner"]["position_m"] == [0.0, 0.32]
+    assert config["sensors"]["front_scanner"]["pitch_deg"] == 0.0
+    assert config["sensors"]["rear_scanner"]["position_m"] == [0.0, -0.55]
+    assert config["sensors"]["rear_scanner"]["pitch_deg"] == 0.0
+    assert config["sensors"]["left_side"]["position_m"] == [-0.36, 0.0]
+    assert config["sensors"]["right_side"]["position_m"] == [0.36, 0.0]
+    assert config["sensors"]["left_side"]["pitch_deg"] == -50.0
+    assert config["sensors"]["right_side"]["pitch_deg"] == -50.0
 
 
 def test_contract_rejects_unknown_fields() -> None:

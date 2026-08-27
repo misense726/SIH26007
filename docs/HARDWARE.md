@@ -12,6 +12,14 @@ FogSen V1 keeps five ToFs and three wired controllers:
 The canonical sensor IDs remain `front_scanner`, `front_fixed`,
 `rear_scanner`, `left_side`, and `right_side`.
 
+The dashboard's default layout follows the vehicle drawing: the front scanner is
+inside the front edge and faces forward on its servo; the fixed front sensor is
+at the nose and points about 50 degrees down; the left and right fixed sensors
+point about 50 degrees down; and the rear scanner is at the back, facing
+straight rearward on its servo. In the vehicle frame these are yaw/pitch
+`(0, 0)`, `(0, -50)`, `(-90, -50)`, `(90, -50)`, and `(180, 0)` degrees in
+sensor order. The Settings page exposes these display values for calibration.
+
 ## FRONT XIAO ESP32-C6
 
 | XIAO pin | Connection |

@@ -31,6 +31,24 @@ def test_sensor_settings_are_complete_validated_and_persisted(tmp_path: Path) ->
             "right_side",
         ]
         assert body["imu_zero"]["available"] is False
+        sensors = {sensor["sensor_id"]: sensor for sensor in body["sensors"]}
+        assert sensors["front_scanner"]["display_pose"] == {
+            "x_m": 0.0,
+            "y_m": 0.32,
+            "z_m": 0.32,
+            "yaw_deg": 0.0,
+            "pitch_deg": 0.0,
+        }
+        assert sensors["front_fixed"]["display_pose"]["pitch_deg"] == -50.0
+        assert sensors["left_side"]["display_pose"]["pitch_deg"] == -50.0
+        assert sensors["right_side"]["display_pose"]["pitch_deg"] == -50.0
+        assert sensors["rear_scanner"]["display_pose"] == {
+            "x_m": 0.0,
+            "y_m": -0.55,
+            "z_m": 0.32,
+            "yaw_deg": 180.0,
+            "pitch_deg": 0.0,
+        }
 
         update = {
             "display_pose": {

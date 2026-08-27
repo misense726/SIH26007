@@ -1,6 +1,7 @@
 import type { RangeReading, SensorHealth, SpatialPoint, VehiclePose } from "../types";
 import { isUsableRangeReading } from "../state/rangeReadings";
 import { TOF_SENSOR_IDS } from "../state/selectors";
+import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
 import { spatialPointToPlot } from "./driverAwareness";
 
 export { spatialPointToPlot } from "./driverAwareness";
@@ -15,13 +16,39 @@ function displayName(sensorId: string): string {
 interface TofRangePlotProps {
   points: SpatialPoint[];
   vehicle: VehiclePose;
+  sensors: SensorDisplaySetting[];
+  readings: RangeReading[];
   className?: string;
   label?: string;
+}
+
+function sensorPlotOrigin(sensor: SensorDisplaySetting): { x: number; y: number } {
+  return {
+    x: 120 + sensor.display_pose.x_m * 44,
+    y: 120 - sensor.display_pose.y_m * 44,
+  };
+}
+
+function sensorPlotDirection(
+  sensor: SensorDisplaySetting,
+  reading: RangeReading | undefined,
+): { x: number; y: number } {
+  const origin = sensorPlotOrigin(sensor);
+  const yaw = sensor.display_pose.yaw_deg + (sensor.scanner ? reading?.angle_deg ?? 0 : 0);
+  const pitchRadians = (sensor.display_pose.pitch_deg * Math.PI) / 180;
+  const length = 17 * Math.max(0, Math.cos(pitchRadians));
+  const yawRadians = (yaw * Math.PI) / 180;
+  return {
+    x: origin.x + Math.sin(yawRadians) * length,
+    y: origin.y - Math.cos(yawRadians) * length,
+  };
 }
 
 export function TofRangePlot({
   points,
   vehicle,
+  sensors,
+  readings,
   className = "proximity-svg",
   label,
 }: TofRangePlotProps) {
@@ -57,6 +84,33 @@ export function TofRangePlot({
         <path d="M120 83l8 12h-16z" />
         <circle cx="120" cy="120" r="4" />
       </g>
+      <g className="tof-sensor-layout" aria-label="Configured ToF sensor positions">
+        {sensors.map((sensor) => {
+          const origin = sensorPlotOrigin(sensor);
+          const endpoint = sensorPlotDirection(sensor, latestReading(readings, sensor.sensor_id));
+          const pitch = sensor.display_pose.pitch_deg;
+          const sensorClass = `sensor-${sensor.sensor_id.replaceAll("_", "-")}`;
+          return (
+            <g
+              key={sensor.sensor_id}
+              className={`tof-sensor-marker ${sensorClass} ${pitch < -5 ? "tof-sensor-marker-down" : ""}`}
+            >
+              <line
+                className="tof-sensor-direction"
+                x1={origin.x}
+                y1={origin.y}
+                x2={endpoint.x}
+                y2={endpoint.y}
+              />
+              <circle className="tof-sensor-origin" cx={origin.x} cy={origin.y} r={sensor.scanner ? 5 : 4} />
+              {pitch < -5 && <circle className="tof-sensor-down-point" cx={endpoint.x} cy={endpoint.y} r="2" />}
+              <title>
+                {`${sensor.label}: ${sensor.scanner ? "servo head" : "fixed"}, ${sensor.display_pose.pitch_deg.toFixed(0)}° pitch`}
+              </title>
+            </g>
+          );
+        })}
+      </g>
       <text x="120" y="13" textAnchor="middle">FRONT</text>
     </svg>
   );
@@ -68,6 +122,7 @@ interface ProximityWidgetProps {
   validReadingCount: number;
   readings: RangeReading[];
   sensorHealth: SensorHealth[];
+  sensorSettings: SensorDisplaySetting[];
   telemetryConnected: boolean;
 }
 
@@ -91,6 +146,7 @@ export function ProximityWidget({
   validReadingCount,
   readings,
   sensorHealth,
+  sensorSettings,
   telemetryConnected,
 }: ProximityWidgetProps) {
   const healthBySensor = new Map(
@@ -109,6 +165,8 @@ export function ProximityWidget({
       <TofRangePlot
         points={points}
         vehicle={vehicle}
+        sensors={sensorSettings}
+        readings={readings}
         label={`Vehicle-centred ToF view with ${points.length} mapped returns`}
       />
       {points.length === 0 && (

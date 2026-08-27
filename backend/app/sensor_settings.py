@@ -106,7 +106,7 @@ class SensorSettingsStore:
                         y_m=float(position[1]),
                         z_m=0.32,
                         yaw_deg=float(configured["orientation_deg"]),
-                        pitch_deg=0.0,
+                        pitch_deg=float(configured.get("pitch_deg", 0.0)),
                     ),
                     alert_distance_m=min(
                         warning_distance,
