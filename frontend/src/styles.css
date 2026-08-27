@@ -1258,6 +1258,7 @@ h3 {
   left: 50%;
   transform: translateX(-50%);
   z-index: 440;
+  pointer-events: none;
 }
 
 .campus-peer-count-badge {
@@ -1279,6 +1280,7 @@ h3 {
   left: 50%;
   transform: translateX(-50%);
   z-index: 440;
+  pointer-events: none;
 }
 
 .campus-hud-coords-pill {
@@ -4077,5 +4079,4 @@ footer {
   white-space: nowrap;
   font-size: 0.66rem;
 }
-
 

@@ -262,13 +262,13 @@ export function CampusMinimap({ world, vehicle, onExpand }: CampusMinimapProps) 
         <div className="compass-cardinal compass-west" aria-hidden="true">W</div>
 
         {/* Top & Bottom Status Badges */}
-        <div className="campus-round-hud-top" pointer-events="none">
+        <div className="campus-round-hud-top">
           <span className="campus-peer-count-badge">
             {activePeers.length > 0 ? `${activePeers.length} PEERS` : "GPS ACTIVE"}
           </span>
         </div>
 
-        <div className="campus-round-hud-bottom" pointer-events="none">
+        <div className="campus-round-hud-bottom">
           <span className="campus-hud-coords-pill">
             {formatCoordinates(vehicleCoords, 4)}
           </span>
