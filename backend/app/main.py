@@ -10,6 +10,7 @@ from backend.app import __version__
 from backend.app.api.routes import api_router, telemetry_socket
 from backend.app.camera import CameraFeed, LiveCameraStream
 from backend.app.camera.dehaze import DehazeFormerEnhancer
+from backend.app.camera.ir_enhance import IREnhancer
 from backend.app.config import RuntimeSettings, load_project_config, runtime_settings
 from backend.app.live_runtime import LiveSerialRuntime, SerialFactory
 from backend.app.providers.wifi_listener import WifiTelemetryListener
@@ -40,6 +41,15 @@ def create_app(
                 if active_settings.camera_dehaze_enabled
                 else None
             )
+            ir_enhancer = (
+                IREnhancer(
+                    device=active_settings.camera_ir_device,
+                    use_fp16=active_settings.camera_ir_fp16,
+                    colormap=active_settings.camera_ir_colormap,
+                )
+                if active_settings.camera_ir_enabled
+                else None
+            )
             active_camera_feed = LiveCameraStream(
                 active_settings.camera_stream_url,
                 stale_ms=active_settings.camera_stale_ms,
@@ -50,6 +60,8 @@ def create_app(
                 metrics_interval_ms=active_settings.camera_metrics_interval_ms,
                 enhancer=enhancer,
                 enhancement_max_fps=active_settings.camera_dehaze_max_fps,
+                ir_enhancer=ir_enhancer,
+                ir_max_fps=active_settings.camera_ir_max_fps,
             )
         app.state.camera_feed = active_camera_feed
         if active_camera_feed is not None:

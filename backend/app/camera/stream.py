@@ -50,6 +50,17 @@ class CameraFrameSnapshot:
     enhancement_latency_ms: float | None = None
     enhancement_fps: float = 0.0
     enhancement_peak_vram_mb: float = 0.0
+    ir_timestamp_ms: int = 0
+    ir_frame_id: str | None = None
+    ir_jpeg: bytes | None = None
+    ir_status: EnhancementStatus = "disabled"
+    ir_detail: str | None = None
+    ir_model: str | None = None
+    ir_device: str | None = None
+    ir_precision: str | None = None
+    ir_latency_ms: float | None = None
+    ir_fps: float = 0.0
+    ir_peak_vram_mb: float = 0.0
 
 
 class CameraFeed(Protocol):
@@ -81,6 +92,8 @@ class LiveCameraStream:
         metrics_interval_ms: int = 500,
         enhancer: FrameEnhancer | None = None,
         enhancement_max_fps: float = 30.0,
+        ir_enhancer: FrameEnhancer | None = None,
+        ir_max_fps: float = 30.0,
     ) -> None:
         self.source_uri = source_uri
         self._stale_ms = stale_ms
@@ -91,14 +104,20 @@ class LiveCameraStream:
         self._metrics_interval_s = metrics_interval_ms / 1_000.0
         self._enhancer = enhancer
         self._enhancement_interval_s = 1.0 / enhancement_max_fps
+        self._ir_enhancer = ir_enhancer
+        self._ir_interval_s = 1.0 / ir_max_fps
         self._lock = threading.Lock()
         self._stop_event = threading.Event()
         self._thread: threading.Thread | None = None
         self._enhancement_thread: threading.Thread | None = None
+        self._ir_thread: threading.Thread | None = None
         self._capture = None
         self._enhancement_condition = threading.Condition()
         self._pending_enhancement: tuple[np.ndarray, str, int] | None = None
         self._next_enhancement_at = 0.0
+        self._ir_condition = threading.Condition()
+        self._pending_ir: tuple[np.ndarray, str, int] | None = None
+        self._next_ir_at = 0.0
         self._frame_sequence = 0
         self._snapshot = CameraFrameSnapshot(
             status="connecting",
@@ -108,6 +127,11 @@ class LiveCameraStream:
                 f"Loading {enhancer.name}" if enhancer is not None else "ML enhancement is disabled"
             ),
             enhancement_model=enhancer.name if enhancer is not None else None,
+            ir_status="loading" if ir_enhancer is not None else "disabled",
+            ir_detail=(
+                f"Loading {ir_enhancer.name}" if ir_enhancer is not None else "IR enhancement is disabled"
+            ),
+            ir_model=ir_enhancer.name if ir_enhancer is not None else None,
         )
 
     async def start(self) -> None:
@@ -127,21 +151,33 @@ class LiveCameraStream:
                 daemon=True,
             )
             self._enhancement_thread.start()
+        if self._ir_enhancer is not None:
+            self._ir_thread = threading.Thread(
+                target=self._run_ir,
+                name="fogsen-ir-enhancer",
+                daemon=True,
+            )
+            self._ir_thread.start()
 
     async def stop(self) -> None:
         thread, self._thread = self._thread, None
         enhancement_thread, self._enhancement_thread = self._enhancement_thread, None
+        ir_thread, self._ir_thread = self._ir_thread, None
         if thread is None:
             return
         self._stop_event.set()
         with self._enhancement_condition:
             self._enhancement_condition.notify_all()
+        with self._ir_condition:
+            self._ir_condition.notify_all()
         capture = self._capture
         if capture is not None:
             capture.release()
         await asyncio.to_thread(thread.join, 4.0)
         if enhancement_thread is not None:
             await asyncio.to_thread(enhancement_thread.join, 4.0)
+        if ir_thread is not None:
+            await asyncio.to_thread(ir_thread.join, 4.0)
         self._set_status("disabled", "FogSen camera ingest stopped")
 
     def snapshot(self) -> CameraFrameSnapshot:
@@ -156,6 +192,7 @@ class LiveCameraStream:
                 snapshot,
                 raw_jpeg=None,
                 enhanced_jpeg=None,
+                ir_jpeg=None,
                 status="stale",
                 detail=f"No Pi camera frame received for {self._stale_ms} ms",
                 measured_fps=0.0,
@@ -163,17 +200,32 @@ class LiveCameraStream:
                     "stale" if self._enhancer is not None else snapshot.enhancement_status
                 ),
                 enhancement_fps=0.0,
+                ir_status=(
+                    "stale" if self._ir_enhancer is not None else snapshot.ir_status
+                ),
+                ir_fps=0.0,
             )
         if (
             snapshot.enhanced_jpeg is not None
             and current_ms - snapshot.enhanced_timestamp_ms > self._stale_ms * 2
         ):
-            return replace(
+            snapshot = replace(
                 snapshot,
                 enhanced_jpeg=None,
                 enhancement_status="stale",
                 enhancement_detail="The latest ML-enhanced frame is stale",
                 enhancement_fps=0.0,
+            )
+        if (
+            snapshot.ir_jpeg is not None
+            and current_ms - snapshot.ir_timestamp_ms > self._stale_ms * 2
+        ):
+            snapshot = replace(
+                snapshot,
+                ir_jpeg=None,
+                ir_status="stale",
+                ir_detail="The latest IR frame is stale",
+                ir_fps=0.0,
             )
         return snapshot
 
@@ -202,6 +254,16 @@ class LiveCameraStream:
             enhancement_latency_ms=snapshot.enhancement_latency_ms,
             enhancement_fps=snapshot.enhancement_fps,
             enhancement_peak_vram_mb=snapshot.enhancement_peak_vram_mb,
+            ir_available=snapshot.ir_jpeg is not None,
+            ir_frame_id=snapshot.ir_frame_id,
+            ir_status=snapshot.ir_status,
+            ir_detail=snapshot.ir_detail,
+            ir_model=snapshot.ir_model,
+            ir_device=snapshot.ir_device,
+            ir_precision=snapshot.ir_precision,
+            ir_latency_ms=snapshot.ir_latency_ms,
+            ir_fps=snapshot.ir_fps,
+            ir_peak_vram_mb=snapshot.ir_peak_vram_mb,
             mode=DataMode.LIVE,
         )
 
@@ -229,6 +291,15 @@ class LiveCameraStream:
             "enhancement_latency_ms": snapshot.enhancement_latency_ms,
             "enhancement_fps": round(snapshot.enhancement_fps, 2),
             "enhancement_peak_vram_mb": round(snapshot.enhancement_peak_vram_mb, 1),
+            "ir_available": snapshot.ir_jpeg is not None,
+            "ir_status": snapshot.ir_status,
+            "ir_detail": snapshot.ir_detail,
+            "ir_model": snapshot.ir_model,
+            "ir_device": snapshot.ir_device,
+            "ir_precision": snapshot.ir_precision,
+            "ir_latency_ms": snapshot.ir_latency_ms,
+            "ir_fps": round(snapshot.ir_fps, 2),
+            "ir_peak_vram_mb": round(snapshot.ir_peak_vram_mb, 1),
         }
 
     def _queue_enhancement(self, frame: np.ndarray, frame_id: str, timestamp_ms: int) -> None:
@@ -309,6 +380,82 @@ class LiveCameraStream:
                     enhancement_latency_ms=latency_ms,
                     enhancement_fps=enhancement_fps,
                     enhancement_peak_vram_mb=self._enhancer.peak_vram_mb,
+                )
+
+    def _queue_ir(self, frame: np.ndarray, frame_id: str, timestamp_ms: int) -> None:
+        if self._ir_enhancer is None:
+            return
+        with self._ir_condition:
+            self._pending_ir = (frame, frame_id, timestamp_ms)
+            self._ir_condition.notify()
+
+    def _run_ir(self) -> None:
+        import cv2
+
+        assert self._ir_enhancer is not None
+        last_completed_at: float | None = None
+        ir_fps = 0.0
+        while not self._stop_event.is_set():
+            with self._ir_condition:
+                while self._pending_ir is None and not self._stop_event.is_set():
+                    self._ir_condition.wait(timeout=0.5)
+                if self._stop_event.is_set():
+                    return
+                remaining = self._next_ir_at - time.monotonic()
+                if remaining > 0:
+                    self._ir_condition.wait(timeout=remaining)
+                    continue
+                pending, self._pending_ir = self._pending_ir, None
+                self._next_ir_at = time.monotonic() + self._ir_interval_s
+            if pending is None:
+                continue
+            frame, source_frame_id, source_timestamp_ms = pending
+            started = time.monotonic()
+            try:
+                ir_frame = self._ir_enhancer.enhance(frame)
+                encoded, jpeg = cv2.imencode(
+                    ".jpg",
+                    ir_frame,
+                    [int(cv2.IMWRITE_JPEG_QUALITY), self._jpeg_quality],
+                )
+                if not encoded:
+                    raise RuntimeError("OpenCV could not encode the IR frame")
+            except Exception as exc:
+                with self._lock:
+                    self._snapshot = replace(
+                        self._snapshot,
+                        ir_jpeg=None,
+                        ir_status="error",
+                        ir_detail=f"{type(exc).__name__}: {exc}",
+                        ir_device=self._ir_enhancer.device,
+                        ir_precision=self._ir_enhancer.precision,
+                    )
+                return
+
+            completed = time.monotonic()
+            latency_ms = (completed - started) * 1_000.0
+            if last_completed_at is not None and completed > last_completed_at:
+                instant_fps = 1.0 / (completed - last_completed_at)
+                ir_fps = (
+                    instant_fps
+                    if ir_fps == 0.0
+                    else ir_fps * 0.8 + instant_fps * 0.2
+                )
+            last_completed_at = completed
+            with self._lock:
+                self._snapshot = replace(
+                    self._snapshot,
+                    ir_timestamp_ms=source_timestamp_ms,
+                    ir_frame_id=f"ir-{source_frame_id}",
+                    ir_jpeg=jpeg.tobytes(),
+                    ir_status="live",
+                    ir_detail="IR enhancement is running",
+                    ir_model=self._ir_enhancer.name,
+                    ir_device=self._ir_enhancer.device,
+                    ir_precision=self._ir_enhancer.precision,
+                    ir_latency_ms=latency_ms,
+                    ir_fps=ir_fps,
+                    ir_peak_vram_mb=self._ir_enhancer.peak_vram_mb,
                 )
 
     def _set_status(self, status: CameraStreamStatus, detail: str) -> None:
@@ -425,8 +572,20 @@ class LiveCameraStream:
                         enhancement_latency_ms=self._snapshot.enhancement_latency_ms,
                         enhancement_fps=self._snapshot.enhancement_fps,
                         enhancement_peak_vram_mb=self._snapshot.enhancement_peak_vram_mb,
+                        ir_timestamp_ms=self._snapshot.ir_timestamp_ms,
+                        ir_frame_id=self._snapshot.ir_frame_id,
+                        ir_jpeg=self._snapshot.ir_jpeg,
+                        ir_status=self._snapshot.ir_status,
+                        ir_detail=self._snapshot.ir_detail,
+                        ir_model=self._snapshot.ir_model,
+                        ir_device=self._snapshot.ir_device,
+                        ir_precision=self._snapshot.ir_precision,
+                        ir_latency_ms=self._snapshot.ir_latency_ms,
+                        ir_fps=self._snapshot.ir_fps,
+                        ir_peak_vram_mb=self._snapshot.ir_peak_vram_mb,
                     )
                 self._queue_enhancement(frame, frame_id, timestamp_ms)
+                self._queue_ir(frame, frame_id, timestamp_ms)
 
             capture.release()
             self._capture = None

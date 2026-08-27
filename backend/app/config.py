@@ -39,6 +39,11 @@ class RuntimeSettings(BaseModel):
     camera_dehaze_device: Literal["auto", "cuda", "cpu"] = "auto"
     camera_dehaze_fp16: bool = True
     camera_dehaze_max_fps: float = Field(default=30.0, gt=0.0, le=30.0)
+    camera_ir_enabled: bool = False
+    camera_ir_device: Literal["auto", "cuda", "cpu"] = "auto"
+    camera_ir_fp16: bool = True
+    camera_ir_max_fps: float = Field(default=30.0, gt=0.0, le=60.0)
+    camera_ir_colormap: str = "INFERNO"
 
     @model_validator(mode="after")
     def require_live_serial_port(self) -> "RuntimeSettings":
@@ -118,6 +123,17 @@ def runtime_settings() -> RuntimeSettings:
         camera_dehaze_max_fps=float(
             os.getenv("FOGSEN_CAMERA_DEHAZE_MAX_FPS", "30")
         ),
+        camera_ir_enabled=_environment_bool("FOGSEN_CAMERA_IR_ENABLED", False),
+        camera_ir_device=os.getenv("FOGSEN_CAMERA_IR_DEVICE", "auto")
+        .strip()
+        .lower(),
+        camera_ir_fp16=_environment_bool("FOGSEN_CAMERA_IR_FP16", True),
+        camera_ir_max_fps=float(
+            os.getenv("FOGSEN_CAMERA_IR_MAX_FPS", "30")
+        ),
+        camera_ir_colormap=os.getenv("FOGSEN_CAMERA_IR_COLORMAP", "INFERNO")
+        .strip()
+        .upper(),
     )
 
 

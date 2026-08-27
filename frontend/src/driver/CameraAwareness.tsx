@@ -40,7 +40,7 @@ export function CameraAwareness({
   connection,
   onExpandMap,
 }: CameraAwarenessProps) {
-  const [cameraView, setCameraView] = useState<"RAW" | "ENHANCED">("RAW");
+  const [cameraView, setCameraView] = useState<"RAW" | "ENHANCED" | "IR">("RAW");
   const telemetryConnected = connection === "CONNECTED";
   const cameraVisibilityScore = world.camera.raw_available
     ? world.camera.visibility_score ?? world.environment.visibility_score
@@ -54,6 +54,8 @@ export function CameraAwareness({
     telemetryConnected && world.camera.mode === "LIVE" && world.camera.raw_available;
   const showEnhancedCamera =
     showLiveCamera && cameraView === "ENHANCED" && world.camera.enhancement_available;
+  const showIRCamera =
+    showLiveCamera && cameraView === "IR" && world.camera.ir_available;
   const showSimulatedCamera =
     telemetryConnected && world.camera.mode === "SIMULATED" && world.camera.raw_available;
   const autoWantsTof = shouldShowTofOverlay(mode, cameraVisibilityState);
@@ -76,10 +78,15 @@ export function CameraAwareness({
         : showTofOverlay
           ? "ToF overlay active"
           : "Camera view";
+  const isIrGpu = (world.camera.ir_device ?? "").toLowerCase() === "cuda";
   const sourceLabel = showLiveCamera
-    ? showEnhancedCamera
-      ? "DEHAZED LIVE · GPU"
-      : "CAMERA LIVE · WI-FI"
+    ? showIRCamera
+      ? isIrGpu
+        ? "IR LIVE · GPU"
+        : "IR LIVE · CPU"
+      : showEnhancedCamera
+        ? "DEHAZED LIVE · GPU"
+        : "CAMERA LIVE · WI-FI"
     : showSimulatedCamera
       ? "CAMERA SIMULATED"
       : telemetryConnected
@@ -87,10 +94,22 @@ export function CameraAwareness({
         : connection === "CONNECTING"
           ? "CONNECTING"
           : "NO TELEMETRY";
+  const cameraStreamSrc = showIRCamera
+    ? "/api/camera/stream?view=ir"
+    : showEnhancedCamera
+      ? "/api/camera/stream?view=enhanced"
+      : "/api/camera/stream?view=raw";
+  const cameraAlt = showIRCamera
+    ? "Infrared view from the Raspberry Pi camera"
+    : showEnhancedCamera
+      ? "ML-dehazed forward view from the Raspberry Pi camera"
+      : "Raw forward view from the Raspberry Pi camera";
   const frameDetail = showLiveCamera && world.camera.width_px && world.camera.height_px
-    ? showEnhancedCamera
-      ? `${world.camera.enhancement_model ?? "ML dehazing"} · ${world.camera.enhancement_fps.toFixed(1)} FPS · ${Math.round(world.camera.enhancement_latency_ms ?? 0)} ms`
-      : `${world.camera.width_px}×${world.camera.height_px} · ${world.camera.measured_fps.toFixed(1)} FPS`
+    ? showIRCamera
+      ? `${world.camera.ir_model ?? "IR"} · ${world.camera.ir_fps.toFixed(1)} FPS · ${Math.round(world.camera.ir_latency_ms ?? 0)} ms`
+      : showEnhancedCamera
+        ? `${world.camera.enhancement_model ?? "ML dehazing"} · ${world.camera.enhancement_fps.toFixed(1)} FPS · ${Math.round(world.camera.enhancement_latency_ms ?? 0)} ms`
+        : `${world.camera.width_px}×${world.camera.height_px} · ${world.camera.measured_fps.toFixed(1)} FPS`
     : null;
 
   return (
@@ -128,8 +147,8 @@ export function CameraAwareness({
           <div className="awareness-mode-switcher" role="group" aria-label="Camera processing">
             <button
               type="button"
-              className={!showEnhancedCamera ? "active" : ""}
-              aria-pressed={!showEnhancedCamera}
+              className={cameraView === "RAW" ? "active" : ""}
+              aria-pressed={cameraView === "RAW"}
               onClick={() => setCameraView("RAW")}
             >
               Raw
@@ -143,6 +162,16 @@ export function CameraAwareness({
               onClick={() => setCameraView("ENHANCED")}
             >
               Dehazed
+            </button>
+            <button
+              type="button"
+              className={showIRCamera ? "active" : ""}
+              aria-pressed={showIRCamera}
+              disabled={!world.camera.ir_available}
+              title={world.camera.ir_detail ?? undefined}
+              onClick={() => setCameraView("IR")}
+            >
+              IR
             </button>
           </div>
         )}
@@ -159,10 +188,8 @@ export function CameraAwareness({
         {showLiveCamera ? (
           <img
             className="camera-feed"
-            src={showEnhancedCamera ? "/api/camera/stream?view=enhanced" : "/api/camera/stream?view=raw"}
-            alt={showEnhancedCamera
-              ? "ML-dehazed forward view from the Raspberry Pi camera"
-              : "Raw forward view from the Raspberry Pi camera"}
+            src={cameraStreamSrc}
+            alt={cameraAlt}
           />
         ) : (
           <>

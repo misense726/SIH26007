@@ -221,6 +221,18 @@ class CameraState(TelemetryModel):
     enhancement_latency_ms: float | None = Field(default=None, ge=0.0)
     enhancement_fps: float = Field(default=0.0, ge=0.0)
     enhancement_peak_vram_mb: float = Field(default=0.0, ge=0.0)
+    ir_available: bool = False
+    ir_frame_id: str | None = None
+    ir_status: Literal[
+        "disabled", "loading", "live", "stale", "error"
+    ] = "disabled"
+    ir_detail: str | None = None
+    ir_model: str | None = None
+    ir_device: str | None = None
+    ir_precision: str | None = None
+    ir_latency_ms: float | None = Field(default=None, ge=0.0)
+    ir_fps: float = Field(default=0.0, ge=0.0)
+    ir_peak_vram_mb: float = Field(default=0.0, ge=0.0)
     mode: DataMode = DataMode.SIMULATED
 
 

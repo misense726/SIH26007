@@ -116,6 +116,16 @@ export interface CameraState {
   enhancement_latency_ms: number | null;
   enhancement_fps: number;
   enhancement_peak_vram_mb: number;
+  ir_available: boolean;
+  ir_frame_id: string | null;
+  ir_status: "disabled" | "loading" | "live" | "stale" | "error";
+  ir_detail: string | null;
+  ir_model: string | null;
+  ir_device: string | null;
+  ir_precision: string | null;
+  ir_latency_ms: number | null;
+  ir_fps: number;
+  ir_peak_vram_mb: number;
   mode: DataMode;
 }
 
