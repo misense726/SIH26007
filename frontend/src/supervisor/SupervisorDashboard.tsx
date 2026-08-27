@@ -10,6 +10,7 @@ import type { ConnectionState } from "../state/useTelemetry";
 import { TwinMap } from "../twin/TwinMap";
 import type { WorldState } from "../types";
 import { FleetCard } from "./FleetCard";
+import { V2XPanel } from "./V2XPanel";
 
 interface SupervisorDashboardProps {
   world: WorldState;
@@ -154,6 +155,8 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
           )}
         </article>
       </div>
+
+      <V2XPanel v2x={world.v2x} />
     </section>
   );
 }

@@ -192,6 +192,98 @@ export interface SimulationControlRequest {
   reset?: boolean;
 }
 
+export type V2XMessageType =
+  | "V2V_BSM"
+  | "V2V_PROXIMITY_ALERT"
+  | "V2I_ADVISORY"
+  | "V2I_INTERSECTION_PRIORITY"
+  | "V2I_EMERGENCY_BROADCAST";
+
+export type V2IAdvisoryType =
+  | "FOG_WARNING"
+  | "SPEED_RESTRICTION"
+  | "HAZARD_ZONE"
+  | "PASSAGE_PRIORITY"
+  | "DISPATCH"
+  | "ROAD_MAINTENANCE";
+
+export interface V2VBasicSafetyMessage {
+  message_id: string;
+  timestamp_ms: number;
+  vehicle_id: string;
+  x_m: number;
+  y_m: number;
+  heading_deg: number;
+  speed_mps: number;
+  emergency_state: EmergencyLevel | string;
+  corridor_state: CorridorState | string;
+  nearest_obstacle_m: number | null;
+  brake_applied: boolean;
+}
+
+export interface V2IAdvisoryMessage {
+  message_id: string;
+  timestamp_ms: number;
+  rsu_id: string;
+  rsu_name: string;
+  advisory_type: V2IAdvisoryType;
+  title: string;
+  detail: string;
+  speed_limit_kmh: number | null;
+  expires_at_ms: number | null;
+  zone_x_m: number | null;
+  zone_y_m: number | null;
+  zone_radius_m: number | null;
+}
+
+export interface V2XMessage {
+  message_id: string;
+  timestamp_ms: number;
+  msg_type: V2XMessageType;
+  source_id: string;
+  target_id: string;
+  summary: string;
+  bsm_payload?: V2VBasicSafetyMessage | null;
+  advisory_payload?: V2IAdvisoryMessage | null;
+}
+
+export interface V2XPeerNode {
+  vehicle_id: string;
+  last_seen_ms: number;
+  x_m: number;
+  y_m: number;
+  distance_m: number;
+  speed_mps: number;
+  heading_deg: number;
+  emergency_state: EmergencyLevel | string;
+  rssi_dbm: number;
+  link_status: "EXCELLENT" | "GOOD" | "DEGRADED" | "LOST";
+}
+
+export interface V2XInfrastructureNode {
+  rsu_id: string;
+  name: string;
+  x_m: number;
+  y_m: number;
+  status: "ACTIVE" | "STANDBY" | "OFFLINE";
+  coverage_radius_m: number;
+  active_advisories_count: number;
+}
+
+export interface V2XState {
+  timestamp_ms: number;
+  enabled: boolean;
+  node_id: string;
+  protocol_version: string;
+  tx_packet_count: number;
+  rx_packet_count: number;
+  channel_frequency_mhz: number;
+  active_peers: V2XPeerNode[];
+  infrastructure_nodes: V2XInfrastructureNode[];
+  active_advisories: V2IAdvisoryMessage[];
+  recent_messages: V2XMessage[];
+}
+
 export interface WorldState {
   schema_version: "1.0";
   generated_at_ms: number;
@@ -241,4 +333,5 @@ export interface WorldState {
   alerts: AlertEvent[];
   recording: RecordingState;
   simulation: SimulationState;
+  v2x?: V2XState;
 }

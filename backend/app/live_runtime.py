@@ -41,6 +41,7 @@ from backend.app.safety.corridor import CorridorEvaluator
 from backend.app.safety.emergency import EmergencyController, SafetyParameters
 from backend.app.twin.map_store import load_reference_map, save_reference_map
 from backend.app.twin.world_store import WorldStore
+from backend.app.v2x import V2XManager
 
 
 RANGE_SENSOR_IDS = (
@@ -81,6 +82,7 @@ class LiveSerialRuntime:
         serial_factory: SerialFactory = MainControllerSerial,
         source_name: str = "MAIN serial",
         transport: str = "SERIAL",
+        v2x_manager: V2XManager | None = None,
     ) -> None:
         self._store = store
         self._config = config
@@ -93,6 +95,7 @@ class LiveSerialRuntime:
         self._source_name = source_name
         self._transport = transport
         self._camera_feed = camera_feed
+        self._v2x_manager = v2x_manager or V2XManager()
         self._serial: SerialReader | None = None
         self._task: asyncio.Task[None] | None = None
         self._running = False
@@ -483,6 +486,12 @@ class LiveSerialRuntime:
                 if self._camera_feed is not None
                 else sample.environment
             )
+            self._v2x_manager.update_from_vehicle(
+                pose,
+                sample.emergency,
+                corridor,
+                sample.emergency.nearest_obstacle_m,
+            )
             return await self._store.replace(
                 WorldState(
                     generated_at_ms=received_at_ms,
@@ -504,6 +513,7 @@ class LiveSerialRuntime:
                     alerts=current.alerts,
                     recording=current.recording,
                     simulation=SimulationState(running=False),
+                    v2x=self._v2x_manager.snapshot(),
                 )
             )
 
@@ -676,5 +686,6 @@ class LiveSerialRuntime:
                     alerts=current.alerts,
                     recording=current.recording,
                     simulation=SimulationState(running=False),
+                    v2x=self._v2x_manager.snapshot(),
                 )
             )

@@ -6,6 +6,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.app.models.v2x import V2XState
+
 
 def now_ms() -> int:
     return time.time_ns() // 1_000_000
@@ -330,6 +332,7 @@ class WorldState(TelemetryModel):
     alerts: list[AlertEvent] = Field(default_factory=list)
     recording: RecordingState = Field(default_factory=RecordingState)
     simulation: SimulationState = Field(default_factory=SimulationState)
+    v2x: V2XState = Field(default_factory=V2XState)
 
     def primary_vehicle(self) -> VehiclePose:
         for vehicle in self.vehicles:

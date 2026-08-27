@@ -16,6 +16,7 @@ from backend.app.providers.wifi_listener import WifiTelemetryListener
 from backend.app.simulation.engine import FullSimulator
 from backend.app.sensor_settings import SensorSettingsStore
 from backend.app.twin.world_store import WorldStore
+from backend.app.v2x import V2XManager
 
 
 def create_app(
@@ -59,6 +60,8 @@ def create_app(
             config,
             active_settings.sensor_settings_path,
         )
+        v2x_manager = V2XManager(node_id="DUMPER_01")
+        app.state.v2x_manager = v2x_manager
         if active_settings.runtime_mode == "LIVE":
             app.state.simulator = None
             if active_settings.telemetry_transport == "WIFI":
@@ -90,6 +93,7 @@ def create_app(
                 serial_factory=source_factory,
                 source_name=source_name,
                 transport=active_settings.telemetry_transport,
+                v2x_manager=v2x_manager,
             )
             app.state.live_runtime = app.state.runtime
         else:
@@ -98,6 +102,7 @@ def create_app(
                 config=config,
                 telemetry_hz=active_settings.telemetry_hz,
                 camera_feed=active_camera_feed,
+                v2x_manager=v2x_manager,
             )
             app.state.runtime = app.state.simulator
             app.state.live_runtime = None
