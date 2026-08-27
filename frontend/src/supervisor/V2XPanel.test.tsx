@@ -1,9 +1,34 @@
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { defaultWorldState } from "../state/defaultState";
 import type { V2XState } from "../types";
 import { SupervisorDashboard } from "./SupervisorDashboard";
 import { V2XPanel } from "./V2XPanel";
+
+vi.mock("leaflet", () => ({
+  default: {
+    map: vi.fn(() => ({
+      setView: vi.fn(),
+      panTo: vi.fn(),
+      remove: vi.fn(),
+      on: vi.fn(),
+      removeLayer: vi.fn(),
+      invalidateSize: vi.fn(),
+    })),
+    tileLayer: vi.fn(() => ({ addTo: vi.fn().mockReturnThis(), bringToBack: vi.fn() })),
+    marker: vi.fn(() => ({
+      addTo: vi.fn().mockReturnThis(),
+      setLatLng: vi.fn(),
+      setIcon: vi.fn(),
+      bindPopup: vi.fn(),
+      on: vi.fn(),
+    })),
+    divIcon: vi.fn(() => ({})),
+    polyline: vi.fn(() => ({ addTo: vi.fn().mockReturnThis() })),
+    layerGroup: vi.fn(() => ({ addTo: vi.fn().mockReturnThis(), addLayer: vi.fn() })),
+    control: { zoom: vi.fn(() => ({ addTo: vi.fn() })), scale: vi.fn(() => ({ addTo: vi.fn() })) },
+  },
+}));
 
 describe("V2XPanel", () => {
   const mockV2XState: V2XState = {
