@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { RangeReading, SpatialPoint, VehiclePose, WorldState } from "../types";
 import type { ConnectionState } from "../state/useTelemetry";
+import { CampusMinimap } from "./CampusMinimap";
 import { TofRangePlot } from "./ProximityWidget";
 import {
   shouldShowTofOverlay,
@@ -26,6 +27,7 @@ interface CameraAwarenessProps {
   mode: AwarenessMode;
   onModeChange: (mode: AwarenessMode) => void;
   connection: ConnectionState;
+  onExpandMap?: () => void;
 }
 
 export function CameraAwareness({
@@ -36,6 +38,7 @@ export function CameraAwareness({
   mode,
   onModeChange,
   connection,
+  onExpandMap,
 }: CameraAwarenessProps) {
   const [cameraView, setCameraView] = useState<"RAW" | "ENHANCED">("RAW");
   const telemetryConnected = connection === "CONNECTED";
@@ -217,11 +220,14 @@ export function CameraAwareness({
             )}
           </div>
         )}
-        <div className="camera-horizon">
-          <span>SAFE CORRIDOR</span>
-          <strong className={`corridor-${corridorState.toLowerCase()}`}>
-            {corridorState}
-          </strong>
+
+        {/* GTA-Style Campus Minimap in the bottom-left corner of the camera stage */}
+        <div className="camera-minimap-overlay">
+          <CampusMinimap
+            world={world}
+            vehicle={vehicle}
+            onExpand={onExpandMap ?? (() => {})}
+          />
         </div>
       </div>
     </article>

@@ -1,4 +1,6 @@
+import { useState } from "react";
 import { CameraAwareness } from "./CameraAwareness";
+import { CampusExtendedMapModal } from "./CampusExtendedMapModal";
 import { ProximityWidget } from "./ProximityWidget";
 import type { AwarenessMode } from "./driverAwareness";
 import { availableRangeReadings } from "../state/rangeReadings";
@@ -20,6 +22,7 @@ export function DriverDashboard({
   onAwarenessModeChange,
   connection,
 }: DriverDashboardProps) {
+  const [isMapExtended, setIsMapExtended] = useState(false);
   const telemetryConnected = connection === "CONNECTED";
   const vehicle = primaryVehicle(world);
   const ranges = availableRangeReadings(
@@ -42,6 +45,9 @@ export function DriverDashboard({
       ? "STOPPED"
       : world.emergency.state;
   const corridorState = telemetryConnected ? world.safe_corridor.state : "GREY";
+  const corridorConfidence = telemetryConnected
+    ? Math.round(world.safe_corridor.confidence * 100)
+    : 0;
 
   return (
     <section className="dashboard driver-dashboard" aria-label="Driver dashboard">
@@ -74,9 +80,35 @@ export function DriverDashboard({
           mode={awarenessMode}
           onModeChange={onAwarenessModeChange}
           connection={connection}
+          onExpandMap={() => setIsMapExtended(true)}
         />
 
         <aside className="driver-instruments">
+          {/* Top-Right Safe Corridor Primary Status Card */}
+          <article className={`safe-corridor-top-card corridor-card-${corridorState.toLowerCase()}`}>
+            <div className="corridor-card-header">
+              <div>
+                <p className="eyebrow">Corridor Clearance</p>
+                <h3>Safe Corridor</h3>
+              </div>
+              <span className="corridor-confidence-badge">
+                {telemetryConnected ? `${corridorConfidence}% Conf.` : "No Telemetry"}
+              </span>
+            </div>
+            <div className="corridor-card-body">
+              <strong className={`corridor-state-pill corridor-${corridorState.toLowerCase()}`}>
+                {corridorState}
+              </strong>
+              <p className="corridor-card-detail">
+                {corridorState === "GREEN" && "Optimal lane clearance. Path is unobstructed."}
+                {corridorState === "YELLOW" && "Caution: Proximity alert or boundary restriction."}
+                {corridorState === "RED" && "Danger: Hazard zone or obstacle in path. Brake now."}
+                {corridorState === "GREY" && "Corridor evaluation inactive or sensors degraded."}
+              </p>
+            </div>
+          </article>
+
+          {/* Vehicle Speed & Heading */}
           <article className="speed-card">
             <p className="eyebrow">Vehicle speed</p>
             <div className="speed-readout">
@@ -89,16 +121,11 @@ export function DriverDashboard({
             </div>
           </article>
 
+          {/* Metrics Grid */}
           <div className="driver-metric-grid">
             <article>
               <span>Nearest obstacle</span>
               <strong>{nearest === null ? "--" : `${formatNumber(nearest, 2)} m`}</strong>
-            </article>
-            <article>
-              <span>Safe corridor</span>
-              <strong className={`corridor-${corridorState.toLowerCase()}`}>
-                {corridorState}
-              </strong>
             </article>
             <article>
               <span>Stop system</span>
@@ -108,6 +135,7 @@ export function DriverDashboard({
             </article>
           </div>
 
+          {/* 360° Proximity Radar Widget */}
           <ProximityWidget
             points={points}
             vehicle={vehicle}
@@ -115,6 +143,16 @@ export function DriverDashboard({
           />
         </aside>
       </div>
+
+      {/* Extended Campus Map View Modal (Bigger Box) */}
+      {isMapExtended && (
+        <CampusExtendedMapModal
+          world={world}
+          vehicle={vehicle}
+          telemetryConnected={telemetryConnected}
+          onClose={() => setIsMapExtended(false)}
+        />
+      )}
     </section>
   );
 }
