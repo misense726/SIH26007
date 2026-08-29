@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { RangeReading, SpatialPoint, VehiclePose } from "../types";
 import { defaultSensorSettings, type SensorDisplaySetting } from "../settings/sensorSettingsApi";
 import {
+  applyImuTransform,
   generateFovSectorPath,
   getSensorThreatLevel,
   obstacleVisualRadius,
@@ -120,5 +121,25 @@ describe("spatial display projection", () => {
     expect(path.startsWith("M ")).toBe(true);
     expect(path.endsWith(" Z")).toBe(true);
   });
+
+  it("applies MPU-6050 pitch, roll, and yaw transformations accurately", () => {
+    const original = { x_m: 0, y_m: 1, z_m: 0.5 };
+
+    // Pitch down by 10 degrees (nose dips forward/downward)
+    const pitched = applyImuTransform(original, { pitch_deg: -10, roll_deg: 0, yaw_deg: 0 });
+    expect(pitched.x_m).toBeCloseTo(0);
+    expect(pitched.z_m).toBeLessThan(0.5); // nose dips down
+
+    // Roll right by 15 degrees (banks right)
+    const rolled = applyImuTransform(original, { pitch_deg: 0, roll_deg: 15, yaw_deg: 0 });
+    expect(rolled.x_m).toBeGreaterThan(0); // shifts right
+
+    // Yaw 90 degrees
+    const yawed = applyImuTransform(original, { pitch_deg: 0, roll_deg: 0, yaw_deg: 90 });
+    expect(yawed.x_m).toBeCloseTo(1);
+    expect(yawed.y_m).toBeCloseTo(0);
+  });
+
 });
+
 

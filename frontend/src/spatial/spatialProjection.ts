@@ -13,6 +13,21 @@ export interface ScreenPoint {
   scale: number;
 }
 
+export interface ImuOrientation {
+  pitch_deg: number; // Nose up (positive) / down (negative)
+  roll_deg: number;  // Bank right (positive) / left (negative)
+  yaw_deg: number;   // Heading yaw offset
+  suspension_z_m?: number;
+}
+
+export interface CameraViewConfig {
+  orbitYawDeg?: number;
+  cameraPitchDeg?: number;
+  zoomScale?: number;
+  panOffsetX?: number;
+  panOffsetY?: number;
+}
+
 export type ThreatLevel = "ALERT" | "CAUTION" | "CLEAR" | "UNKNOWN";
 
 export function worldPointToVehicle(
@@ -29,15 +44,70 @@ export function worldPointToVehicle(
   };
 }
 
-export function projectVehiclePoint(point: VehiclePoint3D): ScreenPoint {
-  const forward = Math.max(-4, Math.min(6, point.y_m));
-  const scale = 1 / (1 + Math.max(0, forward + 0.5) * 0.055);
+/**
+ * Transforms a 3D point in the vehicle body frame by MPU-6050 IMU attitude (pitch, roll, yaw).
+ */
+export function applyImuTransform(
+  point: VehiclePoint3D,
+  imu: ImuOrientation = { pitch_deg: 0, roll_deg: 0, yaw_deg: 0 },
+  origin: VehiclePoint3D = { x_m: 0, y_m: 0, z_m: 0 },
+): VehiclePoint3D {
+  const pRad = (imu.pitch_deg * Math.PI) / 180;
+  const rRad = (imu.roll_deg * Math.PI) / 180;
+  const yRad = (imu.yaw_deg * Math.PI) / 180;
+
+  const dx = point.x_m - origin.x_m;
+  const dy = point.y_m - origin.y_m;
+  const dz = point.z_m - origin.z_m;
+
+  // 1. Yaw rotation around Z
+  const x1 = dx * Math.cos(yRad) + dy * Math.sin(yRad);
+  const y1 = -dx * Math.sin(yRad) + dy * Math.cos(yRad);
+  const z1 = dz;
+
+  // 2. Pitch rotation around X
+  const x2 = x1;
+  const y2 = y1 * Math.cos(pRad) - z1 * Math.sin(pRad);
+  const z2 = y1 * Math.sin(pRad) + z1 * Math.cos(pRad);
+
+  // 3. Roll rotation around Y
+  const x3 = x2 * Math.cos(rRad) + z2 * Math.sin(rRad);
+  const y3 = y2;
+  const z3 = -x2 * Math.sin(rRad) + z2 * Math.cos(rRad);
+
   return {
-    x: 500 + point.x_m * 96 * scale,
-    y: 452 - point.y_m * 55 - point.z_m * 72 * scale,
+    x_m: origin.x_m + x3,
+    y_m: origin.y_m + y3,
+    z_m: Math.max(0, origin.z_m + z3 + (imu.suspension_z_m ?? 0)),
+  };
+}
+
+export function projectVehiclePointWithCamera(
+  point: VehiclePoint3D,
+  camera: CameraViewConfig = {},
+): ScreenPoint {
+  const yawRad = ((camera.orbitYawDeg ?? 0) * Math.PI) / 180;
+  const zoom = camera.zoomScale ?? 1.0;
+  const panX = camera.panOffsetX ?? 0;
+  const panY = camera.panOffsetY ?? 0;
+
+  const rotatedX = point.x_m * Math.cos(yawRad) - point.y_m * Math.sin(yawRad);
+  const rotatedY = point.x_m * Math.sin(yawRad) + point.y_m * Math.cos(yawRad);
+
+  const forward = Math.max(-4, Math.min(6, rotatedY));
+  const scale = (1 / (1 + Math.max(0, forward + 0.5) * 0.055)) * zoom;
+
+  return {
+    x: 500 + panX + rotatedX * 96 * scale,
+    y: 452 + panY - rotatedY * 55 - point.z_m * 72 * scale,
     scale,
   };
 }
+
+export function projectVehiclePoint(point: VehiclePoint3D): ScreenPoint {
+  return projectVehiclePointWithCamera(point, {});
+}
+
 
 export function rangeEndpoint(
   setting: SensorDisplaySetting,

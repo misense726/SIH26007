@@ -3324,6 +3324,133 @@ footer {
   margin-bottom: 10px;
 }
 
+/* MPU-6050 Live Motion & Attitude Panel */
+.imu-motion-panel {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--accent-line, rgba(56, 189, 248, 0.4));
+  border-radius: 12px;
+  background: var(--surface-control);
+  backdrop-filter: blur(8px);
+}
+
+.imu-hud-readout {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
+.imu-hud-badge {
+  display: grid;
+  gap: 2px;
+  padding: 6px 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: 8px;
+  background: var(--surface-inset);
+}
+
+.imu-hud-badge small {
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.52rem;
+  letter-spacing: 0.05em;
+}
+
+.imu-hud-badge strong {
+  color: var(--accent, #38bdf8);
+  font-family: var(--mono);
+  font-size: 0.85rem;
+}
+
+.imu-controls-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  flex-wrap: wrap;
+}
+
+.imu-mode-switch {
+  display: inline-flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--surface-inset);
+}
+
+.imu-mode-btn {
+  padding: 4px 9px;
+  border: none;
+  border-radius: 6px;
+  color: var(--muted);
+  background: transparent;
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  transition: all 120ms ease;
+}
+
+.imu-mode-btn.active {
+  color: var(--accent-contrast);
+  background: var(--accent);
+}
+
+.imu-sliders-group,
+.camera-orbit-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.imu-sliders-group label,
+.camera-orbit-control label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  color: var(--text-soft);
+}
+
+.imu-sliders-group input[type="range"],
+.camera-orbit-control input[type="range"] {
+  width: 90px;
+  height: 4px;
+  accent-color: var(--accent, #38bdf8);
+  cursor: pointer;
+}
+
+.imu-reset-btn {
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  color: var(--text-soft);
+  background: var(--surface-inset);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+}
+
+.imu-reset-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.legend-imu-motion {
+  width: 10px !important;
+  height: 10px !important;
+  border-radius: 2px !important;
+  background: var(--accent, #38bdf8);
+  box-shadow: 0 0 6px var(--accent);
+}
+
+
 .spatial-toggle-group {
   display: inline-flex;
   gap: 6px;
