@@ -62,8 +62,36 @@ function SensorPlacementPreview({ sensors }: { sensors: SensorDisplaySetting[] }
       </defs>
       <rect x="1" y="1" width="318" height="228" rx="14" className="settings-preview-bg" />
       <rect x="1" y="1" width="318" height="228" rx="14" fill="url(#settings-grid)" />
-      <path className="settings-vehicle" d="M135 165V70Q160 48 185 70V165Q160 184 135 165Z" />
-      <path className="settings-vehicle-front" d="M150 61h20l-10-15z" />
+
+      {/* Top-down Haul Truck Schematic */}
+      <g className="settings-truck-schematic">
+        {/* Ground shadow */}
+        <rect x="132" y="62" width="56" height="114" rx="10" fill="rgba(0, 0, 0, 0.45)" />
+
+        {/* 6 Rugged Mining Tires */}
+        <rect x="131" y="70" width="10" height="24" rx="3" fill="#090d14" stroke="#334155" strokeWidth="1" />
+        <rect x="179" y="70" width="10" height="24" rx="3" fill="#090d14" stroke="#334155" strokeWidth="1" />
+        <rect x="130" y="122" width="11" height="28" rx="3" fill="#090d14" stroke="#334155" strokeWidth="1" />
+        <rect x="179" y="122" width="11" height="28" rx="3" fill="#090d14" stroke="#334155" strokeWidth="1" />
+
+        {/* Chassis Frame */}
+        <rect x="136" y="66" width="48" height="106" rx="6" fill="#0f172a" stroke="#475569" strokeWidth="1.5" />
+
+        {/* Dump Bed */}
+        <rect x="138" y="104" width="44" height="66" rx="4" fill="#1e293b" stroke="#475569" strokeWidth="1.5" />
+        <path d="M 138 104 L 140 82 L 180 82 L 182 104 Z" fill="#334155" stroke="#475569" strokeWidth="1.2" />
+
+        {/* Cab & Windshield */}
+        <rect x="140" y="72" width="24" height="24" rx="4" fill="#0284c7" stroke="#38bdf8" strokeWidth="1.4" />
+        <rect x="143" y="74" width="18" height="9" rx="2" fill="#bae6fd" fillOpacity="0.85" />
+
+        {/* Direction pointer */}
+        <path d="M 160 54 L 168 67 L 152 67 Z" fill="var(--accent, #38bdf8)" />
+
+        {/* Center pivot */}
+        <circle cx="160" cy="116" r="3.5" fill="#38bdf8" stroke="#ffffff" strokeWidth="1" />
+      </g>
+
       {sensors.map((sensor) => {
         const x = 160 + sensor.display_pose.x_m * 88;
         const y = 116 - sensor.display_pose.y_m * 88;
@@ -92,6 +120,7 @@ function SensorPlacementPreview({ sensors }: { sensors: SensorDisplaySetting[] }
     </svg>
   );
 }
+
 
 function updatePose(
   setting: SensorDisplaySetting,

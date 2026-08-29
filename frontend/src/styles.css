@@ -2018,7 +2018,7 @@ h3 {
 }
 
 .driver-instruments .proximity-svg {
-  width: min(100%, 205px);
+  width: min(100%, 215px);
 }
 
 .driver-instruments .proximity-key {
@@ -2040,10 +2040,30 @@ h3 {
   letter-spacing: 0.08em;
 }
 
+.prox-front-heading {
+  fill: var(--visual-label);
+  font-family: var(--mono);
+  font-size: 8px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+}
+
+.prox-ring-label {
+  fill: var(--muted);
+  font-family: var(--mono);
+  font-size: 6px;
+  opacity: 0.7;
+}
+
 .proximity-band {
   fill: none;
   stroke: var(--visual-grid);
-  stroke-width: 12;
+  stroke-width: 1.2;
+}
+
+.proximity-band-near {
+  stroke-dasharray: 4 3;
+  stroke: var(--warning-line);
 }
 
 .proximity-axis {
@@ -2052,28 +2072,32 @@ h3 {
   stroke-dasharray: 2 4;
 }
 
+.prox-danger-sector {
+  animation: pulse-danger-fast 1.2s ease-in-out infinite;
+}
+
 .range-hit {
   fill: var(--sensor);
-  filter: drop-shadow(0 0 4px var(--sensor-glow));
+  filter: drop-shadow(0 0 6px var(--sensor-glow));
+  transition: r 120ms ease, fill 120ms ease;
+}
+
+.range-hit-alert {
+  fill: var(--danger);
+  filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.8));
 }
 
 .range-hit-low {
   fill: var(--unknown);
+  opacity: 0.6;
 }
 
-.vehicle-glyph rect {
-  fill: var(--vehicle-fill);
-  stroke: var(--vehicle-outline);
-  stroke-width: 1.2;
+.point-danger-ripple {
+  animation: hit-ripple-expand 1.4s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
 }
 
-.vehicle-glyph path {
-  fill: var(--accent);
-}
-
-.vehicle-glyph circle {
-  fill: var(--surface-inset);
-  stroke: var(--accent);
+.vehicle-glyph {
+  transition: transform 120ms ease;
 }
 
 .tof-sensor-layout {
@@ -2086,15 +2110,29 @@ h3 {
 
 .tof-sensor-direction {
   stroke: currentColor;
-  stroke-width: 1.4;
+  stroke-width: 1.6;
   stroke-linecap: round;
-  opacity: 0.82;
+  opacity: 0.85;
+}
+
+.direction-alert {
+  stroke: var(--danger) !important;
+  stroke-width: 2.5 !important;
 }
 
 .tof-sensor-origin {
   fill: currentColor;
   stroke: var(--surface-inset);
-  stroke-width: 1.1;
+  stroke-width: 1.2;
+}
+
+.origin-alert {
+  fill: var(--danger) !important;
+  stroke: #ffffff !important;
+}
+
+.sensor-marker-alert {
+  filter: drop-shadow(0 0 6px var(--danger));
 }
 
 .tof-sensor-marker-down .tof-sensor-direction {
@@ -2112,10 +2150,11 @@ h3 {
 .proximity-key {
   display: flex;
   justify-content: center;
-  gap: 16px;
-  margin-top: 3px;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 5px;
   color: var(--muted);
-  font-size: 0.61rem;
+  font-size: 0.60rem;
 }
 
 .proximity-empty {
@@ -2140,10 +2179,22 @@ h3 {
   border: 1px solid var(--border-soft);
   border-radius: 10px;
   background: var(--surface-subtle);
+  transition: border-color var(--theme-transition), background-color var(--theme-transition);
 }
 
 .proximity-sensor-reading:last-child:nth-child(odd) {
   grid-column: 1 / -1;
+}
+
+.sensor-card-alert {
+  border-color: var(--danger-line);
+  background: var(--danger-soft);
+  box-shadow: 0 0 12px rgba(239, 68, 68, 0.18);
+}
+
+.sensor-card-caution {
+  border-color: var(--warning-line);
+  background: var(--warning-soft);
 }
 
 .proximity-sensor-heading,
@@ -2181,6 +2232,44 @@ h3 {
 .sensor-status-stale .proximity-sensor-dot,
 .sensor-status-offline .proximity-sensor-dot { background: var(--unknown); }
 
+.prox-mini-gauge {
+  position: relative;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--surface-control);
+  overflow: visible;
+  margin: 1px 0;
+}
+
+.prox-gauge-bar {
+  height: 100%;
+  border-radius: 2px;
+  transition: width 140ms ease, background-color 140ms ease;
+}
+
+.bar-alert {
+  background: var(--danger);
+  box-shadow: 0 0 6px var(--danger);
+}
+
+.bar-caution {
+  background: var(--warning);
+}
+
+.bar-clear {
+  background: var(--safe);
+}
+
+.prox-gauge-alert-line {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 1.5px;
+  background: var(--danger);
+  z-index: 2;
+}
+
 .proximity-sensor-value {
   justify-content: space-between;
   align-items: baseline;
@@ -2213,7 +2302,9 @@ h3 {
 }
 
 .key-sensor { background: var(--sensor); }
+.key-danger { background: var(--danger); }
 .key-low { background: var(--unknown); }
+
 
 .emergency-banner {
   display: flex;
@@ -3155,23 +3246,55 @@ footer {
 .spatial-alert {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   gap: 16px;
-  margin-bottom: 12px;
-  padding: 11px 14px;
-  border: 1px solid var(--danger-line);
-  border-radius: 11px;
-  color: var(--danger);
-  background: var(--danger-soft);
-  font-size: 0.72rem;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  border-radius: 12px;
+  font-size: 0.74rem;
+  transition: all 160ms ease;
 }
 
-.spatial-alert span {
-  color: var(--text-soft);
+.spatial-alert-danger {
+  border: 1px solid var(--danger-line);
+  color: var(--danger);
+  background: var(--danger-soft);
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.22);
+}
+
+.spatial-alert-caution {
+  border: 1px solid var(--warning-line);
+  color: var(--warning);
+  background: var(--warning-soft);
+}
+
+.alert-badge-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.alert-pulse-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 10px var(--danger);
+  animation: pulse-danger-fast 0.9s infinite;
+}
+
+.caution-pulse-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--warning);
+  box-shadow: 0 0 8px var(--warning);
+  animation: pulse-danger-fast 1.6s infinite;
 }
 
 .spatial-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.3fr);
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.34fr);
   gap: 16px;
 }
 
@@ -3189,13 +3312,98 @@ footer {
   min-width: 0;
   overflow: hidden;
   border-radius: 19px;
-  padding: 10px;
+  padding: 12px;
+}
+
+.spatial-viewport-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+}
+
+.spatial-toggle-group {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.spatial-toggle-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--muted);
+  background: var(--surface-control);
+  cursor: pointer;
+  font-family: var(--mono);
+  font-size: 0.60rem;
+  font-weight: 650;
+  transition: all 120ms ease;
+}
+
+.spatial-toggle-btn:hover {
+  color: var(--text-strong);
+  background: var(--surface-control-hover);
+}
+
+.spatial-toggle-btn.active {
+  color: var(--accent-contrast);
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.toggle-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.spatial-threat-pill .threat-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 0.60rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.threat-danger {
+  color: var(--danger);
+  background: var(--danger-soft);
+  border: 1px solid var(--danger-line);
+  animation: pulse-danger-fast 1s infinite;
+}
+
+.threat-caution {
+  color: var(--warning);
+  background: var(--warning-soft);
+  border: 1px solid var(--warning-line);
+}
+
+.threat-clear {
+  color: var(--safe);
+  background: var(--safe-soft);
+  border: 1px solid var(--safe-line);
+}
+
+.threat-offline {
+  color: var(--unknown);
+  background: var(--surface-subtle);
+  border: 1px solid var(--border);
 }
 
 .spatial-scene {
   display: block;
   width: 100%;
-  min-height: 540px;
+  min-height: 560px;
   border: 1px solid var(--border-soft);
   border-radius: 14px;
   background: var(--map-bg);
@@ -3209,6 +3417,7 @@ footer {
 .spatial-horizon {
   stroke: var(--border-strong);
   stroke-width: 1;
+  stroke-dasharray: 4 4;
 }
 
 .spatial-floor-grid line {
@@ -3217,12 +3426,50 @@ footer {
   vector-effect: non-scaling-stroke;
 }
 
+.range-distance-ring {
+  fill: none;
+  stroke: var(--visual-grid);
+  stroke-width: 1.3;
+  stroke-dasharray: 3 3;
+}
+
+.inner-danger-boundary {
+  stroke: var(--warning-line);
+  stroke-width: 1.6;
+}
+
+.dist-tick-label {
+  fill: var(--muted);
+  font-family: var(--mono);
+  font-size: 8.5px;
+  font-weight: 600;
+  opacity: 0.72;
+}
+
+.spatial-axis-marker {
+  fill: var(--visual-label);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+}
+
 .sensor-front-scanner { --sensor-source: var(--sensor-front-scanner); }
 .sensor-front-fixed { --sensor-source: var(--sensor-front-fixed); }
 .sensor-rear-scanner { --sensor-source: var(--sensor-rear-scanner); }
 .sensor-left-side { --sensor-source: var(--sensor-left-side); }
 .sensor-right-side { --sensor-source: var(--sensor-right-side); }
 
+/* FOV Hazard Cones */
+.fov-cone-pulse {
+  animation: fov-cone-hazard-wave 1.4s ease-in-out infinite;
+}
+
+.fov-alert-active {
+  filter: drop-shadow(0 0 12px rgba(239, 68, 68, 0.6));
+}
+
+/* Sensor Beams */
 .sensor-beam,
 .sensor-head-direction {
   stroke: var(--sensor-source);
@@ -3231,8 +3478,8 @@ footer {
 }
 
 .sensor-beam {
-  stroke-width: 1.7;
-  opacity: 0.62;
+  stroke-width: 2;
+  opacity: 0.75;
   transition: x2 190ms linear, y2 190ms linear, stroke var(--theme-transition);
 }
 
@@ -3241,28 +3488,104 @@ footer {
   opacity: 0.28;
 }
 
-.beam-hit,
-.spatial-sensor-heads circle,
-.sensor-swatch,
-.spatial-dot {
-  fill: var(--sensor-source);
-  background: var(--sensor-source);
+.beam-alert .sensor-beam {
+  stroke: #ef4444 !important;
+  stroke-dasharray: 8 4;
+  animation: beam-flow-danger 0.6s linear infinite;
+}
+
+.beam-caution .sensor-beam {
+  stroke: #f59e0b !important;
 }
 
 .beam-hit {
-  opacity: 0.92;
+  fill: var(--sensor-source);
+  opacity: 0.95;
+  transition: r 120ms ease, cx 90ms linear, cy 90ms linear;
 }
 
-.beam-alert .sensor-beam,
-.beam-alert .beam-hit,
-.spatial-dot-alert {
-  fill: var(--danger);
-  stroke: var(--danger);
+.beam-alert .beam-hit {
+  fill: #ef4444 !important;
 }
 
+.beam-caution .beam-hit {
+  fill: #f59e0b !important;
+}
+
+.beam-hit-ripple {
+  animation: hit-ripple-expand 1.2s cubic-bezier(0.1, 0.8, 0.3, 1) infinite;
+}
+
+.hit-ground-disc-alert {
+  animation: pulse-danger-fast 1s infinite;
+}
+
+/* Floating 3D Obstacle Pill */
+.spatial-obstacle-pill {
+  transition: transform 90ms linear;
+  filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.65));
+}
+
+.pill-alert rect {
+  stroke: #ef4444;
+  stroke-width: 2;
+}
+
+.pill-caution rect {
+  stroke: #f59e0b;
+}
+
+/* 3D Truck Model Styles */
+.vehicle-3d-truck {
+  transition: filter 160ms ease;
+}
+
+.truck-alert-active {
+  filter: drop-shadow(0 0 16px rgba(239, 68, 68, 0.35));
+}
+
+.perimeter-shield {
+  animation: pulse-danger-fast 1s infinite;
+}
+
+.beacon-pulse-alert {
+  animation: beacon-pulse-anim 0.6s infinite alternate;
+}
+
+.beacon-pulse-normal {
+  animation: beacon-pulse-anim 1.8s infinite alternate;
+}
+
+.beacon-wave {
+  animation: beacon-wave-pulse 1.4s ease-out infinite;
+}
+
+.sensor-pod-3d {
+  transition: all 120ms ease;
+}
+
+.sensor-lens-alert {
+  animation: pulse-danger-fast 0.8s infinite;
+}
+
+.sensor-alert-ring {
+  animation: hit-ripple-expand 1s infinite;
+}
+
+/* Point Cloud */
 .spatial-dot {
-  opacity: 0.82;
-  transition: cx 90ms linear, cy 90ms linear, fill 90ms linear;
+  fill: var(--sensor-source);
+  opacity: 0.85;
+  transition: cx 90ms linear, cy 90ms linear, r 120ms ease, fill 90ms linear;
+}
+
+.spatial-dot-alert {
+  fill: #ef4444 !important;
+  opacity: 1 !important;
+}
+
+.spatial-dot-caution {
+  fill: #f59e0b !important;
 }
 
 .spatial-dot-low {
@@ -3270,38 +3593,16 @@ footer {
   opacity: 0.52;
 }
 
-.spatial-vehicle path:first-child {
-  fill: var(--vehicle-fill);
-  stroke: var(--vehicle-outline);
-  stroke-width: 2;
-}
-
-.spatial-vehicle-front {
-  fill: var(--accent);
-}
-
-.spatial-vehicle line {
-  stroke: var(--vehicle-outline);
-  stroke-width: 1;
-  opacity: 0.45;
-}
-
-.spatial-sensor-heads circle {
-  stroke: var(--surface-inset);
-  stroke-width: 2;
-}
-
-.sensor-head-direction {
-  stroke-width: 3.5;
-  opacity: 0.9;
-  transition: x2 190ms linear, y2 190ms linear;
+.point-cloud-aura {
+  animation: aura-pulse 1.4s ease-in-out infinite;
 }
 
 .spatial-front-label {
   fill: var(--visual-label);
   font-family: var(--mono);
   font-size: 13px;
-  letter-spacing: 0.14em;
+  font-weight: 700;
+  letter-spacing: 0.16em;
 }
 
 .spatial-empty-overlay {
@@ -3350,6 +3651,13 @@ footer {
 .legend-dot-live { background: var(--sensor-front-scanner); }
 .legend-line-beam { width: 15px !important; height: 2px !important; border-radius: 2px !important; background: var(--sensor-rear-scanner); }
 .legend-dot-alert { background: var(--danger); }
+.legend-dot-caution { background: var(--warning); }
+.legend-ring-scale {
+  width: 12px !important;
+  height: 12px !important;
+  border: 1.5px solid var(--danger) !important;
+  background: transparent !important;
+}
 
 .spatial-truth-note {
   position: absolute;
@@ -3367,49 +3675,162 @@ footer {
 
 .spatial-sensor-list {
   display: grid;
-  gap: 7px;
+  gap: 8px;
 }
 
 .spatial-sensor-row {
   display: grid;
-  grid-template-columns: 7px minmax(0, 1fr) auto;
-  gap: 9px;
+  grid-template-columns: 8px minmax(0, 1fr) auto;
+  gap: 10px;
   align-items: center;
-  padding: 11px 9px;
+  padding: 12px 10px;
   border: 1px solid var(--border-soft);
-  border-radius: 10px;
+  border-radius: 11px;
   background: var(--surface-subtle);
+  transition: all 140ms ease;
 }
 
 .spatial-sensor-row-alert {
   border-color: var(--danger-line);
   background: var(--danger-soft);
+  box-shadow: 0 0 14px rgba(239, 68, 68, 0.2);
+}
+
+.spatial-sensor-row-caution {
+  border-color: var(--warning-line);
+  background: var(--warning-soft);
 }
 
 .sensor-swatch {
-  width: 6px;
-  height: 30px;
+  width: 7px;
+  height: 38px;
   border-radius: 999px;
+  background: var(--sensor-source, var(--accent));
 }
 
-.spatial-sensor-row strong,
-.spatial-sensor-row small {
-  display: block;
+.spatial-sensor-info {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
 }
 
-.spatial-sensor-row strong {
-  font-size: 0.68rem;
+.sensor-title-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
 }
 
-.spatial-sensor-row small {
-  margin-top: 3px;
+.sensor-title-line strong {
+  font-size: 0.72rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.sensor-threat-badge {
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-family: var(--mono);
+  font-size: 0.52rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.badge-alert {
+  color: var(--danger);
+  background: rgba(239, 68, 68, 0.2);
+  border: 1px solid var(--danger-line);
+}
+
+.badge-caution {
+  color: var(--warning);
+  background: rgba(245, 158, 11, 0.2);
+  border: 1px solid var(--warning-line);
+}
+
+.badge-clear {
+  color: var(--safe);
+  background: rgba(74, 222, 128, 0.15);
+}
+
+.badge-unknown {
+  color: var(--muted);
+  background: var(--surface-control);
+}
+
+.spatial-sensor-info small {
   color: var(--muted);
   font-family: var(--mono);
   font-size: 0.54rem;
 }
 
+.sensor-proximity-gauge {
+  position: relative;
+  width: 100%;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--surface-control);
+  margin-top: 3px;
+  overflow: visible;
+}
+
+.gauge-fill {
+  height: 100%;
+  border-radius: 3px;
+  transition: width 140ms ease, background-color 140ms ease;
+}
+
+.gauge-alert {
+  background: var(--danger);
+  box-shadow: 0 0 8px var(--danger);
+}
+
+.gauge-caution {
+  background: var(--warning);
+}
+
+.gauge-clear {
+  background: var(--safe);
+}
+
+.gauge-threshold-marker {
+  position: absolute;
+  top: -2px;
+  bottom: -2px;
+  width: 2px;
+  background: var(--danger);
+  z-index: 2;
+  box-shadow: 0 0 4px var(--danger);
+}
+
 .spatial-range-value {
   text-align: right;
+}
+
+.spatial-range-value strong {
+  display: block;
+  font-family: var(--mono);
+  font-size: 0.78rem;
+  color: var(--text-strong);
+}
+
+.range-text-alert {
+  color: var(--danger) !important;
+  font-weight: 800;
+}
+
+.range-text-caution {
+  color: var(--warning) !important;
+}
+
+.spatial-range-value small {
+  margin-top: 3px;
+  display: block;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.54rem;
 }
 
 .spatial-summary-list {
@@ -3434,6 +3855,51 @@ footer {
 
 .spatial-summary-list dt { color: var(--muted); }
 .spatial-summary-list dd { font-family: var(--mono); }
+
+.text-danger { color: var(--danger) !important; font-weight: 700; }
+.text-warning { color: var(--warning) !important; font-weight: 700; }
+
+/* ------------------------------------------------------------- */
+/* Keyframe Animations for Real-Time Threat Alerts              */
+/* ------------------------------------------------------------- */
+@keyframes pulse-danger-fast {
+  0% { opacity: 0.95; transform: scale(1); }
+  50% { opacity: 0.45; transform: scale(1.04); }
+  100% { opacity: 0.95; transform: scale(1); }
+}
+
+@keyframes hit-ripple-expand {
+  0% { r: 6; opacity: 0.9; }
+  100% { r: 28; opacity: 0; }
+}
+
+@keyframes beacon-pulse-anim {
+  0% { filter: drop-shadow(0 0 4px currentColor); }
+  100% { filter: drop-shadow(0 0 14px currentColor); }
+}
+
+@keyframes beacon-wave-pulse {
+  0% { r: 6; opacity: 0.6; }
+  100% { r: 20; opacity: 0; }
+}
+
+@keyframes fov-cone-hazard-wave {
+  0% { opacity: 0.85; }
+  50% { opacity: 0.4; }
+  100% { opacity: 0.85; }
+}
+
+@keyframes beam-flow-danger {
+  0% { stroke-dashoffset: 0; }
+  100% { stroke-dashoffset: -24; }
+}
+
+@keyframes aura-pulse {
+  0% { opacity: 0.6; transform: scale(1); }
+  50% { opacity: 0.25; transform: scale(1.1); }
+  100% { opacity: 0.6; transform: scale(1); }
+}
+
 
 .settings-heading {
   align-items: center;

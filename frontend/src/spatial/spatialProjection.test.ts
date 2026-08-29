@@ -1,7 +1,13 @@
 import { describe, expect, it } from "vitest";
 import type { RangeReading, SpatialPoint, VehiclePose } from "../types";
 import { defaultSensorSettings, type SensorDisplaySetting } from "../settings/sensorSettingsApi";
-import { rangeEndpoint, worldPointToVehicle } from "./spatialProjection";
+import {
+  generateFovSectorPath,
+  getSensorThreatLevel,
+  obstacleVisualRadius,
+  rangeEndpoint,
+  worldPointToVehicle,
+} from "./spatialProjection";
 
 const vehicle: VehiclePose = {
   timestamp_ms: 1,
@@ -80,4 +86,39 @@ describe("spatial display projection", () => {
     expect(endpoint.z_m).toBeLessThan(front!.display_pose.z_m);
     expect(endpoint.y_m).toBeGreaterThan(front!.display_pose.y_m);
   });
+
+  it("scales visual obstacle radius realistically as objects get nearer", () => {
+    const farRadius = obstacleVisualRadius(4.0, 1);
+    const midRadius = obstacleVisualRadius(2.0, 1);
+    const nearRadius = obstacleVisualRadius(0.8, 1);
+    const veryNearRadius = obstacleVisualRadius(0.25, 1);
+
+    expect(farRadius).toBeLessThan(midRadius);
+    expect(midRadius).toBeLessThan(nearRadius);
+    expect(nearRadius).toBeLessThan(veryNearRadius);
+    expect(veryNearRadius).toBeGreaterThan(15);
+  });
+
+  it("evaluates sensor threat levels correctly", () => {
+    const setting: SensorDisplaySetting = {
+      sensor_id: "front_scanner",
+      label: "Front scanner",
+      scanner: true,
+      display_pose: { x_m: 0, y_m: 0.5, z_m: 0.2, yaw_deg: 0, pitch_deg: 0 },
+      alert_distance_m: 1.0,
+      visual_range_m: 4,
+    };
+
+    expect(getSensorThreatLevel(undefined, setting)).toBe("UNKNOWN");
+    expect(getSensorThreatLevel({ timestamp_ms: 1, sensor_id: "front_scanner", angle_deg: 0, range_m: 0.6, quality: 1, max_range_m: 4, is_valid: true, mode: "LIVE" }, setting)).toBe("ALERT");
+    expect(getSensorThreatLevel({ timestamp_ms: 1, sensor_id: "front_scanner", angle_deg: 0, range_m: 1.3, quality: 1, max_range_m: 4, is_valid: true, mode: "LIVE" }, setting)).toBe("CAUTION");
+    expect(getSensorThreatLevel({ timestamp_ms: 1, sensor_id: "front_scanner", angle_deg: 0, range_m: 3.2, quality: 1, max_range_m: 4, is_valid: true, mode: "LIVE" }, setting)).toBe("CLEAR");
+  });
+
+  it("generates a closed SVG path for FOV sectors", () => {
+    const path = generateFovSectorPath({ x_m: 0, y_m: 0, z_m: 0 }, 0, 30, 2);
+    expect(path.startsWith("M ")).toBe(true);
+    expect(path.endsWith(" Z")).toBe(true);
+  });
 });
+
