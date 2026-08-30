@@ -31,7 +31,7 @@ export interface CameraViewConfig {
 export const CAMERA_ORBIT_MIN_DEG = 0;
 export const CAMERA_ORBIT_MAX_DEG = 359;
 export const DEFAULT_CAMERA_PITCH_DEG = 35;
-export const CAMERA_PITCH_MIN_DEG = 5;
+export const CAMERA_PITCH_MIN_DEG = -85;
 export const CAMERA_PITCH_MAX_DEG = 85;
 
 export function cameraOrbitAfterDrag(
@@ -116,12 +116,12 @@ export function projectVehiclePointWithCamera(
     Math.min(CAMERA_PITCH_MAX_DEG, camera.cameraPitchDeg ?? DEFAULT_CAMERA_PITCH_DEG),
   );
   const pitchRad = (pitchDeg * Math.PI) / 180;
-  const overheadProgress = Math.max(
+  const steepViewProgress = Math.max(
     0,
-    (pitchDeg - DEFAULT_CAMERA_PITCH_DEG) /
+    (Math.abs(pitchDeg) - DEFAULT_CAMERA_PITCH_DEG) /
       (CAMERA_PITCH_MAX_DEG - DEFAULT_CAMERA_PITCH_DEG),
   );
-  const zoom = (camera.zoomScale ?? 1.0) * (1 - overheadProgress * 0.38);
+  const zoom = (camera.zoomScale ?? 1.0) * (1 - steepViewProgress * 0.38);
   const panX = camera.panOffsetX ?? 0;
   const panY = camera.panOffsetY ?? 0;
 

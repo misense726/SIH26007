@@ -2,6 +2,7 @@ import type { RangeReading } from "../types";
 import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
 import {
   applyImuTransform,
+  DEFAULT_CAMERA_PITCH_DEG,
   getSensorThreatLevel,
   projectVehiclePointWithCamera,
   rangeEndpoint,
@@ -54,6 +55,8 @@ export function Vehicle3DTruck({
   const hasAnyAlert =
     emergencyState !== "SAFE" ||
     Array.from(threatBySensor.values()).some((threat) => threat === "ALERT");
+  const isUndersideView =
+    (cameraConfig.cameraPitchDeg ?? DEFAULT_CAMERA_PITCH_DEG) < 0;
 
   const isFrontAlert =
     threatBySensor.get("front_scanner") === "ALERT" ||
@@ -211,6 +214,33 @@ export function Vehicle3DTruck({
   const chassisBottomRight: VehiclePoint3D = { x_m: 0.45, y_m: -1.35, z_m: 0.26 };
   const chassisFrontLeft: VehiclePoint3D = { x_m: -0.45, y_m: 1.15, z_m: 0.26 };
   const chassisFrontRight: VehiclePoint3D = { x_m: 0.45, y_m: 1.15, z_m: 0.26 };
+
+  const underbodySkidPlate: VehiclePoint3D[] = [
+    { x_m: -0.38, y_m: -1.18, z_m: 0.12 },
+    { x_m: 0.38, y_m: -1.18, z_m: 0.12 },
+    { x_m: 0.38, y_m: 1.02, z_m: 0.12 },
+    { x_m: -0.38, y_m: 1.02, z_m: 0.12 },
+  ];
+  const underbodyDriveShaft: VehiclePoint3D[] = [
+    { x_m: -0.07, y_m: -0.82, z_m: 0.08 },
+    { x_m: 0.07, y_m: -0.82, z_m: 0.08 },
+    { x_m: 0.07, y_m: 0.82, z_m: 0.08 },
+    { x_m: -0.07, y_m: 0.82, z_m: 0.08 },
+  ];
+  const underbodyGearbox: VehiclePoint3D[] = [
+    { x_m: -0.25, y_m: -0.38, z_m: 0.06 },
+    { x_m: 0.25, y_m: -0.38, z_m: 0.06 },
+    { x_m: 0.22, y_m: 0.28, z_m: 0.06 },
+    { x_m: -0.22, y_m: 0.28, z_m: 0.06 },
+  ];
+  const axlePlate = (centerY: number): VehiclePoint3D[] => [
+    { x_m: -0.78, y_m: centerY - 0.08, z_m: 0.16 },
+    { x_m: 0.78, y_m: centerY - 0.08, z_m: 0.16 },
+    { x_m: 0.78, y_m: centerY + 0.08, z_m: 0.16 },
+    { x_m: -0.78, y_m: centerY + 0.08, z_m: 0.16 },
+  ];
+  const frontAxle = axlePlate(0.72);
+  const rearAxle = axlePlate(-0.72);
 
   // -------------------------------------------------------------
   // Dump Bed / Hopper Body
@@ -561,6 +591,55 @@ export function Vehicle3DTruck({
           className="beacon-wave"
         />
       </g>
+
+      {isUndersideView && (
+        <g className="truck-undercarriage" aria-label="Truck undercarriage">
+          <polygon
+            points={poly(underbodySkidPlate)}
+            fill="#111827"
+            stroke="#64748b"
+            strokeWidth="1.8"
+          />
+          <polygon
+            points={poly(frontAxle)}
+            fill="#0f172a"
+            stroke="#94a3b8"
+            strokeWidth="1.6"
+          />
+          <polygon
+            points={poly(rearAxle)}
+            fill="#0f172a"
+            stroke="#94a3b8"
+            strokeWidth="1.6"
+          />
+          <polygon
+            points={poly(underbodyDriveShaft)}
+            fill="#334155"
+            stroke="#94a3b8"
+            strokeWidth="1.4"
+          />
+          <polygon
+            points={poly(underbodyGearbox)}
+            fill="#1e293b"
+            stroke="var(--accent, #38bdf8)"
+            strokeWidth="1.5"
+          />
+          {[0.72, -0.72].map((centerY, index) => {
+            const center = proj({ x_m: 0, y_m: centerY, z_m: 0.1 });
+            return (
+              <circle
+                key={index === 0 ? "front-differential" : "rear-differential"}
+                cx={center.x}
+                cy={center.y}
+                r={Math.max(5, 9 * center.scale)}
+                fill="#0f172a"
+                stroke="#94a3b8"
+                strokeWidth="1.6"
+              />
+            );
+          })}
+        </g>
+      )}
 
       {/* 11. Mounted Sensor Pods */}
       {showSensorMounts && (

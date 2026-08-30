@@ -139,10 +139,10 @@ describe("spatial display projection", () => {
     expect(cameraOrbitAfterDrag(10, -120)).toBe(334);
   });
 
-  it("clamps vertical pointer movement between side and overhead views", () => {
+  it("clamps vertical pointer movement between underside and overhead views", () => {
     expect(cameraPitchAfterDrag(35, -100)).toBe(60);
     expect(cameraPitchAfterDrag(80, -100)).toBe(85);
-    expect(cameraPitchAfterDrag(10, 100)).toBe(5);
+    expect(cameraPitchAfterDrag(10, 400)).toBe(-85);
   });
 
   it("changes ground depth and vehicle height together with the camera pitch", () => {
@@ -155,6 +155,15 @@ describe("spatial display projection", () => {
 
     expect(Math.abs(overheadGround.y - 400)).toBeGreaterThan(Math.abs(sideGround.y - 400));
     expect(Math.abs(sideRoof.y - 400)).toBeGreaterThan(Math.abs(overheadRoof.y - 400));
+  });
+
+  it("reverses ground depth when the camera moves below the truck", () => {
+    const groundPoint = { x_m: 0, y_m: 2, z_m: 0 };
+    const overheadGround = projectVehiclePointWithCamera(groundPoint, { cameraPitchDeg: 65 });
+    const undersideGround = projectVehiclePointWithCamera(groundPoint, { cameraPitchDeg: -65 });
+
+    expect(overheadGround.y).toBeLessThan(400);
+    expect(undersideGround.y).toBeGreaterThan(400);
   });
 
   it("applies MPU-6050 pitch, roll, and yaw transformations accurately", () => {

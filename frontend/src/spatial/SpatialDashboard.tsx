@@ -224,6 +224,9 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
     orbitYawDeg: cameraOrbit,
     cameraPitchDeg: cameraPitch,
   };
+  const cameraPitchLabel = cameraPitch < 0
+    ? `${Math.abs(Math.round(cameraPitch))}° below`
+    : `${Math.round(cameraPitch)}° above`;
 
   // Sensor Threat Evaluations
   const sensorThreats = sensorSettings.map((sensor) => {
@@ -497,7 +500,7 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                     />
                   </label>
                   <label>
-                    <span>View: {Math.round(cameraPitch)}°</span>
+                    <span>View: {cameraPitchLabel}</span>
                     <input
                       type="range"
                       min={CAMERA_PITCH_MIN_DEG}
@@ -834,7 +837,7 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
           </svg>
 
           <span className="spatial-orbit-hint" aria-hidden="true">
-            Drag to orbit · <strong>{Math.round(cameraOrbit)}° / {Math.round(cameraPitch)}°</strong>
+            Drag to orbit · <strong>{Math.round(cameraOrbit)}° · {cameraPitchLabel}</strong>
           </span>
 
           {!connected && (

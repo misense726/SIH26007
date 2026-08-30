@@ -52,4 +52,20 @@ describe("Vehicle3DTruck 3D Model", () => {
     expect(markup).toContain("front-shield");
     expect(markup).toContain("sensor-alert-ring");
   });
+
+  it("renders the undercarriage when the camera moves below the truck", () => {
+    const sensors = defaultSensorSettings().sensors;
+    const markup = renderToStaticMarkup(
+      <svg viewBox="0 0 1000 620">
+        <Vehicle3DTruck
+          sensors={sensors}
+          readings={[]}
+          callsign="DUMPER_01"
+          cameraConfig={{ cameraPitchDeg: -65 }}
+        />
+      </svg>,
+    );
+
+    expect(markup).toContain("truck-undercarriage");
+  });
 });
