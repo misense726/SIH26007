@@ -30,6 +30,9 @@ export interface CameraViewConfig {
 
 export const CAMERA_ORBIT_MIN_DEG = 0;
 export const CAMERA_ORBIT_MAX_DEG = 359;
+export const DEFAULT_CAMERA_PITCH_DEG = 35;
+export const CAMERA_PITCH_MIN_DEG = 5;
+export const CAMERA_PITCH_MAX_DEG = 85;
 
 export function cameraOrbitAfterDrag(
   currentOrbitDeg: number,
@@ -38,6 +41,15 @@ export function cameraOrbitAfterDrag(
 ): number {
   const nextOrbitDeg = currentOrbitDeg + horizontalDeltaPx * degreesPerPixel;
   return ((nextOrbitDeg % 360) + 360) % 360;
+}
+
+export function cameraPitchAfterDrag(
+  currentPitchDeg: number,
+  verticalDeltaPx: number,
+  degreesPerPixel: number = 0.25,
+): number {
+  const nextPitchDeg = currentPitchDeg - verticalDeltaPx * degreesPerPixel;
+  return Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG, nextPitchDeg));
 }
 
 export type ThreatLevel = "ALERT" | "CAUTION" | "CLEAR" | "UNKNOWN";
@@ -99,19 +111,34 @@ export function projectVehiclePointWithCamera(
   camera: CameraViewConfig = {},
 ): ScreenPoint {
   const yawRad = ((camera.orbitYawDeg ?? 0) * Math.PI) / 180;
-  const zoom = camera.zoomScale ?? 1.0;
+  const pitchDeg = Math.max(
+    CAMERA_PITCH_MIN_DEG,
+    Math.min(CAMERA_PITCH_MAX_DEG, camera.cameraPitchDeg ?? DEFAULT_CAMERA_PITCH_DEG),
+  );
+  const pitchRad = (pitchDeg * Math.PI) / 180;
+  const overheadProgress = Math.max(
+    0,
+    (pitchDeg - DEFAULT_CAMERA_PITCH_DEG) /
+      (CAMERA_PITCH_MAX_DEG - DEFAULT_CAMERA_PITCH_DEG),
+  );
+  const zoom = (camera.zoomScale ?? 1.0) * (1 - overheadProgress * 0.38);
   const panX = camera.panOffsetX ?? 0;
   const panY = camera.panOffsetY ?? 0;
 
   const rotatedX = point.x_m * Math.cos(yawRad) - point.y_m * Math.sin(yawRad);
   const rotatedY = point.x_m * Math.sin(yawRad) + point.y_m * Math.cos(yawRad);
 
-  const forward = Math.max(-4, Math.min(6, rotatedY));
+  const cameraDepth = rotatedY * Math.cos(pitchRad) - point.z_m * Math.sin(pitchRad);
+  const forward = Math.max(-4, Math.min(6, cameraDepth));
   const scale = (1 / (1 + Math.max(0, forward + 0.5) * 0.055)) * zoom;
 
   return {
     x: 500 + panX + rotatedX * 96 * scale,
-    y: 400 + panY - rotatedY * 55 - point.z_m * 72 * scale,
+    y:
+      400 +
+      panY -
+      rotatedY * 96 * Math.sin(pitchRad) * zoom -
+      point.z_m * 88 * Math.cos(pitchRad) * scale,
     scale,
   };
 }

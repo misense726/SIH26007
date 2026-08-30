@@ -47,6 +47,7 @@ describe("SpatialDashboard scanner motion and proximity", () => {
     expect(markup).not.toContain("MPU-6050 dynamic 3D truck movement");
     expect(markup).not.toContain("MPU-6050 + 5×ToF");
     expect(markup).not.toContain("3D PERSPECTIVE TOF DEPTH VIEW");
+    expect(markup).toContain("vertically to change the viewing angle");
     expect(markup).toContain("vehicle-3d-truck");
   });
 

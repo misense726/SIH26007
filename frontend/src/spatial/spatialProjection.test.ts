@@ -4,9 +4,11 @@ import { defaultSensorSettings, type SensorDisplaySetting } from "../settings/se
 import {
   applyImuTransform,
   cameraOrbitAfterDrag,
+  cameraPitchAfterDrag,
   generateFovSectorPath,
   getSensorThreatLevel,
   obstacleVisualRadius,
+  projectVehiclePointWithCamera,
   rangeEndpoint,
   worldPointToVehicle,
 } from "./spatialProjection";
@@ -135,6 +137,24 @@ describe("spatial display projection", () => {
     expect(cameraOrbitAfterDrag(0, 120)).toBe(36);
     expect(cameraOrbitAfterDrag(350, 120)).toBe(26);
     expect(cameraOrbitAfterDrag(10, -120)).toBe(334);
+  });
+
+  it("clamps vertical pointer movement between side and overhead views", () => {
+    expect(cameraPitchAfterDrag(35, -100)).toBe(60);
+    expect(cameraPitchAfterDrag(80, -100)).toBe(85);
+    expect(cameraPitchAfterDrag(10, 100)).toBe(5);
+  });
+
+  it("changes ground depth and vehicle height together with the camera pitch", () => {
+    const groundPoint = { x_m: 0, y_m: 2, z_m: 0 };
+    const roofPoint = { x_m: 0, y_m: 0, z_m: 1 };
+    const sideGround = projectVehiclePointWithCamera(groundPoint, { cameraPitchDeg: 5 });
+    const overheadGround = projectVehiclePointWithCamera(groundPoint, { cameraPitchDeg: 85 });
+    const sideRoof = projectVehiclePointWithCamera(roofPoint, { cameraPitchDeg: 5 });
+    const overheadRoof = projectVehiclePointWithCamera(roofPoint, { cameraPitchDeg: 85 });
+
+    expect(Math.abs(overheadGround.y - 400)).toBeGreaterThan(Math.abs(sideGround.y - 400));
+    expect(Math.abs(sideRoof.y - 400)).toBeGreaterThan(Math.abs(overheadRoof.y - 400));
   });
 
   it("applies MPU-6050 pitch, roll, and yaw transformations accurately", () => {

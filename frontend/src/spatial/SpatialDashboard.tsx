@@ -8,8 +8,12 @@ import type { SpatialPoint, WorldState } from "../types";
 import {
   applyImuTransform,
   cameraOrbitAfterDrag,
+  cameraPitchAfterDrag,
   CAMERA_ORBIT_MAX_DEG,
   CAMERA_ORBIT_MIN_DEG,
+  CAMERA_PITCH_MAX_DEG,
+  CAMERA_PITCH_MIN_DEG,
+  DEFAULT_CAMERA_PITCH_DEG,
   generateFovSectorPath,
   getSensorThreatLevel,
   obstacleVisualRadius,
@@ -156,9 +160,10 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
   const [manualRoll, setManualRoll] = useState(0);
   const [manualYaw, setManualYaw] = useState(0);
   const [cameraOrbit, setCameraOrbit] = useState(0);
+  const [cameraPitch, setCameraPitch] = useState(DEFAULT_CAMERA_PITCH_DEG);
   const [isCameraDragging, setIsCameraDragging] = useState(false);
-  const cameraDrag = useRef<{ pointerId: number; clientX: number } | null>(null);
-  const pendingOrbitDelta = useRef(0);
+  const cameraDrag = useRef<{ pointerId: number; clientX: number; clientY: number } | null>(null);
+  const pendingOrbitDelta = useRef({ x: 0, y: 0 });
   const orbitAnimationFrame = useRef<number | null>(null);
 
   useEffect(() => () => {
@@ -217,6 +222,7 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
 
   const cameraConfig: CameraViewConfig = {
     orbitYawDeg: cameraOrbit,
+    cameraPitchDeg: cameraPitch,
   };
 
   // Sensor Threat Evaluations
@@ -248,11 +254,16 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
     setManualRoll(0);
     setManualYaw(0);
     setCameraOrbit(0);
+    setCameraPitch(DEFAULT_CAMERA_PITCH_DEG);
   };
 
   const startCameraOrbitDrag = (event: ReactPointerEvent<SVGSVGElement>) => {
     if (event.button !== 0) return;
-    cameraDrag.current = { pointerId: event.pointerId, clientX: event.clientX };
+    cameraDrag.current = {
+      pointerId: event.pointerId,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    };
     event.currentTarget.setPointerCapture(event.pointerId);
     setIsCameraDragging(true);
     event.preventDefault();
@@ -260,10 +271,13 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
 
   const flushCameraOrbit = () => {
     orbitAnimationFrame.current = null;
-    const horizontalDelta = pendingOrbitDelta.current;
-    pendingOrbitDelta.current = 0;
+    const { x: horizontalDelta, y: verticalDelta } = pendingOrbitDelta.current;
+    pendingOrbitDelta.current = { x: 0, y: 0 };
     if (horizontalDelta !== 0) {
       setCameraOrbit((current) => cameraOrbitAfterDrag(current, horizontalDelta));
+    }
+    if (verticalDelta !== 0) {
+      setCameraPitch((current) => cameraPitchAfterDrag(current, verticalDelta));
     }
   };
 
@@ -272,8 +286,10 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
     if (!drag || drag.pointerId !== event.pointerId) return;
 
     const horizontalDelta = event.clientX - drag.clientX;
-    cameraDrag.current = { ...drag, clientX: event.clientX };
-    pendingOrbitDelta.current += horizontalDelta;
+    const verticalDelta = event.clientY - drag.clientY;
+    cameraDrag.current = { ...drag, clientX: event.clientX, clientY: event.clientY };
+    pendingOrbitDelta.current.x += horizontalDelta;
+    pendingOrbitDelta.current.y += verticalDelta;
     if (orbitAnimationFrame.current === null) {
       orbitAnimationFrame.current = window.requestAnimationFrame(flushCameraOrbit);
     }
@@ -470,7 +486,7 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
 
                 <div className="camera-orbit-control">
                   <label>
-                    <span>Camera Orbit: {Math.round(cameraOrbit)}°</span>
+                    <span>Orbit: {Math.round(cameraOrbit)}°</span>
                     <input
                       type="range"
                       min={CAMERA_ORBIT_MIN_DEG}
@@ -478,6 +494,17 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                       step="1"
                       value={cameraOrbit}
                       onChange={(e) => setCameraOrbit(Number(e.target.value))}
+                    />
+                  </label>
+                  <label>
+                    <span>View: {Math.round(cameraPitch)}°</span>
+                    <input
+                      type="range"
+                      min={CAMERA_PITCH_MIN_DEG}
+                      max={CAMERA_PITCH_MAX_DEG}
+                      step="1"
+                      value={cameraPitch}
+                      onChange={(e) => setCameraPitch(Number(e.target.value))}
                     />
                   </label>
                   <button type="button" className="imu-reset-btn" onClick={resetAttitude}>
@@ -492,7 +519,7 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
             className={`spatial-scene ${isCameraDragging ? "is-orbiting" : ""}`}
             viewBox="0 0 1000 620"
             role="img"
-            aria-label={`Interactive 2.5D ToF display with ${plottedPoints.length} mapped returns and ${ranges.length} valid live ranges. Drag horizontally to orbit the camera.`}
+            aria-label={`Interactive 2.5D ToF display with ${plottedPoints.length} mapped returns and ${ranges.length} valid live ranges. Drag horizontally to orbit and vertically to change the viewing angle.`}
             onPointerDown={startCameraOrbitDrag}
             onPointerMove={moveCameraOrbit}
             onPointerUp={stopCameraOrbitDrag}
@@ -807,7 +834,7 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
           </svg>
 
           <span className="spatial-orbit-hint" aria-hidden="true">
-            Drag to orbit · <strong>{Math.round(cameraOrbit)}°</strong>
+            Drag to orbit · <strong>{Math.round(cameraOrbit)}° / {Math.round(cameraPitch)}°</strong>
           </span>
 
           {!connected && (
