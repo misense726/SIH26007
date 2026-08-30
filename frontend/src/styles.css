@@ -3534,6 +3534,28 @@ footer {
   border: 1px solid var(--border-soft);
   border-radius: 14px;
   background: var(--map-bg);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
+}
+
+.spatial-scene.is-orbiting {
+  cursor: grabbing;
+}
+
+.spatial-orbit-hint {
+  position: absolute;
+  right: 24px;
+  bottom: 63px;
+  z-index: 2;
+  padding: 4px 8px;
+  border: 1px solid var(--border-soft);
+  border-radius: 999px;
+  color: var(--muted);
+  background: color-mix(in srgb, var(--surface-inset) 88%, transparent);
+  font-family: var(--mono);
+  font-size: 0.55rem;
+  pointer-events: none;
 }
 
 .spatial-sky-top { stop-color: var(--map-bg); }
@@ -3607,7 +3629,7 @@ footer {
 .sensor-beam {
   stroke-width: 2;
   opacity: 0.75;
-  transition: x2 190ms linear, y2 190ms linear, stroke var(--theme-transition);
+  transition: stroke var(--theme-transition);
 }
 
 .sensor-beam-unknown {
@@ -3628,7 +3650,7 @@ footer {
 .beam-hit {
   fill: var(--sensor-source);
   opacity: 0.95;
-  transition: r 120ms ease, cx 90ms linear, cy 90ms linear;
+  transition: r 120ms ease;
 }
 
 .beam-alert .beam-hit {
@@ -3649,7 +3671,6 @@ footer {
 
 /* Floating 3D Obstacle Pill */
 .spatial-obstacle-pill {
-  transition: transform 90ms linear;
   filter: drop-shadow(0 3px 10px rgba(0, 0, 0, 0.65));
 }
 
@@ -3688,7 +3709,7 @@ footer {
 }
 
 .sensor-pod-3d {
-  transition: all 120ms ease;
+  pointer-events: none;
 }
 
 .sensor-lens-alert {

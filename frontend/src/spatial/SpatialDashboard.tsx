@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { availableRangeReadings } from "../state/rangeReadings";
 import { availableSpatialPoints } from "../state/spatialPoints";
 import { formatNumber, primaryVehicle } from "../state/selectors";
@@ -7,6 +7,9 @@ import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
 import type { SpatialPoint, WorldState } from "../types";
 import {
   applyImuTransform,
+  cameraOrbitAfterDrag,
+  CAMERA_ORBIT_MAX_DEG,
+  CAMERA_ORBIT_MIN_DEG,
   generateFovSectorPath,
   getSensorThreatLevel,
   obstacleVisualRadius,
@@ -153,6 +156,8 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
   const [manualRoll, setManualRoll] = useState(0);
   const [manualYaw, setManualYaw] = useState(0);
   const [cameraOrbit, setCameraOrbit] = useState(0);
+  const [isCameraDragging, setIsCameraDragging] = useState(false);
+  const cameraDrag = useRef<{ pointerId: number; clientX: number } | null>(null);
 
   const connected = connection === "CONNECTED";
   const vehicle = primaryVehicle(world);
@@ -235,6 +240,33 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
     setManualRoll(0);
     setManualYaw(0);
     setCameraOrbit(0);
+  };
+
+  const startCameraOrbitDrag = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (event.button !== 0) return;
+    cameraDrag.current = { pointerId: event.pointerId, clientX: event.clientX };
+    event.currentTarget.setPointerCapture(event.pointerId);
+    setIsCameraDragging(true);
+    event.preventDefault();
+  };
+
+  const moveCameraOrbit = (event: ReactPointerEvent<SVGSVGElement>) => {
+    const drag = cameraDrag.current;
+    if (!drag || drag.pointerId !== event.pointerId) return;
+
+    const horizontalDelta = event.clientX - drag.clientX;
+    cameraDrag.current = { ...drag, clientX: event.clientX };
+    setCameraOrbit((current) => cameraOrbitAfterDrag(current, horizontalDelta));
+    event.preventDefault();
+  };
+
+  const stopCameraOrbitDrag = (event: ReactPointerEvent<SVGSVGElement>) => {
+    if (cameraDrag.current?.pointerId !== event.pointerId) return;
+    cameraDrag.current = null;
+    setIsCameraDragging(false);
+    if (event.currentTarget.hasPointerCapture(event.pointerId)) {
+      event.currentTarget.releasePointerCapture(event.pointerId);
+    }
   };
 
   return (
@@ -418,12 +450,12 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
 
                 <div className="camera-orbit-control">
                   <label>
-                    <span>Camera Orbit: {cameraOrbit}°</span>
+                    <span>Camera Orbit: {Math.round(cameraOrbit)}°</span>
                     <input
                       type="range"
-                      min="-60"
-                      max="60"
-                      step="2"
+                      min={CAMERA_ORBIT_MIN_DEG}
+                      max={CAMERA_ORBIT_MAX_DEG}
+                      step="1"
                       value={cameraOrbit}
                       onChange={(e) => setCameraOrbit(Number(e.target.value))}
                     />
@@ -437,10 +469,18 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
           )}
 
           <svg
-            className="spatial-scene"
+            className={`spatial-scene ${isCameraDragging ? "is-orbiting" : ""}`}
             viewBox="0 0 1000 620"
             role="img"
-            aria-label={`2.5D ToF display with ${plottedPoints.length} mapped returns and ${ranges.length} valid live ranges`}
+            aria-label={`Interactive 2.5D ToF display with ${plottedPoints.length} mapped returns and ${ranges.length} valid live ranges. Drag horizontally to orbit the camera.`}
+            onPointerDown={startCameraOrbitDrag}
+            onPointerMove={moveCameraOrbit}
+            onPointerUp={stopCameraOrbitDrag}
+            onPointerCancel={stopCameraOrbitDrag}
+            onLostPointerCapture={() => {
+              cameraDrag.current = null;
+              setIsCameraDragging(false);
+            }}
           >
             <defs>
               <linearGradient id="spatial-sky" x1="0" y1="0" x2="0" y2="1">
@@ -521,6 +561,7 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                     fov,
                     range,
                     10,
+                    cameraConfig,
                   );
 
                   const fillGrad = isAlert
@@ -743,6 +784,8 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
               3D PERSPECTIVE TOF DEPTH VIEW · MPU-6050 ACTIVE
             </text>
           </svg>
+
+          <span className="spatial-orbit-hint" aria-hidden="true">Drag to orbit</span>
 
           {!connected && (
             <div className="spatial-empty-overlay">

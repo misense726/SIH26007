@@ -3,6 +3,7 @@ import type { RangeReading, SpatialPoint, VehiclePose } from "../types";
 import { defaultSensorSettings, type SensorDisplaySetting } from "../settings/sensorSettingsApi";
 import {
   applyImuTransform,
+  cameraOrbitAfterDrag,
   generateFovSectorPath,
   getSensorThreatLevel,
   obstacleVisualRadius,
@@ -122,6 +123,20 @@ describe("spatial display projection", () => {
     expect(path.endsWith(" Z")).toBe(true);
   });
 
+  it("projects FOV sectors through the active camera orbit", () => {
+    const origin = { x_m: 0, y_m: 0, z_m: 0 };
+    const frontView = generateFovSectorPath(origin, 0, 0, 2, 1, { orbitYawDeg: 0 });
+    const sideView = generateFovSectorPath(origin, 0, 0, 2, 1, { orbitYawDeg: 90 });
+
+    expect(sideView).not.toBe(frontView);
+  });
+
+  it("converts horizontal pointer movement into bounded camera orbit", () => {
+    expect(cameraOrbitAfterDrag(0, 120)).toBe(36);
+    expect(cameraOrbitAfterDrag(170, 120)).toBe(180);
+    expect(cameraOrbitAfterDrag(-170, -120)).toBe(-180);
+  });
+
   it("applies MPU-6050 pitch, roll, and yaw transformations accurately", () => {
     const original = { x_m: 0, y_m: 1, z_m: 0.5 };
 
@@ -141,5 +156,4 @@ describe("spatial display projection", () => {
   });
 
 });
-
 

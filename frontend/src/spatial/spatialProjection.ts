@@ -28,6 +28,20 @@ export interface CameraViewConfig {
   panOffsetY?: number;
 }
 
+export const CAMERA_ORBIT_MIN_DEG = -180;
+export const CAMERA_ORBIT_MAX_DEG = 180;
+
+export function cameraOrbitAfterDrag(
+  currentOrbitDeg: number,
+  horizontalDeltaPx: number,
+  degreesPerPixel: number = 0.3,
+): number {
+  return Math.max(
+    CAMERA_ORBIT_MIN_DEG,
+    Math.min(CAMERA_ORBIT_MAX_DEG, currentOrbitDeg + horizontalDeltaPx * degreesPerPixel),
+  );
+}
+
 export type ThreatLevel = "ALERT" | "CAUTION" | "CLEAR" | "UNKNOWN";
 
 export function worldPointToVehicle(
@@ -172,19 +186,26 @@ export function generateFovSectorPath(
   fovDeg: number,
   rangeM: number,
   segments: number = 8,
+  cameraConfig: CameraViewConfig = {},
 ): string {
   const halfFov = fovDeg / 2;
   const startAngle = yawDeg - halfFov;
   const step = fovDeg / segments;
 
-  const originScreen = projectVehiclePoint({ x_m: origin.x_m, y_m: origin.y_m, z_m: 0 });
+  const originScreen = projectVehiclePointWithCamera(
+    { x_m: origin.x_m, y_m: origin.y_m, z_m: 0 },
+    cameraConfig,
+  );
   const points: Array<{ x: number; y: number }> = [originScreen];
 
   for (let i = 0; i <= segments; i++) {
     const angle = ((startAngle + i * step) * Math.PI) / 180;
     const worldX = origin.x_m + Math.sin(angle) * rangeM;
     const worldY = origin.y_m + Math.cos(angle) * rangeM;
-    const screen = projectVehiclePoint({ x_m: worldX, y_m: worldY, z_m: 0 });
+    const screen = projectVehiclePointWithCamera(
+      { x_m: worldX, y_m: worldY, z_m: 0 },
+      cameraConfig,
+    );
     points.push(screen);
   }
 
@@ -193,4 +214,3 @@ export function generateFovSectorPath(
     return `${acc} L ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
   }, "") + " Z";
 }
-
