@@ -2,6 +2,7 @@ import type { RangeReading } from "../types";
 import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
 import {
   applyImuTransform,
+  cameraDepthForVehiclePoint,
   DEFAULT_CAMERA_PITCH_DEG,
   getSensorThreatLevel,
   projectVehiclePointWithCamera,
@@ -25,6 +26,12 @@ interface Vehicle3DTruckProps {
   imuOrientation?: ImuOrientation;
   steerAngleDeg?: number;
   cameraConfig?: CameraViewConfig;
+}
+
+interface TruckFace {
+  key: string;
+  points: VehiclePoint3D[];
+  fill: string;
 }
 
 function sensorClass(sensorId: string): string {
@@ -94,6 +101,16 @@ export function Vehicle3DTruck({
         return `${screen.x.toFixed(1)},${screen.y.toFixed(1)}`;
       })
       .join(" ");
+
+  const faceDepth = (face: TruckFace): number =>
+    face.points.reduce(
+      (sum, point) =>
+        sum + cameraDepthForVehiclePoint(transformPoint(point), cameraConfig),
+      0,
+    ) / face.points.length;
+
+  const backToFront = (faces: TruckFace[]): TruckFace[] =>
+    [...faces].sort((a, b) => faceDepth(b) - faceDepth(a));
 
   // -------------------------------------------------------------
   // Ground Contact & Shadow Coordinates (Grounded on z = 0)
@@ -176,28 +193,51 @@ export function Vehicle3DTruck({
       };
     };
 
-    const outerFace: VehiclePoint3D[] = [
-      steer(xOuter, centerY - length, zBase),
-      steer(xOuter, centerY + length, zBase),
-      steer(xOuter, centerY + length, zTop),
-      steer(xOuter, centerY - length, zTop),
-    ];
-    const topTread: VehiclePoint3D[] = [
-      steer(xInner, centerY - length, zTop),
-      steer(xInner, centerY + length, zTop),
-      steer(xOuter, centerY + length, zTop),
-      steer(xOuter, centerY - length, zTop),
-    ];
-    const frontTread: VehiclePoint3D[] = [
-      steer(xInner, centerY + length, zBase),
-      steer(xOuter, centerY + length, zBase),
-      steer(xOuter, centerY + length, zTop),
-      steer(xInner, centerY + length, zTop),
+    const innerRearBottom = steer(xInner, centerY - length, zBase);
+    const innerFrontBottom = steer(xInner, centerY + length, zBase);
+    const innerRearTop = steer(xInner, centerY - length, zTop);
+    const innerFrontTop = steer(xInner, centerY + length, zTop);
+    const outerRearBottom = steer(xOuter, centerY - length, zBase);
+    const outerFrontBottom = steer(xOuter, centerY + length, zBase);
+    const outerRearTop = steer(xOuter, centerY - length, zTop);
+    const outerFrontTop = steer(xOuter, centerY + length, zTop);
+
+    const faces: TruckFace[] = [
+      {
+        key: "inner",
+        points: [innerRearBottom, innerFrontBottom, innerFrontTop, innerRearTop],
+        fill: "#070b12",
+      },
+      {
+        key: "outer",
+        points: [outerRearBottom, outerFrontBottom, outerFrontTop, outerRearTop],
+        fill: "#090d14",
+      },
+      {
+        key: "top",
+        points: [innerRearTop, innerFrontTop, outerFrontTop, outerRearTop],
+        fill: "#253247",
+      },
+      {
+        key: "bottom",
+        points: [innerRearBottom, innerFrontBottom, outerFrontBottom, outerRearBottom],
+        fill: "#05080d",
+      },
+      {
+        key: "front",
+        points: [innerFrontBottom, outerFrontBottom, outerFrontTop, innerFrontTop],
+        fill: "#111827",
+      },
+      {
+        key: "rear",
+        points: [innerRearBottom, outerRearBottom, outerRearTop, innerRearTop],
+        fill: "#0b111c",
+      },
     ];
 
     const hubCenter: VehiclePoint3D = steer(xOuter, centerY, radius);
 
-    return { outerFace, topTread, frontTread, hubCenter };
+    return { faces, hubCenter };
   };
 
   const frontLeftWheel = buildTire(-0.66, 0.72, 0.22, 0.30, steerAngleDeg);
@@ -241,6 +281,55 @@ export function Vehicle3DTruck({
   ];
   const frontAxle = axlePlate(0.72);
   const rearAxle = axlePlate(-0.72);
+
+  const coreRearLower: VehiclePoint3D[] = [
+    { x_m: -0.48, y_m: -1.30, z_m: 0.18 },
+    { x_m: 0.48, y_m: -1.30, z_m: 0.18 },
+  ];
+  const coreFrontLower: VehiclePoint3D[] = [
+    { x_m: -0.48, y_m: 1.08, z_m: 0.18 },
+    { x_m: 0.48, y_m: 1.08, z_m: 0.18 },
+  ];
+  const coreRearUpper: VehiclePoint3D[] = [
+    { x_m: -0.48, y_m: -1.30, z_m: 0.54 },
+    { x_m: 0.48, y_m: -1.30, z_m: 0.54 },
+  ];
+  const coreFrontUpper: VehiclePoint3D[] = [
+    { x_m: -0.48, y_m: 1.08, z_m: 0.54 },
+    { x_m: 0.48, y_m: 1.08, z_m: 0.54 },
+  ];
+  const solidCoreFaces: TruckFace[] = [
+    {
+      key: "bottom",
+      points: [coreRearLower[0], coreRearLower[1], coreFrontLower[1], coreFrontLower[0]],
+      fill: "#080d16",
+    },
+    {
+      key: "top",
+      points: [coreRearUpper[0], coreRearUpper[1], coreFrontUpper[1], coreFrontUpper[0]],
+      fill: "#263449",
+    },
+    {
+      key: "left",
+      points: [coreRearLower[0], coreFrontLower[0], coreFrontUpper[0], coreRearUpper[0]],
+      fill: "#101827",
+    },
+    {
+      key: "right",
+      points: [coreRearLower[1], coreFrontLower[1], coreFrontUpper[1], coreRearUpper[1]],
+      fill: "#172235",
+    },
+    {
+      key: "front",
+      points: [coreFrontLower[0], coreFrontLower[1], coreFrontUpper[1], coreFrontUpper[0]],
+      fill: "#1d2a3d",
+    },
+    {
+      key: "rear",
+      points: [coreRearLower[0], coreRearLower[1], coreRearUpper[1], coreRearUpper[0]],
+      fill: "#0b121e",
+    },
+  ];
 
   // -------------------------------------------------------------
   // Dump Bed / Hopper Body
@@ -466,6 +555,21 @@ export function Vehicle3DTruck({
         </g>
       )}
 
+      {/* Closed load-bearing chassis core remains solid from every camera angle. */}
+      <g className="truck-solid-core" aria-label="Solid truck chassis">
+        {backToFront(solidCoreFaces).map((face) => (
+          <polygon
+            key={`core-${face.key}`}
+            className="truck-core-face"
+            points={poly(face.points)}
+            fill={face.fill}
+            stroke="#526176"
+            strokeWidth="1.35"
+            strokeLinejoin="round"
+          />
+        ))}
+      </g>
+
       {/* 4. Rear Tires */}
       <g className="truck-wheels">
         {[rearLeftInnerWheel, rearLeftOuterWheel, rearRightInnerWheel, rearRightOuterWheel].map(
@@ -473,9 +577,17 @@ export function Vehicle3DTruck({
             const hub = proj(tire.hubCenter);
             return (
               <g key={`rear-wheel-${idx}`} className="truck-tire-assembly">
-                <polygon points={poly(tire.outerFace)} fill="#090d14" stroke="#1e293b" strokeWidth="1.2" />
-                <polygon points={poly(tire.topTread)} fill="#1e293b" stroke="#334155" strokeWidth="1" />
-                <polygon points={poly(tire.frontTread)} fill="#0f172a" stroke="#1e293b" strokeWidth="1" />
+                {backToFront(tire.faces).map((face) => (
+                  <polygon
+                    key={face.key}
+                    className="truck-tire-face"
+                    points={poly(face.points)}
+                    fill={face.fill}
+                    stroke="#334155"
+                    strokeWidth="1.1"
+                    strokeLinejoin="round"
+                  />
+                ))}
                 <circle cx={hub.x} cy={hub.y} r={Math.max(2, 6 * hub.scale)} fill="#475569" stroke="#94a3b8" strokeWidth="1" />
                 <circle cx={hub.x} cy={hub.y} r={Math.max(1, 2.5 * hub.scale)} fill="#1e293b" />
               </g>
@@ -549,9 +661,17 @@ export function Vehicle3DTruck({
           const hub = proj(tire.hubCenter);
           return (
             <g key={`front-wheel-${idx}`} className="truck-tire-assembly">
-              <polygon points={poly(tire.outerFace)} fill="#090d14" stroke="#1e293b" strokeWidth="1.4" />
-              <polygon points={poly(tire.topTread)} fill="#1e293b" stroke="#334155" strokeWidth="1.2" />
-              <polygon points={poly(tire.frontTread)} fill="#0f172a" stroke="#1e293b" strokeWidth="1.2" />
+              {backToFront(tire.faces).map((face) => (
+                <polygon
+                  key={face.key}
+                  className="truck-tire-face"
+                  points={poly(face.points)}
+                  fill={face.fill}
+                  stroke="#334155"
+                  strokeWidth="1.2"
+                  strokeLinejoin="round"
+                />
+              ))}
               <circle cx={hub.x} cy={hub.y} r={Math.max(2, 6 * hub.scale)} fill="#475569" stroke="#94a3b8" strokeWidth="1" />
               <circle cx={hub.x} cy={hub.y} r={Math.max(1, 2.5 * hub.scale)} fill="#1e293b" />
             </g>
@@ -646,6 +766,9 @@ export function Vehicle3DTruck({
         <g className="truck-sensor-mounts">
           {sensors.map((sensor) => {
             const reading = readingById.get(sensor.sensor_id);
+            const hasFiniteReturn = Boolean(
+              reading?.is_valid && Number.isFinite(reading.range_m),
+            );
             const origin = proj(sensor.display_pose);
             const endpoint = proj(rangeEndpoint(sensor, reading));
             const threat = threatBySensor.get(sensor.sensor_id) ?? "UNKNOWN";
@@ -698,7 +821,7 @@ export function Vehicle3DTruck({
                     className="sensor-alert-ring"
                   />
                 )}
-                <title>{`${sensor.label}: ${threat} (${reading?.is_valid ? `${reading.range_m.toFixed(2)} m` : "no return"})`}</title>
+                <title>{`${sensor.label}: ${threat} (${hasFiniteReturn ? `${reading!.range_m.toFixed(2)} m` : "no return"})`}</title>
               </g>
             );
           })}

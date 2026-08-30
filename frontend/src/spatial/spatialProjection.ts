@@ -34,12 +34,26 @@ export const DEFAULT_CAMERA_PITCH_DEG = 35;
 export const CAMERA_PITCH_MIN_DEG = -85;
 export const CAMERA_PITCH_MAX_DEG = 85;
 
+function finiteNumber(value: number | undefined, fallback: number): number {
+  return Number.isFinite(value) ? (value as number) : fallback;
+}
+
+function finiteVehiclePoint(point: VehiclePoint3D): VehiclePoint3D {
+  return {
+    x_m: finiteNumber(point.x_m, 0),
+    y_m: finiteNumber(point.y_m, 0),
+    z_m: finiteNumber(point.z_m, 0),
+  };
+}
+
 export function cameraOrbitAfterDrag(
   currentOrbitDeg: number,
   horizontalDeltaPx: number,
   degreesPerPixel: number = 0.3,
 ): number {
-  const nextOrbitDeg = currentOrbitDeg + horizontalDeltaPx * degreesPerPixel;
+  const nextOrbitDeg =
+    finiteNumber(currentOrbitDeg, 0) +
+    finiteNumber(horizontalDeltaPx, 0) * finiteNumber(degreesPerPixel, 0.3);
   return ((nextOrbitDeg % 360) + 360) % 360;
 }
 
@@ -48,7 +62,9 @@ export function cameraPitchAfterDrag(
   verticalDeltaPx: number,
   degreesPerPixel: number = 0.25,
 ): number {
-  const nextPitchDeg = currentPitchDeg - verticalDeltaPx * degreesPerPixel;
+  const nextPitchDeg =
+    finiteNumber(currentPitchDeg, DEFAULT_CAMERA_PITCH_DEG) -
+    finiteNumber(verticalDeltaPx, 0) * finiteNumber(degreesPerPixel, 0.25);
   return Math.max(CAMERA_PITCH_MIN_DEG, Math.min(CAMERA_PITCH_MAX_DEG, nextPitchDeg));
 }
 
@@ -76,13 +92,15 @@ export function applyImuTransform(
   imu: ImuOrientation = { pitch_deg: 0, roll_deg: 0, yaw_deg: 0 },
   origin: VehiclePoint3D = { x_m: 0, y_m: 0, z_m: 0 },
 ): VehiclePoint3D {
-  const pRad = (imu.pitch_deg * Math.PI) / 180;
-  const rRad = (imu.roll_deg * Math.PI) / 180;
-  const yRad = (imu.yaw_deg * Math.PI) / 180;
+  const safePoint = finiteVehiclePoint(point);
+  const safeOrigin = finiteVehiclePoint(origin);
+  const pRad = (finiteNumber(imu.pitch_deg, 0) * Math.PI) / 180;
+  const rRad = (finiteNumber(imu.roll_deg, 0) * Math.PI) / 180;
+  const yRad = (finiteNumber(imu.yaw_deg, 0) * Math.PI) / 180;
 
-  const dx = point.x_m - origin.x_m;
-  const dy = point.y_m - origin.y_m;
-  const dz = point.z_m - origin.z_m;
+  const dx = safePoint.x_m - safeOrigin.x_m;
+  const dy = safePoint.y_m - safeOrigin.y_m;
+  const dz = safePoint.z_m - safeOrigin.z_m;
 
   // 1. Yaw rotation around Z
   const x1 = dx * Math.cos(yRad) + dy * Math.sin(yRad);
@@ -100,20 +118,48 @@ export function applyImuTransform(
   const z3 = -x2 * Math.sin(rRad) + z2 * Math.cos(rRad);
 
   return {
-    x_m: origin.x_m + x3,
-    y_m: origin.y_m + y3,
-    z_m: Math.max(0, origin.z_m + z3 + (imu.suspension_z_m ?? 0)),
+    x_m: safeOrigin.x_m + x3,
+    y_m: safeOrigin.y_m + y3,
+    z_m: Math.max(
+      0,
+      safeOrigin.z_m + z3 + finiteNumber(imu.suspension_z_m, 0),
+    ),
   };
+}
+
+export function cameraDepthForVehiclePoint(
+  point: VehiclePoint3D,
+  camera: CameraViewConfig = {},
+): number {
+  const safePoint = finiteVehiclePoint(point);
+  const yawDeg = finiteNumber(camera.orbitYawDeg, 0);
+  const pitchDeg = Math.max(
+    CAMERA_PITCH_MIN_DEG,
+    Math.min(
+      CAMERA_PITCH_MAX_DEG,
+      finiteNumber(camera.cameraPitchDeg, DEFAULT_CAMERA_PITCH_DEG),
+    ),
+  );
+  const yawRad = (yawDeg * Math.PI) / 180;
+  const pitchRad = (pitchDeg * Math.PI) / 180;
+  const rotatedY =
+    safePoint.x_m * Math.sin(yawRad) + safePoint.y_m * Math.cos(yawRad);
+
+  return rotatedY * Math.cos(pitchRad) - safePoint.z_m * Math.sin(pitchRad);
 }
 
 export function projectVehiclePointWithCamera(
   point: VehiclePoint3D,
   camera: CameraViewConfig = {},
 ): ScreenPoint {
-  const yawRad = ((camera.orbitYawDeg ?? 0) * Math.PI) / 180;
+  const safePoint = finiteVehiclePoint(point);
+  const yawRad = (finiteNumber(camera.orbitYawDeg, 0) * Math.PI) / 180;
   const pitchDeg = Math.max(
     CAMERA_PITCH_MIN_DEG,
-    Math.min(CAMERA_PITCH_MAX_DEG, camera.cameraPitchDeg ?? DEFAULT_CAMERA_PITCH_DEG),
+    Math.min(
+      CAMERA_PITCH_MAX_DEG,
+      finiteNumber(camera.cameraPitchDeg, DEFAULT_CAMERA_PITCH_DEG),
+    ),
   );
   const pitchRad = (pitchDeg * Math.PI) / 180;
   const steepViewProgress = Math.max(
@@ -121,14 +167,17 @@ export function projectVehiclePointWithCamera(
     (Math.abs(pitchDeg) - DEFAULT_CAMERA_PITCH_DEG) /
       (CAMERA_PITCH_MAX_DEG - DEFAULT_CAMERA_PITCH_DEG),
   );
-  const zoom = (camera.zoomScale ?? 1.0) * (1 - steepViewProgress * 0.38);
-  const panX = camera.panOffsetX ?? 0;
-  const panY = camera.panOffsetY ?? 0;
+  const zoom = Math.max(0.2, Math.min(4, finiteNumber(camera.zoomScale, 1))) *
+    (1 - steepViewProgress * 0.38);
+  const panX = finiteNumber(camera.panOffsetX, 0);
+  const panY = finiteNumber(camera.panOffsetY, 0);
 
-  const rotatedX = point.x_m * Math.cos(yawRad) - point.y_m * Math.sin(yawRad);
-  const rotatedY = point.x_m * Math.sin(yawRad) + point.y_m * Math.cos(yawRad);
+  const rotatedX =
+    safePoint.x_m * Math.cos(yawRad) - safePoint.y_m * Math.sin(yawRad);
+  const rotatedY =
+    safePoint.x_m * Math.sin(yawRad) + safePoint.y_m * Math.cos(yawRad);
 
-  const cameraDepth = rotatedY * Math.cos(pitchRad) - point.z_m * Math.sin(pitchRad);
+  const cameraDepth = cameraDepthForVehiclePoint(safePoint, camera);
   const forward = Math.max(-4, Math.min(6, cameraDepth));
   const scale = (1 / (1 + Math.max(0, forward + 0.5) * 0.055)) * zoom;
 
@@ -138,7 +187,7 @@ export function projectVehiclePointWithCamera(
       400 +
       panY -
       rotatedY * 96 * Math.sin(pitchRad) * zoom -
-      point.z_m * 88 * Math.cos(pitchRad) * scale,
+      safePoint.z_m * 88 * Math.cos(pitchRad) * scale,
     scale,
   };
 }
@@ -152,17 +201,24 @@ export function rangeEndpoint(
   setting: SensorDisplaySetting,
   reading: RangeReading | undefined,
 ): VehiclePoint3D {
+  const visualRange = Math.max(0, finiteNumber(setting.visual_range_m, 0));
+  const measuredRange = finiteNumber(reading?.range_m, 0.55);
   const range = reading?.is_valid
-    ? Math.min(reading.range_m, setting.visual_range_m)
-    : Math.min(0.55, setting.visual_range_m);
-  const yaw = setting.display_pose.yaw_deg + (setting.scanner ? reading?.angle_deg ?? 0 : 0);
+    ? Math.max(0, Math.min(measuredRange, visualRange))
+    : Math.min(0.55, visualRange);
+  const yaw =
+    finiteNumber(setting.display_pose.yaw_deg, 0) +
+    (setting.scanner ? finiteNumber(reading?.angle_deg, 0) : 0);
   const yawRad = (yaw * Math.PI) / 180;
-  const pitchRad = (setting.display_pose.pitch_deg * Math.PI) / 180;
+  const pitchRad = (finiteNumber(setting.display_pose.pitch_deg, 0) * Math.PI) / 180;
   const planarRange = range * Math.cos(pitchRad);
   return {
-    x_m: setting.display_pose.x_m + Math.sin(yawRad) * planarRange,
-    y_m: setting.display_pose.y_m + Math.cos(yawRad) * planarRange,
-    z_m: Math.max(0, setting.display_pose.z_m + Math.sin(pitchRad) * range),
+    x_m: finiteNumber(setting.display_pose.x_m, 0) + Math.sin(yawRad) * planarRange,
+    y_m: finiteNumber(setting.display_pose.y_m, 0) + Math.cos(yawRad) * planarRange,
+    z_m: Math.max(
+      0,
+      finiteNumber(setting.display_pose.z_m, 0) + Math.sin(pitchRad) * range,
+    ),
   };
 }
 
@@ -170,10 +226,11 @@ export function pointDistanceFromSensor(
   point: VehiclePoint3D,
   setting: SensorDisplaySetting,
 ): number {
+  const safePoint = finiteVehiclePoint(point);
   return Math.hypot(
-    point.x_m - setting.display_pose.x_m,
-    point.y_m - setting.display_pose.y_m,
-    point.z_m - setting.display_pose.z_m,
+    safePoint.x_m - finiteNumber(setting.display_pose.x_m, 0),
+    safePoint.y_m - finiteNumber(setting.display_pose.y_m, 0),
+    safePoint.z_m - finiteNumber(setting.display_pose.z_m, 0),
   );
 }
 
@@ -183,9 +240,12 @@ export function pointDistanceFromSensor(
  * expanding into high-prominence hazard discs when close.
  */
 export function obstacleVisualRadius(distanceM: number, scale: number = 1): number {
-  const clampedDist = Math.max(0.18, distanceM);
+  const clampedDist = Math.max(0.18, finiteNumber(distanceM, 4));
   const proximityFactor = 3.6 / (clampedDist + 0.42);
-  const radius = Math.min(26, Math.max(3.2, 4.4 * proximityFactor * scale));
+  const radius = Math.min(
+    26,
+    Math.max(3.2, 4.4 * proximityFactor * Math.max(0, finiteNumber(scale, 1))),
+  );
   return Number(radius.toFixed(2));
 }
 
@@ -196,9 +256,10 @@ export function getSensorThreatLevel(
   reading: RangeReading | undefined,
   setting: SensorDisplaySetting,
 ): ThreatLevel {
-  if (!reading || !reading.is_valid) return "UNKNOWN";
-  if (reading.range_m <= setting.alert_distance_m) return "ALERT";
-  if (reading.range_m <= setting.alert_distance_m * 1.5) return "CAUTION";
+  if (!reading || !reading.is_valid || !Number.isFinite(reading.range_m)) return "UNKNOWN";
+  const alertDistance = Math.max(0, finiteNumber(setting.alert_distance_m, 0));
+  if (reading.range_m <= alertDistance) return "ALERT";
+  if (reading.range_m <= alertDistance * 1.5) return "CAUTION";
   return "CLEAR";
 }
 

@@ -184,4 +184,53 @@ describe("spatial display projection", () => {
     expect(yawed.y_m).toBeCloseTo(0);
   });
 
+  it("contains invalid camera and IMU values before they reach SVG geometry", () => {
+    const transformed = applyImuTransform(
+      { x_m: Number.NaN, y_m: Number.POSITIVE_INFINITY, z_m: Number.NEGATIVE_INFINITY },
+      { pitch_deg: Number.NaN, roll_deg: Number.POSITIVE_INFINITY, yaw_deg: Number.NaN },
+    );
+    const projected = projectVehiclePointWithCamera(transformed, {
+      orbitYawDeg: Number.NaN,
+      cameraPitchDeg: Number.POSITIVE_INFINITY,
+      zoomScale: Number.NaN,
+      panOffsetX: Number.POSITIVE_INFINITY,
+      panOffsetY: Number.NaN,
+    });
+
+    expect(Object.values(transformed).every(Number.isFinite)).toBe(true);
+    expect(Object.values(projected).every(Number.isFinite)).toBe(true);
+  });
+
+  it("contains invalid scanner telemetry before calculating a range endpoint", () => {
+    const setting = defaultSensorSettings().sensors.find(
+      (sensor) => sensor.sensor_id === "front_scanner",
+    )!;
+    const endpoint = rangeEndpoint(setting, {
+      timestamp_ms: 1,
+      sensor_id: "front_scanner",
+      angle_deg: Number.NaN,
+      range_m: Number.NaN,
+      quality: 1,
+      max_range_m: 4,
+      is_valid: true,
+      mode: "LIVE",
+    });
+
+    expect(Object.values(endpoint).every(Number.isFinite)).toBe(true);
+    expect(getSensorThreatLevel(
+      {
+        timestamp_ms: 1,
+        sensor_id: "front_scanner",
+        angle_deg: Number.NaN,
+        range_m: Number.NaN,
+        quality: 1,
+        max_range_m: 4,
+        is_valid: true,
+        mode: "LIVE",
+      },
+      setting,
+    )).toBe("UNKNOWN");
+    expect(Number.isFinite(obstacleVisualRadius(Number.NaN, Number.POSITIVE_INFINITY))).toBe(true);
+  });
+
 });
