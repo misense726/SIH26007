@@ -3226,21 +3226,15 @@ footer {
   font-size: 0.74rem;
 }
 
-.spatial-heading-badges {
-  display: flex;
-  gap: 7px;
+.spatial-page-heading {
+  align-items: center;
+  margin-bottom: 12px;
+  padding-block: 0;
 }
 
-.source-live {
-  color: var(--safe);
-  border-color: var(--safe-line);
-  background: var(--safe-soft);
-}
-
-.source-offline {
-  color: var(--warning);
-  border-color: var(--warning-line);
-  background: var(--warning-soft);
+.spatial-page-heading h2 {
+  margin: 0;
+  font-size: clamp(1.45rem, 2.4vw, 2rem);
 }
 
 .spatial-alert {
@@ -3312,16 +3306,21 @@ footer {
   min-width: 0;
   overflow: hidden;
   border-radius: 19px;
-  padding: 12px;
+  padding: 10px;
+  background: linear-gradient(180deg, var(--surface), var(--surface-subtle));
 }
 
 .spatial-viewport-toolbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
   margin-bottom: 10px;
+  padding: 7px;
+  border: 1px solid var(--border-soft);
+  border-radius: 12px;
+  background: var(--surface-inset);
 }
 
 /* MPU-6050 Live Motion & Attitude Panel */
@@ -3442,15 +3441,6 @@ footer {
   border-color: var(--accent);
 }
 
-.legend-imu-motion {
-  width: 10px !important;
-  height: 10px !important;
-  border-radius: 2px !important;
-  background: var(--accent, #38bdf8);
-  box-shadow: 0 0 6px var(--accent);
-}
-
-
 .spatial-toggle-group {
   display: inline-flex;
   gap: 6px;
@@ -3461,11 +3451,12 @@ footer {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  min-height: 30px;
   padding: 5px 10px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  border: 1px solid transparent;
+  border-radius: 7px;
   color: var(--muted);
-  background: var(--surface-control);
+  background: transparent;
   cursor: pointer;
   font-family: var(--mono);
   font-size: 0.60rem;
@@ -3479,9 +3470,9 @@ footer {
 }
 
 .spatial-toggle-btn.active {
-  color: var(--accent-contrast);
-  background: var(--accent);
-  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--accent-soft);
+  border-color: var(--accent-line);
 }
 
 .toggle-dot {
@@ -3494,12 +3485,21 @@ footer {
 .spatial-threat-pill .threat-pill {
   display: inline-flex;
   align-items: center;
-  padding: 4px 10px;
+  gap: 7px;
+  padding: 5px 10px;
   border-radius: 999px;
   font-family: var(--mono);
   font-size: 0.60rem;
   font-weight: 700;
   letter-spacing: 0.04em;
+}
+
+.threat-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 8px currentColor;
 }
 
 .threat-danger {
@@ -3534,6 +3534,7 @@ footer {
   border: 1px solid var(--border-soft);
   border-radius: 14px;
   background: var(--map-bg);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.025);
   cursor: grab;
   touch-action: none;
   user-select: none;
@@ -3546,7 +3547,7 @@ footer {
 .spatial-orbit-hint {
   position: absolute;
   right: 24px;
-  bottom: 63px;
+  bottom: 45px;
   z-index: 2;
   padding: 4px 8px;
   border: 1px solid var(--border-soft);
@@ -3556,6 +3557,11 @@ footer {
   font-family: var(--mono);
   font-size: 0.55rem;
   pointer-events: none;
+}
+
+.spatial-orbit-hint strong {
+  color: var(--text-strong);
+  font-weight: 700;
 }
 
 .spatial-sky-top { stop-color: var(--map-bg); }
@@ -3724,7 +3730,7 @@ footer {
 .spatial-dot {
   fill: var(--sensor-source);
   opacity: 0.85;
-  transition: cx 90ms linear, cy 90ms linear, r 120ms ease, fill 90ms linear;
+  transition: r 120ms ease, fill 90ms linear;
 }
 
 .spatial-dot-alert {
@@ -3743,14 +3749,6 @@ footer {
 
 .point-cloud-aura {
   animation: aura-pulse 1.4s ease-in-out infinite;
-}
-
-.spatial-front-label {
-  fill: var(--visual-label);
-  font-family: var(--mono);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.16em;
 }
 
 .spatial-empty-overlay {
@@ -3777,8 +3775,8 @@ footer {
 .spatial-legend {
   display: flex;
   flex-wrap: wrap;
-  gap: 16px;
-  padding: 10px 7px 3px;
+  gap: 14px;
+  padding: 10px 5px 2px;
   color: var(--muted);
   font-size: 0.62rem;
 }
@@ -3800,21 +3798,6 @@ footer {
 .legend-line-beam { width: 15px !important; height: 2px !important; border-radius: 2px !important; background: var(--sensor-rear-scanner); }
 .legend-dot-alert { background: var(--danger); }
 .legend-dot-caution { background: var(--warning); }
-.legend-ring-scale {
-  width: 12px !important;
-  height: 12px !important;
-  border: 1.5px solid var(--danger) !important;
-  background: transparent !important;
-}
-
-.spatial-truth-note {
-  position: absolute;
-  right: 17px;
-  bottom: 14px;
-  color: var(--footer);
-  font-size: 0.58rem;
-}
-
 .spatial-sensor-panel {
   align-self: start;
   border-radius: 19px;
@@ -4346,6 +4329,17 @@ footer {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
+  .spatial-viewport-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .spatial-toggle-group {
+    max-width: 100%;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+
   .setting-field-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
@@ -4364,15 +4358,6 @@ footer {
 
   .spatial-scene {
     min-height: 390px;
-  }
-
-  .spatial-legend {
-    padding-bottom: 22px;
-  }
-
-  .spatial-truth-note {
-    left: 17px;
-    right: auto;
   }
 
   .spatial-alert {

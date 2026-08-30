@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { availableRangeReadings } from "../state/rangeReadings";
 import { availableSpatialPoints } from "../state/spatialPoints";
 import { formatNumber, primaryVehicle } from "../state/selectors";
@@ -158,6 +158,14 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
   const [cameraOrbit, setCameraOrbit] = useState(0);
   const [isCameraDragging, setIsCameraDragging] = useState(false);
   const cameraDrag = useRef<{ pointerId: number; clientX: number } | null>(null);
+  const pendingOrbitDelta = useRef(0);
+  const orbitAnimationFrame = useRef<number | null>(null);
+
+  useEffect(() => () => {
+    if (orbitAnimationFrame.current !== null) {
+      window.cancelAnimationFrame(orbitAnimationFrame.current);
+    }
+  }, []);
 
   const connected = connection === "CONNECTED";
   const vehicle = primaryVehicle(world);
@@ -250,13 +258,25 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
     event.preventDefault();
   };
 
+  const flushCameraOrbit = () => {
+    orbitAnimationFrame.current = null;
+    const horizontalDelta = pendingOrbitDelta.current;
+    pendingOrbitDelta.current = 0;
+    if (horizontalDelta !== 0) {
+      setCameraOrbit((current) => cameraOrbitAfterDrag(current, horizontalDelta));
+    }
+  };
+
   const moveCameraOrbit = (event: ReactPointerEvent<SVGSVGElement>) => {
     const drag = cameraDrag.current;
     if (!drag || drag.pointerId !== event.pointerId) return;
 
     const horizontalDelta = event.clientX - drag.clientX;
     cameraDrag.current = { ...drag, clientX: event.clientX };
-    setCameraOrbit((current) => cameraOrbitAfterDrag(current, horizontalDelta));
+    pendingOrbitDelta.current += horizontalDelta;
+    if (orbitAnimationFrame.current === null) {
+      orbitAnimationFrame.current = window.requestAnimationFrame(flushCameraOrbit);
+    }
     event.preventDefault();
   };
 
@@ -264,6 +284,10 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
     if (cameraDrag.current?.pointerId !== event.pointerId) return;
     cameraDrag.current = null;
     setIsCameraDragging(false);
+    if (orbitAnimationFrame.current !== null) {
+      window.cancelAnimationFrame(orbitAnimationFrame.current);
+      flushCameraOrbit();
+    }
     if (event.currentTarget.hasPointerCapture(event.pointerId)) {
       event.currentTarget.releasePointerCapture(event.pointerId);
     }
@@ -272,17 +296,7 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
   return (
     <section className="dashboard spatial-dashboard" aria-label="Live 2.5D ToF surrounding view">
       <header className="page-heading spatial-page-heading">
-        <div>
-          <p className="eyebrow">Tactical 3D Vehicle Surroundings</p>
-          <h2>Spatial view</h2>
-          <p>MPU-6050 dynamic 3D truck movement, optical perspective scaling &amp; real-time collision zones.</p>
-        </div>
-        <div className="spatial-heading-badges">
-          <span className="source-badge">MPU-6050 + 5×ToF</span>
-          <span className={`source-badge ${connected ? "source-live" : "source-offline"}`}>
-            {connected ? world.mode : connection}
-          </span>
-        </div>
+        <h2>Spatial view</h2>
       </header>
 
       {/* Top Banner Alert when obstacle is detected */}
@@ -354,18 +368,24 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
             <div className="spatial-threat-pill">
               {closestAlert ? (
                 <span className="threat-pill threat-danger">
-                  🔴 DANGER: {closestAlert.sensor.label} ({closestAlert.rangeM?.toFixed(2)}m)
+                  <i className="threat-status-dot" aria-hidden="true" />
+                  Hazard · {closestAlert.sensor.label} · {closestAlert.rangeM?.toFixed(2)} m
                 </span>
               ) : closestCaution ? (
                 <span className="threat-pill threat-caution">
-                  🟡 CAUTION: {closestCaution.sensor.label} ({closestCaution.rangeM?.toFixed(2)}m)
+                  <i className="threat-status-dot" aria-hidden="true" />
+                  Caution · {closestCaution.sensor.label} · {closestCaution.rangeM?.toFixed(2)} m
                 </span>
               ) : connected ? (
                 <span className="threat-pill threat-clear">
-                  🟢 ALL SECTORS CLEAR ({ranges.length} active ToF)
+                  <i className="threat-status-dot" aria-hidden="true" />
+                  Clear · {ranges.length}/5 ToF
                 </span>
               ) : (
-                <span className="threat-pill threat-offline">⚪ TELEMETRY DISCONNECTED</span>
+                <span className="threat-pill threat-offline">
+                  <i className="threat-status-dot" aria-hidden="true" />
+                  No telemetry
+                </span>
               )}
             </div>
           </div>
@@ -478,6 +498,10 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
             onPointerUp={stopCameraOrbitDrag}
             onPointerCancel={stopCameraOrbitDrag}
             onLostPointerCapture={() => {
+              if (orbitAnimationFrame.current !== null) {
+                window.cancelAnimationFrame(orbitAnimationFrame.current);
+                flushCameraOrbit();
+              }
               cameraDrag.current = null;
               setIsCameraDragging(false);
             }}
@@ -780,12 +804,11 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
               cameraConfig={cameraConfig}
             />
 
-            <text className="spatial-front-label" x="500" y="38" textAnchor="middle">
-              3D PERSPECTIVE TOF DEPTH VIEW · MPU-6050 ACTIVE
-            </text>
           </svg>
 
-          <span className="spatial-orbit-hint" aria-hidden="true">Drag to orbit</span>
+          <span className="spatial-orbit-hint" aria-hidden="true">
+            Drag to orbit · <strong>{Math.round(cameraOrbit)}°</strong>
+          </span>
 
           {!connected && (
             <div className="spatial-empty-overlay">
@@ -798,14 +821,9 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
           <div className="spatial-legend">
             <span><i className="legend-dot-live" />Mapped return</span>
             <span><i className="legend-line-beam" />Active beam</span>
-            <span><i className="legend-dot-alert" />Proximity Hazard (Red)</span>
-            <span><i className="legend-dot-caution" />Proximity Caution (Amber)</span>
-            <span><i className="legend-ring-scale" />Inverse Distance Sizing</span>
-            <span><i className="legend-imu-motion" />MPU-6050 Motion Active</span>
+            <span><i className="legend-dot-alert" />Hazard</span>
+            <span><i className="legend-dot-caution" />Caution</span>
           </div>
-          <p className="spatial-truth-note">
-            Perspective scaling: Nearest objects expand into high-prominence hazard discs. MPU-6050 pitches, rolls, &amp; turns the vehicle in 3D space.
-          </p>
         </article>
 
         {/* ----------------------------------------------------------- */}

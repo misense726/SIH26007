@@ -28,18 +28,16 @@ export interface CameraViewConfig {
   panOffsetY?: number;
 }
 
-export const CAMERA_ORBIT_MIN_DEG = -180;
-export const CAMERA_ORBIT_MAX_DEG = 180;
+export const CAMERA_ORBIT_MIN_DEG = 0;
+export const CAMERA_ORBIT_MAX_DEG = 359;
 
 export function cameraOrbitAfterDrag(
   currentOrbitDeg: number,
   horizontalDeltaPx: number,
   degreesPerPixel: number = 0.3,
 ): number {
-  return Math.max(
-    CAMERA_ORBIT_MIN_DEG,
-    Math.min(CAMERA_ORBIT_MAX_DEG, currentOrbitDeg + horizontalDeltaPx * degreesPerPixel),
-  );
+  const nextOrbitDeg = currentOrbitDeg + horizontalDeltaPx * degreesPerPixel;
+  return ((nextOrbitDeg % 360) + 360) % 360;
 }
 
 export type ThreatLevel = "ALERT" | "CAUTION" | "CLEAR" | "UNKNOWN";
@@ -113,7 +111,7 @@ export function projectVehiclePointWithCamera(
 
   return {
     x: 500 + panX + rotatedX * 96 * scale,
-    y: 452 + panY - rotatedY * 55 - point.z_m * 72 * scale,
+    y: 400 + panY - rotatedY * 55 - point.z_m * 72 * scale,
     scale,
   };
 }

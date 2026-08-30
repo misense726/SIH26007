@@ -131,10 +131,10 @@ describe("spatial display projection", () => {
     expect(sideView).not.toBe(frontView);
   });
 
-  it("converts horizontal pointer movement into bounded camera orbit", () => {
+  it("wraps horizontal pointer movement through a full camera orbit", () => {
     expect(cameraOrbitAfterDrag(0, 120)).toBe(36);
-    expect(cameraOrbitAfterDrag(170, 120)).toBe(180);
-    expect(cameraOrbitAfterDrag(-170, -120)).toBe(-180);
+    expect(cameraOrbitAfterDrag(350, 120)).toBe(26);
+    expect(cameraOrbitAfterDrag(10, -120)).toBe(334);
   });
 
   it("applies MPU-6050 pitch, roll, and yaw transformations accurately", () => {
@@ -156,4 +156,3 @@ describe("spatial display projection", () => {
   });
 
 });
-
