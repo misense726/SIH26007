@@ -4283,6 +4283,38 @@ footer {
 .settings-save-state-saved { color: var(--safe); }
 .settings-save-state-local_only { color: var(--warning); }
 
+@media (min-width: 1181px) and (min-height: 640px) {
+  .spatial-scene {
+    height: clamp(360px, calc(100dvh - 335px), 620px);
+    min-height: 0;
+  }
+
+  .spatial-sensor-panel {
+    padding: 14px;
+  }
+
+  .spatial-sensor-panel .panel-heading {
+    margin-bottom: 10px;
+  }
+
+  .spatial-sensor-list {
+    gap: 6px;
+  }
+
+  .spatial-sensor-row {
+    padding-block: 4px;
+  }
+
+  .spatial-summary-list {
+    margin-top: 10px;
+    padding-top: 5px;
+  }
+
+  .spatial-summary-list div {
+    padding-block: 4px;
+  }
+}
+
 @media (max-width: 1180px) {
   .spatial-layout {
     grid-template-columns: 1fr;
