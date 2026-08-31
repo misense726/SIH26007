@@ -365,6 +365,8 @@ class SystemStatus(TelemetryModel):
     replaying: bool = False
     runtime_detail: str | None = None
     serial_port: str | None = None
-    telemetry_transport: Literal["SERIAL", "WIFI", "SIMULATED"] = "SIMULATED"
+    telemetry_transport: Literal["SERIAL", "WIFI", "BOTH", "SIMULATED"] = "SIMULATED"
     telemetry_endpoint: str | None = None
+    active_telemetry_sources: list[str] = Field(default_factory=list)
+    telemetry_source_errors: dict[str, str] = Field(default_factory=dict)
     last_telemetry_ms: int | None = Field(default=None, ge=0)

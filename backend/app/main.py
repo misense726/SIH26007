@@ -13,6 +13,11 @@ from backend.app.camera.dehaze import DehazeFormerEnhancer
 from backend.app.camera.ir_enhance import IREnhancer
 from backend.app.config import RuntimeSettings, load_project_config, runtime_settings
 from backend.app.live_runtime import LiveSerialRuntime, SerialFactory
+from backend.app.providers.redundant_reader import (
+    RedundantTelemetryReader,
+    TelemetrySource,
+)
+from backend.app.providers.serial_port import MainControllerSerial
 from backend.app.providers.wifi_listener import WifiTelemetryListener
 from backend.app.simulation.engine import FullSimulator
 from backend.app.sensor_settings import SensorSettingsStore
@@ -88,6 +93,40 @@ def create_app(
                     )
                 )
                 source_name = "MAIN Wi-Fi"
+            elif active_settings.telemetry_transport == "BOTH":
+                assert active_settings.serial_port is not None
+                wifi_endpoint = (
+                    f"{active_settings.wifi_listen_host}:"
+                    f"{active_settings.wifi_listen_port}"
+                )
+                source_port = (
+                    f"USB {active_settings.serial_port} + WIFI {wifi_endpoint}"
+                )
+                source_factory = serial_factory or (
+                    lambda _port, _baud: RedundantTelemetryReader(
+                        (
+                            TelemetrySource(
+                                name="USB",
+                                endpoint=active_settings.serial_port or "",
+                                open_reader=lambda: MainControllerSerial(
+                                    active_settings.serial_port or "",
+                                    active_settings.serial_baud,
+                                ),
+                            ),
+                            TelemetrySource(
+                                name="Wi-Fi",
+                                endpoint=wifi_endpoint,
+                                open_reader=lambda: WifiTelemetryListener(
+                                    active_settings.wifi_listen_host,
+                                    active_settings.wifi_listen_port,
+                                ),
+                            ),
+                        ),
+                        reconnect_ms=active_settings.serial_reconnect_ms,
+                        source_stale_ms=active_settings.serial_stale_ms,
+                    )
+                )
+                source_name = "MAIN USB + Wi-Fi"
             else:
                 assert active_settings.serial_port is not None
                 source_port = active_settings.serial_port
@@ -105,6 +144,7 @@ def create_app(
                 serial_factory=source_factory,
                 source_name=source_name,
                 transport=active_settings.telemetry_transport,
+                reported_serial_port=active_settings.serial_port,
                 v2x_manager=v2x_manager,
             )
             app.state.live_runtime = app.state.runtime

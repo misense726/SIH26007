@@ -19,7 +19,7 @@ class RuntimeSettings(BaseModel):
     config_dir: Path = PROJECT_ROOT / "config"
     sensor_settings_path: Path = PROJECT_ROOT / "runtime" / "sensor_display.json"
     runtime_mode: Literal["SIMULATED", "LIVE"] = "SIMULATED"
-    telemetry_transport: Literal["SERIAL", "WIFI"] = "SERIAL"
+    telemetry_transport: Literal["SERIAL", "WIFI", "BOTH"] = "SERIAL"
     serial_port: str | None = None
     serial_baud: int = Field(default=115200, ge=1200, le=3_000_000)
     serial_stale_ms: int = Field(default=750, ge=50, le=60_000)
@@ -49,7 +49,7 @@ class RuntimeSettings(BaseModel):
     def require_live_serial_port(self) -> "RuntimeSettings":
         if (
             self.runtime_mode == "LIVE"
-            and self.telemetry_transport == "SERIAL"
+            and self.telemetry_transport in {"SERIAL", "BOTH"}
             and not (self.serial_port or "").strip()
         ):
             raise ValueError("FOGSEN_SERIAL_PORT is required when FOGSEN_MODE=LIVE")

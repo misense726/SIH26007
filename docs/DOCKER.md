@@ -9,7 +9,7 @@ The backend opens the Raspberry Pi H.264 listener over Wi-Fi, shares decoded
 frames through `/api/camera/stream`, and runs DehazeFormer-MCT on the laptop GPU.
 An optional second worker creates an RGB-derived IR-style view on the CPU or
 GPU. It does not use USB video or USB-LAN. MAIN sends dashboard telemetry over
-Wi-Fi to TCP port `8765`. USB remains available for uploads and diagnostics.
+Wi-Fi to TCP port `8765` and also writes it to USB serial.
 
 The stack does not build or flash firmware and stores no secrets. The backend
 runtime and schematic map have no cloud dependency. The backend image build
@@ -18,6 +18,11 @@ author's repository.
 Set `FOGSEN_MODE=LIVE` and `FOGSEN_TELEMETRY_TRANSPORT=WIFI` before starting
 Compose to run the network listener in the backend container. The default mode
 remains `SIMULATED`.
+
+The backend also supports `BOTH`, but Docker Desktop's Linux VM cannot open a
+Windows `COM` port directly. Use `scripts/start_live_fogsen.ps1` for concurrent
+USB and Wi-Fi ingestion on Windows. Keep Compose on `WIFI`; this is a container
+device boundary, not a firmware or dashboard transport limit.
 
 Docker Desktop must expose the NVIDIA runtime for GPU dehazing. Check it with
 `docker info` if the backend reports that CUDA is unavailable. Raw video remains

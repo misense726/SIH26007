@@ -55,6 +55,16 @@ async def status(request: Request) -> SystemStatus:
         telemetry_endpoint=(
             live_runtime.telemetry_endpoint if live_runtime is not None else None
         ),
+        active_telemetry_sources=(
+            live_runtime.active_telemetry_sources
+            if live_runtime is not None
+            else []
+        ),
+        telemetry_source_errors=(
+            live_runtime.telemetry_source_errors
+            if live_runtime is not None
+            else {}
+        ),
         last_telemetry_ms=(
             live_runtime.last_telemetry_ms if live_runtime is not None else None
         ),

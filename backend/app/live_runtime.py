@@ -82,6 +82,7 @@ class LiveSerialRuntime:
         serial_factory: SerialFactory = MainControllerSerial,
         source_name: str = "MAIN serial",
         transport: str = "SERIAL",
+        reported_serial_port: str | None = None,
         v2x_manager: V2XManager | None = None,
     ) -> None:
         self._store = store
@@ -94,6 +95,7 @@ class LiveSerialRuntime:
         self._serial_factory = serial_factory
         self._source_name = source_name
         self._transport = transport
+        self._reported_serial_port = reported_serial_port
         self._camera_feed = camera_feed
         self._v2x_manager = v2x_manager or V2XManager()
         self._serial: SerialReader | None = None
@@ -163,7 +165,7 @@ class LiveSerialRuntime:
 
     @property
     def serial_port(self) -> str | None:
-        return self._port if self._transport == "SERIAL" else None
+        return self._reported_serial_port
 
     @property
     def telemetry_transport(self) -> str:
@@ -172,6 +174,26 @@ class LiveSerialRuntime:
     @property
     def telemetry_endpoint(self) -> str:
         return self._port
+
+    @property
+    def active_telemetry_sources(self) -> list[str]:
+        if self._serial is not None:
+            active_sources = getattr(self._serial, "active_sources", None)
+            if active_sources is not None:
+                return list(active_sources)
+        if (
+            self._last_telemetry_ms is not None
+            and now_ms() - self._last_telemetry_ms <= self._stale_timeout_ms
+        ):
+            return ["USB" if self._transport == "SERIAL" else self._transport]
+        return []
+
+    @property
+    def telemetry_source_errors(self) -> dict[str, str]:
+        if self._serial is None:
+            return {}
+        source_errors = getattr(self._serial, "source_errors", None)
+        return dict(source_errors) if source_errors is not None else {}
 
     @property
     def last_telemetry_ms(self) -> int | None:

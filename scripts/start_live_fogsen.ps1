@@ -4,12 +4,28 @@ param(
     [int]$ApiPort = 8000,
     [int]$TelemetryPort = 8765,
     [double]$TelemetryHz = 20,
+    [string]$SerialPort = "",
     [switch]$NoCamera
 )
 
 $ErrorActionPreference = "Stop"
 $projectRoot = Split-Path -Parent $PSScriptRoot
 Set-Location $projectRoot
+
+$python = Join-Path $projectRoot ".venv\Scripts\python.exe"
+if (-not (Test-Path -LiteralPath $python)) {
+    throw "FogSen virtual environment is missing: $python"
+}
+
+if (-not $SerialPort.Trim()) {
+    $detectedPorts = @(& $python -c "from serial.tools import list_ports; print(*[p.device for p in list_ports.comports() if p.vid == 0x10C4 and p.pid == 0xEA60], sep='\n')")
+    $detectedPorts = @($detectedPorts | Where-Object { $_ -match '^COM\d+$' })
+    if ($detectedPorts.Count -ne 1) {
+        $found = if ($detectedPorts.Count -eq 0) { "none" } else { $detectedPorts -join ", " }
+        throw "FogSen could not identify one MAIN CP210x USB port (found: $found). Pass -SerialPort COMx after checking the connected boards."
+    }
+    $SerialPort = $detectedPorts[0]
+}
 
 $cameraUrl = $null
 if (-not $NoCamera) {
@@ -30,7 +46,8 @@ $env:FOGSEN_HOST = "0.0.0.0"
 $env:FOGSEN_PORT = [string]$ApiPort
 $env:FOGSEN_MODE = "LIVE"
 $env:FOGSEN_TELEMETRY_HZ = [string]$TelemetryHz
-$env:FOGSEN_TELEMETRY_TRANSPORT = "WIFI"
+$env:FOGSEN_TELEMETRY_TRANSPORT = "BOTH"
+$env:FOGSEN_SERIAL_PORT = $SerialPort
 $env:FOGSEN_WIFI_LISTEN_HOST = "0.0.0.0"
 $env:FOGSEN_WIFI_LISTEN_PORT = [string]$TelemetryPort
 $env:FOGSEN_CAMERA_DEHAZE_ENABLED = "false"
@@ -38,16 +55,11 @@ $env:FOGSEN_CAMERA_IR_ENABLED = "false"
 
 if ($NoCamera) {
     Remove-Item Env:FOGSEN_CAMERA_STREAM_URL -ErrorAction SilentlyContinue
-    Write-Host ("FogSen LIVE: API 0.0.0.0:{0}, MAIN Wi-Fi 0.0.0.0:{1}, {2} Hz, camera disabled" -f $ApiPort, $TelemetryPort, $TelemetryHz)
+    Write-Host ("FogSen LIVE: API 0.0.0.0:{0}, MAIN USB {1} + Wi-Fi 0.0.0.0:{2}, {3} Hz, camera disabled" -f $ApiPort, $SerialPort, $TelemetryPort, $TelemetryHz)
 } else {
     $env:FOGSEN_CAMERA_STREAM_URL = $cameraUrl
-    Write-Host ("FogSen LIVE: API 0.0.0.0:{0}, MAIN Wi-Fi 0.0.0.0:{1}, {2} Hz, Pi camera {3}" -f $ApiPort, $TelemetryPort, $TelemetryHz, $cameraUrl)
+    Write-Host ("FogSen LIVE: API 0.0.0.0:{0}, MAIN USB {1} + Wi-Fi 0.0.0.0:{2}, {3} Hz, Pi camera {4}" -f $ApiPort, $SerialPort, $TelemetryPort, $TelemetryHz, $cameraUrl)
     Write-Host "Raw camera is enabled; optional ML enhancement stays off."
-}
-
-$python = Join-Path $projectRoot ".venv\Scripts\python.exe"
-if (-not (Test-Path -LiteralPath $python)) {
-    throw "FogSen virtual environment is missing: $python"
 }
 
 & $python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $ApiPort

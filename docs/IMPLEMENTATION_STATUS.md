@@ -351,8 +351,9 @@ V2X, camera, or IR display features replaces the ToF safety path.
 
 ## Operator dashboard and firmware hardening
 
-Status: locally integrated, Docker-verified, and host-telemetry-verified on
-2026-08-31. Hardware upload and fault-injection recovery tests remain pending.
+Status: locally integrated, Docker-verified, firmware-uploaded, and live
+USB/Wi-Fi telemetry-verified on 2026-08-31. Physical fault-injection and
+long-duration vehicle tests remain pending.
 
 Implemented:
 
@@ -372,6 +373,8 @@ Implemented:
   false colour instead of infrared;
 - Wi-Fi telemetry session generations so a queued frame from an old TCP session
   cannot be sent after reconnect;
+- concurrent MAIN USB and Wi-Fi ingestion behind one provider, with independent
+  reconnects, duplicate rejection, and active-source reporting;
 - IMU and BMP280 cache invalidation after repeated read failure;
 - a 256-byte FRONT UART transmit buffer plus compile-time pin, address, scan,
   servo, timing, and packet-capacity checks;
@@ -379,16 +382,19 @@ Implemented:
 
 Verification:
 
-- backend: 66 tests passed;
+- backend: 69 tests passed;
 - frontend: 70 tests passed across 16 files;
 - TypeScript and Vite production build passed;
 - all 40 firmware contract checks passed;
 - MAIN, FRONT, and MIDDLE compiled for their pinned FQBNs with warnings enabled;
+- FRONT was uploaded to COM5, MIDDLE to COM3, and MAIN to COM11; every upload
+  completed with flash hash verification;
 - Docker Compose rebuilt the committed images; backend and frontend were healthy
   with zero restarts, and `/healthz` plus the dashboard returned HTTP 200;
-- the host-side MAIN check on the identified CP210x USB-UART port passed all 12
-  live five-ToF checks across 74 packets; it discarded 9 non-telemetry lines and
-  no oversized lines;
+- the native Windows backend received the same MAIN stream over USB and Wi-Fi
+  concurrently, reported both sources active, and exposed all five valid ranges;
+- with both inputs active, the canonical world advanced at 19.7 Hz rather than
+  doubling to roughly 40 Hz, confirming duplicate frames were rejected;
 - the simulated dashboard remained connected through WebSocket telemetry;
 - all four views rendered at desktop and 390×844 mobile sizes without horizontal
   overflow or browser console warnings or errors; theme switching passed in
@@ -397,10 +403,10 @@ Verification:
   awareness modes, map expansion, sensor detail, and settings validation were
   exercised in the browser.
 
-The Docker stack is serving the dashboard on port 8080 and the backend on ports
-8000 and 8765. COM3 and COM5 identify as Espressif USB-JTAG/serial devices;
-COM11 identifies as the CP210x USB-UART used by MAIN. No firmware was uploaded,
-so the live packet check confirms the connected chain but not that the newly
-compiled images are running. Compilation and telemetry do not prove reconnect
-freshness under fault, stuck-bus recovery, sensor wiring, servo motion, or
-long-run vehicle stability.
+Docker Desktop uses MAIN Wi-Fi because its Linux VM cannot open a Windows COM
+port. The native Windows launcher uses both inputs and auto-detects MAIN's
+CP210x port. COM3 and COM5 identify as Espressif USB-JTAG/serial devices; COM11
+identifies as MAIN's CP210x USB-UART. The current BMP280 and five range channels
+are producing data; MPU6050 remains offline. Compilation, upload, and telemetry
+do not prove fault recovery, sensor accuracy, servo mechanics, or long-run
+vehicle stability.

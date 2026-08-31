@@ -4,10 +4,10 @@ FogSen is a proof of concept for mine-vehicle operation in fog and low visibilit
 
 The dashboard starts in `SIMULATED` mode. The repository also includes
 compile-verified firmware for BACK/MAIN, FRONT, and MIDDLE, a laptop serial
-monitor, and an opt-in `LIVE` runtime that feeds MAIN Wi-Fi or USB telemetry into the
-same dashboard state. It does not claim that prototype ToF sensors are industrial LiDAR,
-that BMP280 produces precise altitude, or that a relay motor cut is production
-braking.
+monitor, and an opt-in `LIVE` runtime. The live backend accepts MAIN telemetry
+over USB, Wi-Fi, or both at once and publishes the same dashboard state. It does
+not claim that prototype ToF sensors are industrial LiDAR, that BMP280 produces
+precise altitude, or that a relay motor cut is production braking.
 
 The current `LIVE` hardware profile leaves Hall sensors and the motor-cut relay
 unconnected. Their code remains behind disabled flags for a later build. The
@@ -38,7 +38,8 @@ FogSen currently includes:
 - backend and frontend tests;
 - wired firmware for one ESP32-WROOM BACK/MAIN, one XIAO ESP32-C6 FRONT, and
   one ESP32-C3 Super Mini MIDDLE controller;
-- validated MAIN-to-laptop Wi-Fi telemetry with USB kept as a diagnostic fallback, independent of the camera link.
+- MAIN-to-laptop telemetry over USB and Wi-Fi, with duplicate suppression and
+  either link able to carry the dashboard independently.
 
 See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for the milestone record.
 
@@ -96,8 +97,10 @@ For the connected ESP32 MAIN and Pi camera, use the LAN-aware launcher instead:
 .\scripts\start_live_fogsen.ps1
 ```
 
-It resolves `misense.local`, binds the API and MAIN listener to the laptop's
-LAN interfaces, selects `LIVE` + `WIFI`, and connects the camera over TCP. Run
+It resolves `misense.local`, finds MAIN's CP210x USB port, binds the API and
+Wi-Fi listener to the laptop's LAN interfaces, selects `LIVE` + `BOTH`, and
+connects the camera over TCP. Pass `-SerialPort COMx` if more than one CP210x
+adapter is connected. Run
 the check from another terminal:
 
 ```powershell
@@ -202,16 +205,20 @@ and start the backend in explicit `LIVE` mode:
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -e ".[hardware]"
 $env:FOGSEN_MODE = "LIVE"
-$env:FOGSEN_TELEMETRY_TRANSPORT = "WIFI"
+$env:FOGSEN_TELEMETRY_TRANSPORT = "BOTH"
+$env:FOGSEN_SERIAL_PORT = "COM11"
 $env:FOGSEN_WIFI_LISTEN_HOST = "0.0.0.0"
 $env:FOGSEN_WIFI_LISTEN_PORT = "8765"
 .\.venv\Scripts\python.exe -m uvicorn backend.app.main:app --host 0.0.0.0 --port 8000
 ```
 
 Start the frontend normally in another terminal. `SIMULATED` remains the
-default when `FOGSEN_MODE` is not set. In `LIVE` mode, an absent source or stale
-MAIN stream publishes five invalid ranges, degraded health, a grey corridor,
-and a warning instead of leaving the last healthy state on screen.
+default when `FOGSEN_MODE` is not set. Replace `COM11` with MAIN's current port.
+In `BOTH` mode, USB and Wi-Fi are read concurrently, identical frames are
+accepted once, and either link can keep the dashboard live. If neither source
+delivers fresh MAIN data, the runtime publishes five invalid ranges, degraded
+health, a grey corridor, and a warning instead of leaving the last healthy
+state on screen.
 
 ## Test
 

@@ -1,4 +1,4 @@
-"""Check the live FogSen Wi-Fi telemetry and Pi camera boundaries."""
+"""Check FogSen live telemetry and Pi camera boundaries."""
 
 from __future__ import annotations
 
@@ -20,14 +20,17 @@ def _get(base_url: str, path: str) -> dict[str, object]:
 
 def _arguments() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Check FogSen MAIN Wi-Fi telemetry and Pi camera status."
+        description="Check FogSen MAIN telemetry and Pi camera status."
     )
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--stale-ms", type=int, default=1_500)
     parser.add_argument(
         "--skip-camera",
         action="store_true",
-        help="Validate MAIN Wi-Fi and the five-range contract without a Pi camera.",
+        help=(
+            "Validate MAIN telemetry and the five-range contract without "
+            "a Pi camera."
+        ),
     )
     return parser
 
@@ -52,18 +55,31 @@ def main(argv: Sequence[str] | None = None) -> int:
         isinstance(last_telemetry_ms, int)
         and now_ms - last_telemetry_ms <= arguments.stale_ms
     )
+    transport = status.get("telemetry_transport")
+    active_sources = status.get("active_telemetry_sources")
+    required_sources = {"USB", "Wi-Fi"} if transport == "BOTH" else set()
+    redundant_sources_ok = not required_sources or (
+        isinstance(active_sources, list)
+        and required_sources.issubset(set(active_sources))
+    )
     source_ok = (
         status.get("mode") == "LIVE"
-        and status.get("telemetry_transport") == "WIFI"
+        and transport in {"SERIAL", "WIFI", "BOTH"}
         and telemetry_fresh
+        and redundant_sources_ok
     )
-    print(f"{'PASS' if source_ok else 'FAIL'} MAIN Wi-Fi telemetry source")
+    print(f"{'PASS' if source_ok else 'FAIL'} MAIN live telemetry source")
     print(
         "INFO mode={mode} transport={transport} endpoint={endpoint} "
-        "world_sequence={sequence} telemetry_age_ms={age}".format(
+        "active={active} world_sequence={sequence} telemetry_age_ms={age}".format(
             mode=status.get("mode"),
-            transport=status.get("telemetry_transport"),
+            transport=transport,
             endpoint=status.get("telemetry_endpoint"),
+            active=(
+                ",".join(str(source) for source in active_sources)
+                if isinstance(active_sources, list)
+                else "unknown"
+            ),
             sequence=status.get("world_sequence"),
             age=(
                 now_ms - last_telemetry_ms

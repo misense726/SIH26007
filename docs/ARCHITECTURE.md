@@ -51,7 +51,8 @@ the same values. Every simulated source remains labelled `SIMULATED`.
 ## Live runtime
 
 `FOGSEN_MODE=LIVE` selects `LiveSerialRuntime` instead of `FullSimulator`.
-The runtime accepts MAIN TCP telemetry over Wi-Fi without blocking the API, translates the
+The runtime accepts MAIN telemetry over USB serial, Wi-Fi TCP, or both without
+blocking the API. It translates the
 five range readings and their individual ages into host timestamps, and replaces
 the same canonical `WorldState` used by simulation. HTTP and WebSocket clients
 therefore need no hardware-specific data path.
@@ -61,9 +62,11 @@ ranges. BACK/MAIN reads the rear scanner locally and merges all five readings
 into the unchanged laptop contract.
 
 Wi-Fi mode listens on TCP port `8765` on all interfaces so MAIN can reach the
-laptop over the same LAN. USB remains available for uploads and diagnostics.
-Serial mode still requires `FOGSEN_SERIAL_PORT`. The runtime
-reconnects after source or read failures. If the stream is absent or stale, it advances the world sequence with
+laptop over the same LAN. Serial mode requires `FOGSEN_SERIAL_PORT`. `BOTH`
+wraps both readers behind one provider, reconnects them independently, and
+uses MAIN's sequence and controller clock to reject duplicate or old frames.
+A failure on one input does not close the other. If every stream is absent or
+stale, the runtime advances the world sequence with
 five invalid ranges, offline or stale health, a grey corridor, and a warning.
 It never freezes the last healthy snapshot. Simulation remains the default.
 

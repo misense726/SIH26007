@@ -8,6 +8,10 @@ from fastapi.testclient import TestClient
 
 from backend.app.config import PROJECT_ROOT, RuntimeSettings
 from backend.app.main import create_app
+from backend.app.providers.redundant_reader import (
+    RedundantTelemetryReader,
+    TelemetrySource,
+)
 from backend.app.providers.serial_protocol import MainTelemetryPacket, parse_main_packet
 
 
@@ -106,6 +110,9 @@ def test_simulation_is_the_default_and_live_requires_an_explicit_port() -> None:
     with pytest.raises(ValueError, match="FOGSEN_SERIAL_PORT"):
         RuntimeSettings(runtime_mode="LIVE")
 
+    with pytest.raises(ValueError, match="FOGSEN_SERIAL_PORT"):
+        RuntimeSettings(runtime_mode="LIVE", telemetry_transport="BOTH")
+
 
 def test_wifi_live_mode_uses_listener_without_claiming_a_serial_port() -> None:
     settings = live_settings(
@@ -133,6 +140,43 @@ def test_wifi_live_mode_uses_listener_without_claiming_a_serial_port() -> None:
         assert status["serial_port"] is None
 
     assert readers[0].closed is True
+
+
+def test_both_mode_reports_usb_and_wifi_as_one_live_source() -> None:
+    readers: list[RepeatedPacket] = []
+    opened_endpoints: list[str] = []
+
+    def factory(endpoint: str, baud: int) -> RedundantTelemetryReader:
+        opened_endpoints.append(endpoint)
+        usb = RepeatedPacket("COM42", baud)
+        wifi = RepeatedPacket("0.0.0.0:8765", baud)
+        readers.extend((usb, wifi))
+        return RedundantTelemetryReader(
+            (
+                TelemetrySource("USB", "COM42", lambda: usb),
+                TelemetrySource("Wi-Fi", "0.0.0.0:8765", lambda: wifi),
+            )
+        )
+
+    settings = live_settings(
+        telemetry_transport="BOTH",
+        wifi_listen_host="0.0.0.0",
+        wifi_listen_port=8765,
+    )
+    app = create_app(settings, serial_factory=factory)
+    with TestClient(app) as client:
+        wait_for_world(
+            client,
+            lambda world: all(reading["is_valid"] for reading in world["ranges"]),
+        )
+        status = client.get("/api/status").json()
+        assert status["telemetry_transport"] == "BOTH"
+        assert status["telemetry_endpoint"] == "USB COM42 + WIFI 0.0.0.0:8765"
+        assert status["serial_port"] == "COM42"
+        assert status["active_telemetry_sources"] == ["USB", "Wi-Fi"]
+
+    assert opened_endpoints == ["USB COM42 + WIFI 0.0.0.0:8765"]
+    assert all(reader.closed for reader in readers)
 
 
 def test_live_serial_packet_reaches_api_websocket_and_then_fails_stale() -> None:
