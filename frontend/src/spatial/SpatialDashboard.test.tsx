@@ -5,6 +5,20 @@ import { defaultWorldState } from "../state/defaultState";
 import { SpatialDashboard } from "./SpatialDashboard";
 
 describe("SpatialDashboard scanner motion and proximity", () => {
+  it("does not fabricate a truck when the primary vehicle is missing", () => {
+    const markup = renderToStaticMarkup(
+      <SpatialDashboard
+        world={{ ...defaultWorldState, vehicles: [], primary_vehicle_id: "MISSING" }}
+        connection="CONNECTED"
+        sensorSettings={defaultSensorSettings().sensors}
+      />,
+    );
+
+    expect(markup).toContain("Vehicle data unavailable");
+    expect(markup).not.toContain("vehicle-3d-truck");
+    expect(markup).not.toContain("DUMPER_01 3D model");
+  });
+
   it("keeps the latest scanner angle when that range sample is invalid", () => {
     const sensorSettings = defaultSensorSettings().sensors;
     const world = {
@@ -43,6 +57,9 @@ describe("SpatialDashboard scanner motion and proximity", () => {
     );
 
     expect(markup).toContain("Front scanner head 50°");
+    expect(markup).toContain("Coverage incomplete · 0/5 valid");
+    expect(markup).toContain("fov-unknown-gradient");
+    expect(markup).not.toMatch(/Clear\s*·/);
     expect(markup).toContain("Spatial view");
     expect(markup).not.toContain("MPU-6050 dynamic 3D truck movement");
     expect(markup).not.toContain("MPU-6050 + 5×ToF");
@@ -110,5 +127,7 @@ describe("SpatialDashboard scanner motion and proximity", () => {
     expect(markup).toContain("0.35m");
     // 3D Distance Rings
     expect(markup).toContain("range-distance-ring");
+    expect(markup).toContain(">1/5 valid<");
+    expect(markup).not.toMatch(/Clear\s*·/);
   });
 });

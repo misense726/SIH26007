@@ -26,15 +26,18 @@ class WifiTelemetry {
   struct Frame {
     char bytes[config::kTelemetryLineCapacity];
     uint16_t length;
+    uint32_t connectionGeneration;
   };
 
   static void taskEntry(void* context);
+  void discardQueuedFrames();
   void run();
 
   QueueHandle_t queue_;
   TaskHandle_t task_;
   std::atomic<bool> stationConnected_;
   std::atomic<bool> backendConnected_;
+  std::atomic<uint32_t> connectionGeneration_;
   std::atomic<uint32_t> droppedFrames_;
   std::atomic<uint32_t> sentFrames_;
 };

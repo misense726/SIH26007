@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import L from "leaflet";
 import type { MapFeature, Point2D, WorldState } from "../types";
 import { DEFAULT_CAMPUS_CONFIG, EMPTY_MAP_TILE } from "../maps/campusConfig";
-import { cartesianToGeodetic, formatCoordinates } from "../maps/locationProvider";
-import { formatNumber } from "../state/selectors";
+import { cartesianToGeodetic } from "../maps/locationProvider";
+import { primaryVehicleOrNull } from "../state/selectors";
 
 const SCALE = 10;
 const PADDING = 16;
@@ -22,6 +22,16 @@ function className(feature: MapFeature): string {
   return `map-feature map-${feature.feature_type.toLowerCase().replace("_", "-")}`;
 }
 
+function escapeHtml(value: string): string {
+  return value.replace(/[&<>'"]/g, (character) => ({
+    "&": "&amp;",
+    "<": "&lt;",
+    ">": "&gt;",
+    "'": "&#39;",
+    '"': "&quot;",
+  })[character] ?? character);
+}
+
 interface TwinMapProps {
   world: WorldState;
   selectedTruckId?: string | null;
@@ -35,18 +45,12 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
 
   const features = world.reference_map?.features ?? [];
-  const primaryVehicle = world.vehicles[0] || {
-    vehicle_id: "DUMPER_01",
-    x_m: 0,
-    y_m: 0,
-    heading_deg: 0,
-    speed_mps: 0,
-  };
+  const primaryVehicle = primaryVehicleOrNull(world);
   const activePeers = world.v2x?.active_peers ?? [];
 
   // All trucks in fleet
   const allTrucks = [
-    {
+    ...(primaryVehicle ? [{
       vehicle_id: primaryVehicle.vehicle_id,
       is_primary: true,
       x_m: primaryVehicle.x_m,
@@ -55,8 +59,8 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
       speed_mps: primaryVehicle.speed_mps,
       emergency_state: world.emergency.state,
       color: "#38bdf8",
-      label: `${primaryVehicle.vehicle_id} [LEAD]`,
-    },
+      label: `${primaryVehicle.vehicle_id} [PRIMARY]`,
+    }] : []),
     ...activePeers.map((peer, idx) => ({
       vehicle_id: peer.vehicle_id,
       is_primary: false,
@@ -75,11 +79,14 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
   useEffect(() => {
     if (viewMode !== "road" || !leafletContainerRef.current || leafletMapRef.current) return;
 
-    const primaryGeo = cartesianToGeodetic(
-      primaryVehicle.x_m,
-      primaryVehicle.y_m,
-      DEFAULT_CAMPUS_CONFIG.anchor,
-    );
+    const initialVehicle = primaryVehicle ?? allTrucks[0];
+    const primaryGeo = initialVehicle
+      ? cartesianToGeodetic(
+          initialVehicle.x_m,
+          initialVehicle.y_m,
+          DEFAULT_CAMPUS_CONFIG.anchor,
+        )
+      : DEFAULT_CAMPUS_CONFIG.siteCenter;
 
     const map = L.map(leafletContainerRef.current, {
       center: [primaryGeo.lat, primaryGeo.lng],
@@ -120,6 +127,10 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
       const geo = cartesianToGeodetic(truck.x_m, truck.y_m, DEFAULT_CAMPUS_CONFIG.anchor);
       const latLng: [number, number] = [geo.lat, geo.lng];
       const isSelected = selectedTruckId === truck.vehicle_id;
+      const safeHeading = Number.isFinite(truck.heading_deg) ? truck.heading_deg : 0;
+      const safeSpeedKmh = Number.isFinite(truck.speed_mps)
+        ? (truck.speed_mps * 3.6).toFixed(0)
+        : "--";
 
       let marker = markersRef.current.get(truck.vehicle_id);
       if (!marker) {
@@ -130,7 +141,7 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
             (truck.is_primary ? "primary-driver" : "peer-driver") +
             (isSelected ? " marker-selected" : "") +
             '" style="transform: rotate(' +
-            truck.heading_deg +
+            safeHeading +
             'deg);"><svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">' +
             '<path d="M16 3 L27 28 L16 23 L5 28 Z" fill="' +
             truck.color +
@@ -138,14 +149,18 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
             '<div class="campus-driver-label ' +
             (truck.is_primary ? "primary-label" : "peer-label") +
             '"><strong>' +
-            truck.label +
+            escapeHtml(truck.label) +
             '</strong><span class="campus-marker-speed">' +
-            (truck.speed_mps * 3.6).toFixed(0) +
+            safeSpeedKmh +
             " km/h</span></div>",
           iconSize: [92, 54],
           iconAnchor: [46, 16],
         });
-        marker = L.marker(latLng, { icon, zIndexOffset: truck.is_primary ? 1000 : 800 }).addTo(map);
+        marker = L.marker(latLng, {
+          icon,
+          title: truck.label,
+          zIndexOffset: truck.is_primary ? 1000 : 800,
+        }).addTo(map);
         marker.on("click", () => onSelectTruck?.(truck.vehicle_id));
         markersRef.current.set(truck.vehicle_id, marker);
       } else {
@@ -153,13 +168,13 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
         const element = marker.getElement();
         const pointer = element?.querySelector<HTMLElement>(".campus-navigation-pointer");
         if (pointer) {
-          pointer.style.transform = `rotate(${truck.heading_deg}deg)`;
+          pointer.style.transform = `rotate(${safeHeading}deg)`;
           pointer.classList.toggle("marker-selected", isSelected);
         }
         element?.querySelector<SVGPathElement>(".campus-navigation-pointer path")
           ?.setAttribute("fill", truck.color);
         const speed = element?.querySelector<HTMLElement>(".campus-marker-speed");
-        if (speed) speed.textContent = `${(truck.speed_mps * 3.6).toFixed(0)} km/h`;
+        if (speed) speed.textContent = `${safeSpeedKmh} km/h`;
       }
     });
 
@@ -181,8 +196,9 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
             type="button"
             className={`truck-pill-btn ${selectedTruckId === null || selectedTruckId === undefined ? "active" : ""}`}
             onClick={() => onSelectTruck?.(null)}
+            aria-pressed={selectedTruckId === null || selectedTruckId === undefined}
           >
-            All Trucks ({allTrucks.length})
+            All vehicles ({allTrucks.length})
           </button>
           {allTrucks.map((truck) => {
             const isSelected = selectedTruckId === truck.vehicle_id;
@@ -193,6 +209,7 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
                 className={`truck-pill-btn ${isSelected ? "active" : ""}`}
                 style={{ borderColor: isSelected ? truck.color : undefined }}
                 onClick={() => onSelectTruck?.(truck.vehicle_id)}
+                aria-pressed={isSelected}
                 title={`Track ${truck.label}`}
               >
                 <span className="truck-dot" style={{ backgroundColor: truck.color }} />
@@ -209,7 +226,8 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
             type="button"
             className={`fleet-mode-btn ${viewMode === "schematic" ? "active" : ""}`}
             onClick={() => setViewMode("schematic")}
-            title="Digital Twin 2.5D schematic view"
+            aria-pressed={viewMode === "schematic"}
+            title="Show schematic map"
           >
             Twin schematic
           </button>
@@ -217,7 +235,8 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
             type="button"
             className={`fleet-mode-btn ${viewMode === "road" ? "active" : ""}`}
             onClick={() => setViewMode("road")}
-            title="Road map fleet tracking"
+            aria-pressed={viewMode === "road"}
+            title="Show road map"
           >
             Road map
           </button>
@@ -299,6 +318,15 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
                   className={`map-truck-group ${isSelected ? "truck-selected" : ""} ${truck.is_primary ? "lead-truck" : "peer-truck"}`}
                   transform={`translate(${tx} ${ty})`}
                   onClick={() => onSelectTruck?.(truck.vehicle_id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      onSelectTruck?.(truck.vehicle_id);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-label={`Show ${truck.vehicle_id} on the fleet map`}
                   style={{ cursor: "pointer" }}
                 >
                   {/* Highlight tracking ring if selected */}
@@ -398,12 +426,17 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
                 </g>
               );
             })}
+            {allTrucks.length === 0 && (
+              <text x={WIDTH / 2} y={HEIGHT / 2} textAnchor="middle" className="map-empty-label">
+                No vehicle telemetry
+              </text>
+            )}
           </svg>
 
           {/* Map Legend */}
           <div className="fleet-map-legend" aria-label="Fleet Map Legend">
-            <span><i className="legend-lead-truck" />Lead Dumper (You)</span>
-            <span><i className="legend-peer-truck" />Peer Haulers</span>
+            <span><i className="legend-lead-truck" />Primary vehicle</span>
+            <span><i className="legend-peer-truck" />Simulated peers</span>
             <span><i className="legend-road" />Haul Road</span>
             <span><i className="legend-hazard" />Hazard Zone</span>
           </div>
@@ -413,7 +446,7 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
           <div ref={leafletContainerRef} className="fleet-leaflet-container" />
           <div className="fleet-road-hud">
             <span>{DEFAULT_CAMPUS_CONFIG.locationLabel}</span>
-            <span>{allTrucks.length} trucks tracked</span>
+            <span>{allTrucks.length} vehicles tracked</span>
           </div>
         </div>
       )}

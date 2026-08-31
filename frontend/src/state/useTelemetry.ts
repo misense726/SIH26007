@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { defaultWorldState } from "./defaultState";
+import { isWorldStateSnapshot } from "./worldStateSnapshot";
 import type { WorldState } from "../types";
 
 export type ConnectionState = "CONNECTING" | "CONNECTED" | "DISCONNECTED";
@@ -50,7 +51,11 @@ export function useTelemetry(): {
       socket.onopen = () => armStaleTimer(FIRST_TELEMETRY_TIMEOUT_MS);
       socket.onmessage = (event) => {
         try {
-          setWorld(JSON.parse(event.data) as WorldState);
+          const nextWorld: unknown = JSON.parse(event.data);
+          if (!isWorldStateSnapshot(nextWorld)) {
+            throw new Error("Invalid world-state snapshot");
+          }
+          setWorld(nextWorld);
           setConnection("CONNECTED");
           armStaleTimer();
         } catch {

@@ -198,6 +198,24 @@ button:focus-visible {
   outline-offset: 2px;
 }
 
+a:focus-visible,
+summary:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.sr-only {
+  position: absolute !important;
+  width: 1px !important;
+  height: 1px !important;
+  padding: 0 !important;
+  margin: -1px !important;
+  overflow: hidden !important;
+  clip: rect(0, 0, 0, 0) !important;
+  white-space: nowrap !important;
+  border: 0 !important;
+}
+
 h1,
 h2,
 h3,
@@ -226,7 +244,58 @@ h3 {
   width: min(1540px, 100%);
   min-height: 100vh;
   margin: 0 auto;
-  padding: 24px clamp(16px, 3.3vw, 52px) 22px;
+  padding: 14px clamp(16px, 3.3vw, 52px) 28px;
+}
+
+.skip-link {
+  position: fixed;
+  z-index: 200;
+  top: 8px;
+  left: 8px;
+  padding: 9px 13px;
+  border-radius: 8px;
+  color: var(--accent-contrast);
+  background: var(--accent);
+  font-weight: 700;
+  transform: translateY(-160%);
+  transition: transform 120ms ease;
+}
+
+.skip-link:focus {
+  transform: translateY(0);
+}
+
+.dashboard-content:focus {
+  outline: none;
+}
+
+.dashboard-error {
+  display: grid;
+  justify-items: start;
+  gap: 9px;
+  min-height: 240px;
+  align-content: center;
+  padding: clamp(24px, 5vw, 64px);
+  border: 1px solid var(--danger-line);
+  border-radius: 18px;
+  background: var(--surface);
+  box-shadow: var(--shadow-card);
+}
+
+.dashboard-error p:not(.eyebrow) {
+  color: var(--text-soft);
+}
+
+.dashboard-error button {
+  min-height: 40px;
+  margin-top: 5px;
+  padding: 8px 13px;
+  border: 0;
+  border-radius: 8px;
+  color: var(--accent-contrast);
+  background: var(--accent);
+  cursor: pointer;
+  font-weight: 700;
 }
 
 .topbar,
@@ -242,22 +311,31 @@ h3 {
 }
 
 .topbar {
-  position: relative;
-  z-index: 10;
+  position: sticky;
+  z-index: 40;
+  top: 10px;
   justify-content: space-between;
-  min-height: 58px;
+  min-height: 64px;
   margin-bottom: 14px;
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 15px;
+  background: color-mix(in srgb, var(--surface) 88%, transparent);
+  box-shadow: var(--shadow-overlay);
+  backdrop-filter: blur(16px) saturate(135%);
 }
 
 .brand-lockup {
-  min-width: 220px;
+  min-width: 190px;
   gap: 13px;
+  color: inherit;
+  text-decoration: none;
 }
 
 .brand-mark {
   display: grid;
-  width: 46px;
-  height: 46px;
+  width: 42px;
+  height: 42px;
   place-items: center;
   color: var(--accent-contrast);
   background: var(--accent);
@@ -277,7 +355,8 @@ h3 {
 }
 
 .view-switcher {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(86px, 1fr));
   gap: 4px;
   padding: 3px;
   border: 1px solid var(--border);
@@ -285,9 +364,13 @@ h3 {
   background: var(--surface-control);
 }
 
-.view-switcher button {
-  min-width: 92px;
-  padding: 8px 16px;
+.view-switcher a {
+  display: inline-flex;
+  min-height: 40px;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 8px 13px;
   border: 0;
   border-radius: 7px;
   background: transparent;
@@ -295,21 +378,32 @@ h3 {
   cursor: pointer;
   font-size: 0.77rem;
   font-weight: 600;
+  text-decoration: none;
 }
 
-.view-switcher button:hover {
+.view-switcher a svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.7;
+}
+
+.view-switcher a:hover {
   color: var(--text-strong);
   background: var(--surface-control-hover);
 }
 
-.view-switcher button.active {
+.view-switcher a.active {
   color: var(--accent-contrast);
   background: var(--accent);
   box-shadow: 0 6px 18px var(--accent-glow);
 }
 
 .status-row {
-  min-width: 220px;
+  min-width: 210px;
   justify-content: flex-end;
   gap: 9px;
 }
@@ -785,6 +879,20 @@ h3 {
 .camera-unavailable span {
   color: var(--text-soft);
   font-size: 0.68rem;
+}
+
+.camera-unavailable button {
+  width: max-content;
+  min-height: 34px;
+  margin-top: 3px;
+  padding: 6px 10px;
+  border: 1px solid var(--camera-callout-border);
+  border-radius: 7px;
+  color: var(--text-strong);
+  background: var(--surface-control);
+  cursor: pointer;
+  font-size: 0.68rem;
+  font-weight: 700;
 }
 
 .camera-preview-label {
@@ -2164,6 +2272,48 @@ h3 {
   text-align: center;
 }
 
+.proximity-sensor-details {
+  margin-top: 7px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.proximity-sensor-details summary {
+  display: flex;
+  min-height: 38px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--text-soft);
+  cursor: pointer;
+  font-size: 0.65rem;
+  font-weight: 650;
+  list-style: none;
+}
+
+.proximity-sensor-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.proximity-sensor-details summary::after {
+  content: "+";
+  margin-left: 2px;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.8rem;
+}
+
+.proximity-sensor-details[open] summary::after {
+  content: "−";
+}
+
+.proximity-sensor-details summary strong {
+  margin-left: auto;
+  color: var(--muted);
+  font-family: var(--mono);
+  font-size: 0.56rem;
+  font-weight: 600;
+}
+
 .proximity-sensor-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2940,6 +3090,7 @@ footer {
   }
 
   .driver-instruments {
+    display: grid;
     grid-template-columns: minmax(220px, 0.65fr) minmax(300px, 1fr) minmax(260px, 0.85fr);
     grid-template-rows: 1fr;
     align-items: stretch;
@@ -2970,7 +3121,7 @@ footer {
     width: 100%;
   }
 
-  .view-switcher button {
+  .view-switcher a {
     flex: 1;
   }
 
@@ -3036,11 +3187,78 @@ footer {
 
 @media (max-width: 560px) {
   .app-shell {
-    padding: 14px 10px 18px;
+    padding: 10px 9px 84px;
+  }
+
+  .topbar {
+    position: relative;
+    top: 0;
+    min-height: 52px;
+    gap: 8px;
+    padding: 7px 8px;
+    backdrop-filter: none;
+  }
+
+  .brand-lockup {
+    min-width: 0;
+    gap: 8px;
+  }
+
+  .brand-lockup .eyebrow {
+    display: none;
+  }
+
+  .brand-lockup h1 {
+    font-size: 1.05rem;
   }
 
   .brand-mark {
+    width: 34px;
+    height: 34px;
+    border-radius: 10px;
+    font-size: 0.72rem;
+  }
+
+  .status-row {
+    min-width: 0;
+    gap: 6px;
+  }
+
+  .theme-toggle span {
     display: none;
+  }
+
+  .view-switcher {
+    position: fixed;
+    z-index: 100;
+    right: 8px;
+    bottom: 8px;
+    left: 8px;
+    order: initial;
+    width: auto;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 3px;
+    padding: 5px;
+    overflow: visible;
+    border-radius: 14px;
+    background: color-mix(in srgb, var(--surface) 94%, transparent);
+    box-shadow: 0 14px 40px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(18px) saturate(140%);
+  }
+
+  .view-switcher a {
+    min-width: 0;
+    min-height: 50px;
+    flex-direction: column;
+    gap: 3px;
+    padding: 5px 3px;
+    font-size: 0.62rem;
+    line-height: 1;
+  }
+
+  .view-switcher a svg {
+    width: 18px;
+    height: 18px;
   }
 
   .emergency-banner {
@@ -3108,10 +3326,6 @@ footer {
 
   .awareness-mode-switcher button {
     flex: 1;
-  }
-
-  .awareness-mode-status {
-    align-self: flex-start;
   }
 
   .proximity-svg.tof-overlay-grid {
@@ -4377,12 +4591,12 @@ footer {
   }
 }
 
-@media (max-width: 620px) {
+@media (min-width: 561px) and (max-width: 620px) {
   .view-switcher {
     overflow-x: auto;
   }
 
-  .view-switcher button {
+  .view-switcher a {
     min-width: max-content;
     flex: 0 0 auto;
     padding-inline: 12px;

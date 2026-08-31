@@ -55,7 +55,7 @@ Send one compact JSON object per line:
 
 Health bits are scanner `1`, fixed-front `2`, and servo `8`. The fully healthy
 mask is `0x0B`. Support `PING`, `STATUS`, `CENTER`, `SCAN_ON`, `SCAN_OFF`, and
-`SETTLE=<ms>` from 20 through 120 ms without blocking the acquisition loop.
+`SETTLE=<ms>` from 20 through 100 ms without blocking the acquisition loop.
 Reject any other value with `ERROR_SETTLE_RANGE` and keep the current setting.
 
 Packet `ms` is local packet-completion time. Each range has its own local

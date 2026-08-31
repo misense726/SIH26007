@@ -34,7 +34,7 @@ export function useSensorSettings(): {
       .catch(() => {
         if (disposed) return;
         setConnection("LOCAL_ONLY");
-        setMessage("Using display defaults until the settings service is available.");
+        setMessage("Calibration unavailable. Display defaults are active.");
       });
     return () => {
       disposed = true;

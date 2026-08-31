@@ -35,7 +35,7 @@ export function SimulationControls({ simulation }: { simulation: SimulationState
   const busy = status === "UPDATING";
 
   return (
-    <section className="simulation-controls" aria-label="Simulation controls">
+    <section className="simulation-controls" aria-label="Simulation controls" aria-busy={busy}>
       <div className="simulation-control-heading">
         <span className="simulation-label">SIMULATED</span>
         <div>
@@ -68,9 +68,11 @@ export function SimulationControls({ simulation }: { simulation: SimulationState
         </button>
       </div>
 
-      <span className={`simulation-request-status status-${status.toLowerCase()}`} aria-live="polite">
-        {status === "UPDATING" ? "Applying" : status === "ERROR" ? "Controls unavailable" : "Ready"}
-      </span>
+      {status !== "IDLE" && (
+        <span className={`simulation-request-status status-${status.toLowerCase()}`} aria-live="polite">
+          {status === "UPDATING" ? "Applying" : "Controls unavailable"}
+        </span>
+      )}
     </section>
   );
 }

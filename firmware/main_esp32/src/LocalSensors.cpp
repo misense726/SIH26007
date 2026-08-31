@@ -75,6 +75,9 @@ bool LocalSensors::probe(uint8_t address) {
 bool LocalSensors::initializeImu(uint32_t nowMs) {
   imuInitialized_ = false;
   imuAddress_ = 0;
+  imuReading_.hasSample = false;
+  imuReading_.calibrated = false;
+  imuReading_.zeroing = false;
   for (size_t index = 0; index < sizeof(kMpuAddresses); ++index) {
     const uint8_t address = kMpuAddresses[index];
     if (!probe(address)) {
@@ -188,6 +191,8 @@ void LocalSensors::restartAltitudeBaseline() {
 bool LocalSensors::initializeBmp(uint32_t nowMs) {
   bmpInitialized_ = false;
   bmpAddress_ = 0;
+  environmentReading_.hasSample = false;
+  restartAltitudeBaseline();
   for (size_t index = 0; index < sizeof(kBmpAddresses); ++index) {
     const uint8_t address = kBmpAddresses[index];
     if (!probe(address)) {
@@ -234,6 +239,9 @@ void LocalSensors::readImu(uint32_t nowMs) {
     }
     if (imuConsecutiveFailures_ >= config::kSensorFailureLimit) {
       imuInitialized_ = false;
+      imuReading_.hasSample = false;
+      imuReading_.calibrated = false;
+      imuReading_.zeroing = false;
       nextImuRetryMs_ = nowMs + config::kSensorRetryMs;
     }
     return;
@@ -287,6 +295,8 @@ void LocalSensors::readEnvironment(uint32_t nowMs) {
     }
     if (bmpConsecutiveFailures_ >= config::kSensorFailureLimit) {
       bmpInitialized_ = false;
+      environmentReading_.hasSample = false;
+      restartAltitudeBaseline();
       nextBmpRetryMs_ = nowMs + config::kSensorRetryMs;
     }
     return;

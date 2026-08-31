@@ -122,6 +122,8 @@ def test_xiao_source_uses_bounded_wired_state_machines() -> None:
     assert "probeI2cAddress" in shared
     assert "inter_sensor_guard_ms" in shared
     assert "scheduleNodeAddressRecovery" in shared
+    assert "Serial1.setTxBufferSize(config_.node_uart_tx_buffer_bytes);" in shared
+    assert shared.index("Serial1.setTxBufferSize") < shared.index("Serial1.begin")
 
     middle = (MIDDLE_ROOT / "MiddleFixedNode.h").read_text(encoding="utf-8")
     assert "Serial0.begin" in middle
@@ -130,6 +132,21 @@ def test_xiao_source_uses_bounded_wired_state_machines() -> None:
     assert "runAddressSequence" in middle
     assert "readRangeSingleMillimeters" in middle
     assert "inter_sensor_guard_ms" in middle
+    assert "void clearI2cBus()" in middle
+    assert "pulse < 16U" in middle
+    assert middle.index("clearI2cBus();") < middle.index("Wire.begin")
+
+
+def test_front_configuration_has_compile_time_guards() -> None:
+    front = _config("front")
+    assert _integer_constant(front, "kNodeUartTxBufferBytes") == 256
+    assert "static_assert(kPinsUnique" in front
+    assert "FRONT runtime I2C addresses must be distinct from 0x29" in front
+    assert "FRONT scan bounds must use a positive exact step" in front
+    assert "FRONT scan bounds must fit inside the servo limits" in front
+    assert "FRONT servo pulse limits must be ordered" in front
+    assert "FRONT default settle must stay inside its command limits" in front
+    assert "FRONT UART TX buffer must hold one complete node packet" in front
 
 
 def test_no_i2c_multiplexer_contract_remains() -> None:
@@ -193,3 +210,31 @@ def test_build_targets_and_library_versions_are_pinned() -> None:
     assert "esp32:esp32:nologo_esp32c3_super_mini" in middle_readme
     assert "board = esp32-c3-devkitm-1" in middle_platformio
     assert "pololu/VL53L0X @ 1.3.1" in middle_platformio
+
+
+def test_firmware_prompts_match_the_compiled_configuration() -> None:
+    middle_prompt = (FIRMWARE_ROOT / "MIDDLE_ESP32C3_SUPERMINI_PROMPT.md").read_text(
+        encoding="utf-8"
+    )
+    front_prompt = (FIRMWARE_ROOT / "FRONT_XIAO_ESP32C6_PROMPT.md").read_text(
+        encoding="utf-8"
+    )
+    research = (FIRMWARE_ROOT / "xiao_shared" / "HARDWARE_RESEARCH.md").read_text(
+        encoding="utf-8"
+    )
+    shared_readme = (FIRMWARE_ROOT / "xiao_shared" / "README.md").read_text(
+        encoding="utf-8"
+    )
+    firmware_context = (FIRMWARE_ROOT / "FIRMWARE_CONTEXT.md").read_text(
+        encoding="utf-8"
+    )
+
+    assert "esp32:esp32:nologo_esp32c3_super_mini" in middle_prompt
+    assert "esp32:esp32:esp32c3:CDCOnBoot=cdc" not in middle_prompt
+    assert "at most 16 SCL pulses and a STOP condition" in middle_prompt
+    assert "SETTLE=<ms>` from 20 through 100 ms" in front_prompt
+    assert "bounded to 20 through 100 ms" in shared_readme
+    assert "FRONT and MIDDLE clear a stuck SDA line" in firmware_context
+    assert "FRONT uses GPIO22 and GPIO23 at 100 kHz" in research
+    assert "MIDDLE uses GPIO4 and GPIO5 at 400 kHz" in research
+    assert "Both FogSen scanners use short mode with a 20 ms budget" in research

@@ -1,6 +1,7 @@
 import type { FormEvent } from "react";
 import type { WorldState } from "../types";
 import type { ConnectionState } from "../state/useTelemetry";
+import { isUsableRangeReading } from "../state/rangeReadings";
 import {
   type SensorDisplayPose,
   type SensorDisplaySetting,
@@ -152,7 +153,6 @@ export function SensorSettingsPage({
         <div>
           <p className="eyebrow">Sensor setup</p>
           <h2>Display calibration</h2>
-          <p>Place each ToF on the vehicle view and choose its display alert range.</p>
         </div>
         <span className="source-badge">{telemetryLabel}</span>
       </header>
@@ -177,7 +177,7 @@ export function SensorSettingsPage({
           >
             {imuBusy ? "Zeroing..." : "Zero IMU"}
           </button>
-          <small>{settings.imu_zero.detail ?? "No IMU status reported."}</small>
+          <small>{settings.imu_zero.detail ?? "IMU status unavailable."}</small>
         </article>
 
         <article className="settings-panel placement-card">
@@ -193,18 +193,27 @@ export function SensorSettingsPage({
       </div>
 
       <div className="settings-note" role="note">
-        Display pose, visual range, and alert distance affect the dashboard only. MAIN keeps its own safety thresholds.
+        Display-only settings. Vehicle safety thresholds do not change.
       </div>
 
       <div className="sensor-settings-list">
         {settings.sensors.map((sensor) => {
           const reading = world.ranges.find((item) => item.sensor_id === sensor.sensor_id);
           const health = world.sensor_health.find((item) => item.sensor_id === sensor.sensor_id);
+          const displayHealthStatus = telemetryConnection === "CONNECTED"
+            ? health?.status ?? "OFFLINE"
+            : "OFFLINE";
+          const hasTrustedReading =
+            telemetryConnection === "CONNECTED" &&
+            Boolean(reading && isUsableRangeReading(reading)) &&
+            (displayHealthStatus === "HEALTHY" || displayHealthStatus === "DEGRADED");
+          const hasInvalidAlertDistance = sensor.alert_distance_m > sensor.visual_range_m;
 
           const changePose = (field: keyof SensorDisplayPose, value: number) =>
             onSensorChange(sensor.sensor_id, updatePose(sensor, field, value));
           const submit = (event: FormEvent) => {
             event.preventDefault();
+            if (hasInvalidAlertDistance) return;
             void onSensorSave(sensor.sensor_id);
           };
 
@@ -216,9 +225,16 @@ export function SensorSettingsPage({
                   <h3>{sensor.label}</h3>
                 </div>
                 <div className="sensor-live-summary">
-                  <span className={`health-dot health-${health?.status.toLowerCase() ?? "offline"}`} />
-                  <strong>{reading?.is_valid ? `${reading.range_m.toFixed(2)} m` : "Unknown"}</strong>
-                  {sensor.scanner && <small>{reading?.angle_deg.toFixed(0) ?? "--"}° head</small>}
+                  <span
+                    className={`health-dot health-${displayHealthStatus.toLowerCase()}`}
+                    aria-hidden="true"
+                  />
+                  <strong>{hasTrustedReading ? `${reading!.range_m.toFixed(2)} m` : "Unknown"}</strong>
+                  <small>
+                    {hasTrustedReading && sensor.scanner
+                      ? `${reading!.angle_deg.toFixed(0)}° head · ${displayHealthStatus}`
+                      : displayHealthStatus}
+                  </small>
                 </div>
               </header>
 
@@ -228,18 +244,26 @@ export function SensorSettingsPage({
                 <NumberField label="Height" value={sensor.display_pose.z_m} min={0} max={2} step={0.01} unit="m" onChange={(value) => changePose("z_m", value)} />
                 <NumberField label="Yaw" value={sensor.display_pose.yaw_deg} min={-180} max={180} step={1} unit="°" onChange={(value) => changePose("yaw_deg", value)} />
                 <NumberField label="Pitch" value={sensor.display_pose.pitch_deg} min={-90} max={90} step={1} unit="°" onChange={(value) => changePose("pitch_deg", value)} />
-                <NumberField label="Alert inside" value={sensor.alert_distance_m} min={0.05} max={8} step={0.05} unit="m" onChange={(value) => onSensorChange(sensor.sensor_id, { ...sensor, alert_distance_m: value })} />
+                <NumberField label="Alert distance" value={sensor.alert_distance_m} min={0.05} max={8} step={0.05} unit="m" onChange={(value) => onSensorChange(sensor.sensor_id, { ...sensor, alert_distance_m: value })} />
                 <NumberField label="Visual range" value={sensor.visual_range_m} min={0.1} max={8} step={0.1} unit="m" onChange={(value) => onSensorChange(sensor.sensor_id, { ...sensor, visual_range_m: value })} />
               </div>
 
-              <button type="submit" className="secondary-action">Save {sensor.label}</button>
+              {hasInvalidAlertDistance && (
+                <p className="settings-save-state-error" role="alert">
+                  Alert distance must not exceed visual range.
+                </p>
+              )}
+
+              <button type="submit" className="secondary-action" disabled={hasInvalidAlertDistance}>
+                Save {sensor.label}
+              </button>
             </form>
           );
         })}
       </div>
 
       <div className={`settings-save-state settings-save-state-${settingsConnection.toLowerCase()}`} role="status" aria-live="polite">
-        {message ?? (settingsConnection === "SAVED" ? "Display settings are synced." : "Loading display settings...")}
+        {message ?? (settingsConnection === "SAVED" ? "Settings saved." : "Loading display settings...")}
       </div>
     </section>
   );

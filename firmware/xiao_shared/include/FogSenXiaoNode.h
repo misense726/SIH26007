@@ -45,6 +45,7 @@ struct NodeConfig {
 
   uint32_t debug_baud;
   uint32_t node_uart_baud;
+  uint16_t node_uart_tx_buffer_bytes;
   uint32_t i2c_clock_hz;
   uint16_t i2c_bus_timeout_ms;
   uint16_t sensor_read_timeout_ms;
@@ -82,6 +83,7 @@ class XiaoSensorNode {
 
   void begin() {
     Serial.begin(config_.debug_baud);
+    Serial1.setTxBufferSize(config_.node_uart_tx_buffer_bytes);
     Serial1.begin(
         config_.node_uart_baud,
         SERIAL_8N1,

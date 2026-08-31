@@ -11,7 +11,7 @@ fixed-front sensor becomes `0x31` after the ordered XSHUT sequence.
 The scanner sweeps -80 through +80 degrees. Firmware reads scanner then fixed
 front with a 5 ms guard and reports `-1` for unknown range. Commands are
 `PING`, `STATUS`, `CENTER`, `SCAN_ON`, `SCAN_OFF`, and `SETTLE=<ms>`. Settle is
-bounded to 20 through 120 ms.
+bounded to 20 through 100 ms.
 
 MIDDLE does not use this class. Its fixed-only C3 implementation lives in
 `middle_esp32c3_supermini/MiddleFixedNode.h`. MAIN owns the rear scanner

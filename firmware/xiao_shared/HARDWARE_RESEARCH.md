@@ -25,7 +25,9 @@ available for debug output. The ESP32-C3 middle node uses native UART0 through
 API](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/serial.html)
 
 Arduino-ESP32 supports explicit SDA/SCL assignment, clock selection, and a bus
-timeout. The nodes use GPIO22 and GPIO23 at 400 kHz with a 30 ms bus timeout.
+timeout. FRONT uses GPIO22 and GPIO23 at 100 kHz with a 30 ms bus timeout.
+MIDDLE uses GPIO4 and GPIO5 at 400 kHz with the same timeout. Both nodes clear
+a stuck bus with bounded SCL pulses before restarting Wire.
 [Arduino-ESP32 I2C
 API](https://docs.espressif.com/projects/arduino-esp32/en/latest/api/i2c.html)
 
@@ -50,8 +52,9 @@ library](https://github.com/pololu/vl53l0x-arduino), [Pololu VL53L1X Arduino
 library](https://github.com/pololu/vl53l1x-arduino)
 
 ST lists a 1.2 ms maximum boot time after XSHUT release for both sensor families.
-FogSen holds all sensors low for 2 ms during recovery and waits another 2 ms
-after each release before initialization. [ST VL53L1X
+FRONT holds both sensors low for 50 ms and waits 20 ms after each release.
+MIDDLE uses 10 ms for both periods. MAIN uses 2 ms for its single rear scanner.
+[ST VL53L1X
 datasheet](https://www.st.com/resource/en/datasheet/vl53l1x.pdf), [ST VL53L0X
 datasheet](https://www.st.com/resource/datasheet/vl53l0x.pdf)
 
@@ -69,8 +72,9 @@ The SG90 takes power from a separate regulated 5 V rail, never from XIAO 3.3 V.
 
 ST specifies VL53L1X ranging up to 4 m. Pololu's VL53L1X 1.3.1 library supports
 long mode, timing budgets, non-blocking data-ready polling, timeouts, and range
-status. FogSen uses a 50 ms budget and rejects results whose status is not
-`RangeValid`. [ST VL53L1X product
+status. Both FogSen scanners use short mode with a 20 ms budget and reject
+results whose status is not `RangeValid`. The fixed VL53L0X sensors also use a
+20 ms timing budget. [ST VL53L1X product
 page](https://www.st.com/content/st_com/en/products/imaging-and-photonics-solutions/time-of-flight-sensors/vl53l1x.html),
 [Pololu VL53L1X Arduino library](https://github.com/pololu/vl53l1x-arduino)
 

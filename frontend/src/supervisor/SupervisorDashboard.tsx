@@ -4,6 +4,7 @@ import { availableRangeReadings } from "../state/rangeReadings";
 import {
   formatNumber,
   nearestRange,
+  primaryVehicleOrNull,
   tofSensorHealth,
   tofSensorHealthSummary,
 } from "../state/selectors";
@@ -52,7 +53,6 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
         <article className="operations-card supervisor-unavailable-card">
           <p className="eyebrow">Fleet data</p>
           <h2>{connecting ? "Opening telemetry" : "Waiting for telemetry"}</h2>
-          <p>Current data will appear when the connection is available.</p>
         </article>
       </section>
     );
@@ -61,33 +61,28 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
   const nearest = nearestRange(
     availableRangeReadings(world.ranges, world.sensor_health, true),
   );
-  const activeAlerts = world.emergency.state === "SAFE" ? 0 : 1;
   const tofSensors = tofSensorHealth(world.sensor_health);
   const sensorSummary = tofSensorHealthSummary(world.sensor_health);
 
-  const primaryVehicle = world.vehicles[0] || {
-    vehicle_id: "DUMPER_01",
-    x_m: 0,
-    y_m: 0,
-    heading_deg: 0,
-    speed_mps: 0,
-  };
+  const primaryVehicle = primaryVehicleOrNull(world);
   const activePeers = world.v2x?.active_peers ?? [];
 
   // Build unified fleet trucks list
   const allTrucks: FleetTruckData[] = [
-    {
+    ...(primaryVehicle ? [{
       vehicle_id: primaryVehicle.vehicle_id,
       is_primary: true,
+      is_simulated: false,
       x_m: primaryVehicle.x_m,
       y_m: primaryVehicle.y_m,
       heading_deg: primaryVehicle.heading_deg,
       speed_mps: primaryVehicle.speed_mps,
       emergency_state: world.emergency.state,
-    },
+    }] : []),
     ...activePeers.map((peer) => ({
       vehicle_id: peer.vehicle_id,
       is_primary: false,
+      is_simulated: true,
       x_m: peer.x_m,
       y_m: peer.y_m,
       heading_deg: peer.heading_deg,
@@ -95,20 +90,51 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
       emergency_state: peer.emergency_state,
       distance_m: peer.distance_m,
       link_status: peer.link_status,
-      rssi_dbm: peer.rssi_dbm,
     })),
   ];
+  const canonicalAlerts = [...world.alerts].sort((a, b) => b.timestamp_ms - a.timestamp_ms);
+  const hasMatchingCanonicalAlert = (vehicleId: string, emergencyState: string) =>
+    canonicalAlerts.some(
+      (alert) =>
+        alert.vehicle_id === vehicleId &&
+        alert.title.toUpperCase().replaceAll("_", " ").includes(
+          emergencyState.toUpperCase().replaceAll("_", " "),
+        ),
+    );
+  const currentSafetyAlerts = [
+    ...(primaryVehicle && world.emergency.state !== "SAFE" && !hasMatchingCanonicalAlert(primaryVehicle.vehicle_id, world.emergency.state)
+      ? [{
+          event_id: `current-${primaryVehicle.vehicle_id}`,
+          title: world.emergency.state.replaceAll("_", " "),
+          detail: world.emergency.reason ?? "Unsafe vehicle condition detected.",
+          vehicle_id: primaryVehicle.vehicle_id,
+        }]
+      : []),
+    ...activePeers
+      .filter(
+        (peer) =>
+          peer.emergency_state !== "SAFE" &&
+          !hasMatchingCanonicalAlert(peer.vehicle_id, peer.emergency_state),
+      )
+      .map((peer) => ({
+        event_id: `current-${peer.vehicle_id}`,
+        title: peer.emergency_state.replaceAll("_", " "),
+        detail: `${peer.vehicle_id} reports an unsafe state in the V2X simulation.`,
+        vehicle_id: peer.vehicle_id,
+      })),
+  ];
+  const safetyAlerts = [...currentSafetyAlerts, ...canonicalAlerts];
 
   return (
     <section className="dashboard supervisor-dashboard" aria-label="Supervisor dashboard">
       <div className="supervisor-summary">
         <div>
           <p className="eyebrow">Fleet operations</p>
-          <h2>{world.reference_map?.name ?? "Haul Road & Facility Reference"}</h2>
+          <h2>{world.reference_map?.name ?? "Reference map unavailable"}</h2>
         </div>
         <div className="summary-metrics">
-          <span><strong>{allTrucks.length}</strong> trucks active</span>
-          <span><strong>{activeAlerts}</strong> alerts</span>
+          <span><strong>{allTrucks.length}</strong> vehicles tracked</span>
+          <span><strong>{safetyAlerts.length}</strong> alerts</span>
           <span><strong>{Math.round(world.environment.visibility_score * 100)}%</strong> visibility</span>
         </div>
       </div>
@@ -121,7 +147,7 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
               <h2>Vehicle positions</h2>
             </div>
             <span className="source-badge">
-              {allTrucks.length} Trucks Active
+              {allTrucks.length} tracked
             </span>
           </div>
           <TwinMap
@@ -133,8 +159,7 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
 
         <aside className="fleet-column">
           <div className="fleet-column-header">
-            <h3>Truck Telemetry List ({allTrucks.length})</h3>
-            <small>Select a truck to highlight on map</small>
+            <h3>Vehicles ({allTrucks.length})</h3>
           </div>
           {allTrucks.map((truck) => (
             <FleetCard
@@ -151,6 +176,9 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
               }
             />
           ))}
+          {allTrucks.length === 0 && (
+            <p className="empty-state">No vehicle telemetry.</p>
+          )}
         </aside>
       </div>
 
@@ -188,23 +216,24 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Safety events</p>
-              <h2>Alert log</h2>
+              <h2>Recent alerts</h2>
             </div>
-            <span className={`alert-count ${activeAlerts > 0 ? "alert-count-active" : ""}`}>
-              {activeAlerts}
+            <span className={`alert-count ${safetyAlerts.length > 0 ? "alert-count-active" : ""}`}>
+              {safetyAlerts.length}
             </span>
           </div>
-          {activeAlerts === 0 ? (
+          {safetyAlerts.length === 0 ? (
             <div className="alerts-empty">
               <span className="alerts-check">✓</span>
-              <strong>No active alerts</strong>
-              <small>Monitoring active.</small>
+              <strong>No safety alerts</strong>
             </div>
           ) : (
-            <div className="active-alert" role="alert">
-              <strong>{world.emergency.state.replaceAll("_", " ")}</strong>
-              <span>{world.emergency.reason ?? "Unsafe vehicle condition detected."}</span>
-            </div>
+            safetyAlerts.map((alert) => (
+              <div className="active-alert" role="alert" key={alert.event_id}>
+                <strong>{alert.vehicle_id}: {alert.title}</strong>
+                <span>{alert.detail}</span>
+              </div>
+            ))
           )}
         </article>
       </div>

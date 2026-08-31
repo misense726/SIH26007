@@ -279,7 +279,6 @@ export function TofRangePlot({
 interface ProximityWidgetProps {
   points: SpatialPoint[];
   vehicle: VehiclePose;
-  validReadingCount: number;
   readings: RangeReading[];
   sensorHealth: SensorHealth[];
   sensorSettings: SensorDisplaySetting[];
@@ -303,7 +302,6 @@ function latestReading(readings: RangeReading[], sensorId: string): RangeReading
 export function ProximityWidget({
   points,
   vehicle,
-  validReadingCount,
   readings,
   sensorHealth,
   sensorSettings,
@@ -314,101 +312,122 @@ export function ProximityWidget({
   );
 
   const settingById = new Map(sensorSettings.map((s) => [s.sensor_id, s]));
+  const trustedReadings = telemetryConnected
+    ? readings.filter((reading) => {
+        const status = healthBySensor.get(reading.sensor_id)?.status;
+        return (
+          (status === "HEALTHY" || status === "DEGRADED") &&
+          isUsableRangeReading(reading)
+        );
+      })
+    : [];
+  const trustedSensorIds = new Set(
+    trustedReadings.map((reading) => reading.sensor_id),
+  );
+  const trustedReadingCount = trustedSensorIds.size;
+  const trustedPoints = telemetryConnected
+    ? points.filter((point) => trustedSensorIds.has(point.source_sensor_id))
+    : [];
 
   return (
     <article className="proximity-card">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">Range awareness</p>
-          <h2>360° proximity</h2>
+          <p className="eyebrow">Proximity</p>
+          <h2>Range field</h2>
         </div>
-        <span className="source-badge">ToF 2D/2.5D</span>
+        <span className="source-badge">ToF · 2.5D</span>
       </div>
 
       <TofRangePlot
-        points={points}
+        points={trustedPoints}
         vehicle={vehicle}
         sensors={sensorSettings}
-        readings={readings}
-        label={`Vehicle-centred ToF view with ${points.length} mapped returns`}
+        readings={trustedReadings}
+        label={`Vehicle-centred ToF view with ${trustedPoints.length} mapped returns`}
       />
 
-      {points.length === 0 && (
+      {trustedPoints.length === 0 && (
         <p className="proximity-empty">
-          {validReadingCount > 0
-            ? `${validReadingCount} valid readings. No mapped returns.`
-            : "No valid ToF readings."}
+          {trustedReadingCount > 0
+            ? "No mapped returns"
+            : "No trusted ranges"}
         </p>
       )}
 
-      <div className="proximity-sensor-grid" aria-label="Live ToF sensor readings">
-        {TOF_SENSOR_IDS.map((sensorId) => {
-          const health = healthBySensor.get(sensorId);
-          const setting = settingById.get(sensorId);
-          const status = telemetryConnected ? health?.status ?? "OFFLINE" : "OFFLINE";
-          const reading = latestReading(readings, sensorId);
-          const available =
-            telemetryConnected &&
-            (status === "HEALTHY" || status === "DEGRADED") &&
-            Boolean(reading && isUsableRangeReading(reading));
-          const isScanner = sensorId === "front_scanner" || sensorId === "rear_scanner";
-          const threat = setting ? getSensorThreatLevel(reading, setting) : "UNKNOWN";
-          const isAlert = available && threat === "ALERT";
-          const isCaution = available && threat === "CAUTION";
+      <details className="proximity-sensor-details">
+        <summary>
+          <span>Sensor detail</span>
+          <strong>{trustedReadingCount}/{TOF_SENSOR_IDS.length} trusted</strong>
+        </summary>
+        <div className="proximity-sensor-grid" aria-label="Live ToF sensor readings">
+          {TOF_SENSOR_IDS.map((sensorId) => {
+            const health = healthBySensor.get(sensorId);
+            const setting = settingById.get(sensorId);
+            const status = telemetryConnected ? health?.status ?? "OFFLINE" : "OFFLINE";
+            const reading = latestReading(trustedReadings, sensorId);
+            const available =
+              telemetryConnected &&
+              (status === "HEALTHY" || status === "DEGRADED") &&
+              Boolean(reading && isUsableRangeReading(reading));
+            const isScanner = sensorId === "front_scanner" || sensorId === "rear_scanner";
+            const threat = setting ? getSensorThreatLevel(reading, setting) : "UNKNOWN";
+            const isAlert = available && threat === "ALERT";
+            const isCaution = available && threat === "CAUTION";
 
-          const meta = available && reading
-            ? isScanner
-              ? `${reading.angle_deg.toFixed(0)}° scan, ${Math.round(reading.quality * 100)}% quality`
-              : `${Math.round(reading.quality * 100)}% quality`
-            : "No trusted range";
+            const meta = available && reading
+              ? isScanner
+                ? `${reading.angle_deg.toFixed(0)}° scan, ${Math.round(reading.quality * 100)}% quality`
+                : `${Math.round(reading.quality * 100)}% quality`
+              : "No trusted range";
 
-          const rangeM = available && reading ? reading.range_m : null;
-          const maxRange = setting?.visual_range_m ?? 4;
-          const alertDist = setting?.alert_distance_m ?? 1;
-          const gaugePct = rangeM !== null ? Math.max(5, Math.min(100, (rangeM / maxRange) * 100)) : 0;
+            const rangeM = available && reading ? reading.range_m : null;
+            const maxRange = setting?.visual_range_m ?? 4;
+            const alertDist = setting?.alert_distance_m ?? 1;
+            const gaugePct = rangeM !== null ? Math.max(5, Math.min(100, (rangeM / maxRange) * 100)) : 0;
 
-          return (
-            <div
-              key={sensorId}
-              className={`proximity-sensor-reading sensor-status-${status.toLowerCase()} ${
-                isAlert ? "sensor-card-alert" : isCaution ? "sensor-card-caution" : ""
-              }`}
-            >
-              <div className="proximity-sensor-heading">
-                <span className={`proximity-sensor-dot ${isAlert ? "pulse-danger-fast" : ""}`} aria-hidden="true" />
-                <strong>{SENSOR_LABELS[sensorId]}</strong>
-                <small>{status}</small>
-              </div>
-
-              {/* Proximity Gauge Meter */}
-              {available && rangeM !== null && (
-                <div className="prox-mini-gauge" title={`Distance: ${rangeM.toFixed(2)}m`}>
-                  <div
-                    className={`prox-gauge-bar ${isAlert ? "bar-alert" : isCaution ? "bar-caution" : "bar-clear"}`}
-                    style={{ width: `${gaugePct}%` }}
-                  />
-                  <div
-                    className="prox-gauge-alert-line"
-                    style={{ left: `${Math.min(95, (alertDist / maxRange) * 100)}%` }}
-                  />
+            return (
+              <div
+                key={sensorId}
+                className={`proximity-sensor-reading sensor-status-${status.toLowerCase()} ${
+                  isAlert ? "sensor-card-alert" : isCaution ? "sensor-card-caution" : ""
+                }`}
+              >
+                <div className="proximity-sensor-heading">
+                  <span className={`proximity-sensor-dot ${isAlert ? "pulse-danger-fast" : ""}`} aria-hidden="true" />
+                  <strong>{SENSOR_LABELS[sensorId]}</strong>
+                  <small>{status}</small>
                 </div>
-              )}
 
-              <div className="proximity-sensor-value">
-                <strong className={isAlert ? "text-danger" : isCaution ? "text-warning" : ""}>
-                  {available && reading ? `${reading.range_m.toFixed(2)} m` : "Unknown"}
-                </strong>
-                <span>{meta}</span>
+                {available && rangeM !== null && (
+                  <div className="prox-mini-gauge" title={`Distance: ${rangeM.toFixed(2)}m`}>
+                    <div
+                      className={`prox-gauge-bar ${isAlert ? "bar-alert" : isCaution ? "bar-caution" : "bar-clear"}`}
+                      style={{ width: `${gaugePct}%` }}
+                    />
+                    <div
+                      className="prox-gauge-alert-line"
+                      style={{ left: `${Math.min(95, (alertDist / maxRange) * 100)}%` }}
+                    />
+                  </div>
+                )}
+
+                <div className="proximity-sensor-value">
+                  <strong className={isAlert ? "text-danger" : isCaution ? "text-warning" : ""}>
+                    {available && reading ? `${reading.range_m.toFixed(2)} m` : "Unknown"}
+                  </strong>
+                  <span>{meta}</span>
+                </div>
               </div>
-            </div>
-          );
-        })}
-      </div>
+            );
+          })}
+        </div>
+      </details>
 
       <div className="proximity-key">
         <span><i className="key-sensor" />ToF return</span>
-        <span><i className="key-danger" />Hazard Alert (&lt; threshold)</span>
-        <span><i className="key-low" />lower confidence</span>
+        <span><i className="key-danger" />Hazard</span>
+        <span><i className="key-low" />Low confidence</span>
       </div>
     </article>
   );

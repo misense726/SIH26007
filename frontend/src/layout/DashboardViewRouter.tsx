@@ -27,7 +27,6 @@ interface DashboardViewRouterProps {
   onZeroImu: () => Promise<void>;
 }
 
-/** View boundary: keep sensor state and presentation layout independently editable. */
 export function DashboardViewRouter({
   view,
   world,

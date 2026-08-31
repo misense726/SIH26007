@@ -348,3 +348,52 @@ The dashboard proves that normalized backend readings reach the five visible
 sensor rows. Simulated values do not prove physical ToF accuracy, UART delivery,
 or Wi-Fi delivery from MAIN. No DSRC or C-V2X radio is connected. None of the map,
 V2X, camera, or IR display features replaces the ToF safety path.
+
+## Operator dashboard and firmware hardening
+
+Status: locally integrated and software-verified on 2026-08-31. Hardware upload
+and physical recovery tests remain pending.
+
+Implemented:
+
+- URL-backed Driver, Spatial, Fleet, and Calibration navigation with a compact
+  mobile navigation bar, keyboard support, accessible status labels, and a
+  compact operator header;
+- concise operator copy with setup and implementation narration removed from
+  normal views;
+- fail-closed corridor, proximity, fleet, and settings displays so incomplete,
+  stale, unhealthy, or disconnected data cannot appear clear or current;
+- primary-vehicle selection by `primary_vehicle_id`, empty-fleet handling,
+  canonical alert counting, and explicit `SIMULATED` labels for V2X peers and
+  advisory controls;
+- bounded settings validation, malformed WebSocket snapshot rejection, and a
+  view-level render fallback;
+- camera stream error and retry handling, with the RGB-derived view labelled
+  false colour instead of infrared;
+- Wi-Fi telemetry session generations so a queued frame from an old TCP session
+  cannot be sent after reconnect;
+- IMU and BMP280 cache invalidation after repeated read failure;
+- a 256-byte FRONT UART transmit buffer plus compile-time pin, address, scan,
+  servo, timing, and packet-capacity checks;
+- bounded MIDDLE I2C bus clearing before Wire restarts.
+
+Verification:
+
+- backend: 66 tests passed;
+- frontend: 70 tests passed across 16 files;
+- TypeScript and Vite production build passed;
+- all 40 firmware contract checks passed;
+- MAIN, FRONT, and MIDDLE compiled for their pinned FQBNs with warnings enabled;
+- the simulated dashboard remained connected through WebSocket telemetry;
+- all four views rendered at desktop and 390×844 mobile sizes without horizontal
+  overflow or browser console warnings or errors; theme switching passed in
+  both layouts;
+- Normal, Fog, Obstacle, and Emergency scenarios, pause, resume, reset, camera
+  awareness modes, map expansion, sensor detail, and settings validation were
+  exercised in the browser.
+
+Docker runtime health was not rechecked because the local Docker Desktop engine
+was stopped. COM7 and COM13 were present but not identifiable as FogSen boards,
+so no firmware was uploaded. Compilation does not prove reconnect freshness,
+UART delivery, stuck-bus recovery, sensor wiring, servo motion, or long-run
+vehicle stability.

@@ -76,7 +76,6 @@ describe("proximity point projection", () => {
       createElement(ProximityWidget, {
         points: [point],
         vehicle,
-        validReadingCount: 1,
         readings,
         sensorHealth,
         sensorSettings: defaultSensorSettings().sensors,
@@ -91,5 +90,41 @@ describe("proximity point projection", () => {
     expect(markup).toContain("Unknown");
     expect(markup).toContain("STALE");
     expect(markup).toContain("Right side");
+  });
+
+  it("does not render stale ranges when telemetry is disconnected", () => {
+    const readings: RangeReading[] = [{
+      timestamp_ms: 10,
+      sensor_id: "front_scanner",
+      angle_deg: 15,
+      range_m: 1.42,
+      quality: 0.94,
+      max_range_m: 4,
+      is_valid: true,
+      mode: "LIVE",
+    }];
+    const sensorHealth: SensorHealth[] = [{
+      sensor_id: "front_scanner",
+      status: "HEALTHY",
+      last_update_ms: 10,
+      confidence: 0.94,
+      detail: null,
+    }];
+
+    const markup = renderToStaticMarkup(
+      createElement(ProximityWidget, {
+        points: [],
+        vehicle,
+        readings,
+        sensorHealth,
+        sensorSettings: defaultSensorSettings().sensors,
+        telemetryConnected: false,
+      }),
+    );
+
+    expect(markup).toContain("0/5 trusted");
+    expect(markup).toContain("Unknown");
+    expect(markup).not.toContain("1.42 m");
+    expect(markup).not.toContain("15° scan");
   });
 });

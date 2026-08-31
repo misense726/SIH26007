@@ -15,6 +15,7 @@ WifiTelemetry::WifiTelemetry()
       task_(nullptr),
       stationConnected_(false),
       backendConnected_(false),
+      connectionGeneration_(0),
       droppedFrames_(0),
       sentFrames_(0) {}
 
@@ -44,10 +45,16 @@ bool WifiTelemetry::enqueueLine(const char* line, size_t length) {
     droppedFrames_.fetch_add(1);
     return false;
   }
+  const uint32_t connectionGeneration = connectionGeneration_.load();
+  if (!backendConnected_.load()) {
+    droppedFrames_.fetch_add(1);
+    return false;
+  }
   Frame frame{};
   memcpy(frame.bytes, line, length);
   frame.bytes[length] = '\n';
   frame.length = static_cast<uint16_t>(length + 1);
+  frame.connectionGeneration = connectionGeneration;
   if (xQueueSend(queue_, &frame, 0) != pdPASS) {
     droppedFrames_.fetch_add(1);
     return false;
@@ -57,6 +64,20 @@ bool WifiTelemetry::enqueueLine(const char* line, size_t length) {
 
 void WifiTelemetry::taskEntry(void* context) {
   static_cast<WifiTelemetry*>(context)->run();
+}
+
+void WifiTelemetry::discardQueuedFrames() {
+  if (queue_ == nullptr) {
+    return;
+  }
+  Frame discarded{};
+  uint32_t discardedCount = 0;
+  while (xQueueReceive(queue_, &discarded, 0) == pdPASS) {
+    ++discardedCount;
+  }
+  if (discardedCount > 0U) {
+    droppedFrames_.fetch_add(discardedCount);
+  }
 }
 
 void WifiTelemetry::run() {
@@ -76,6 +97,7 @@ void WifiTelemetry::run() {
     if (!stationConnected_) {
       backendConnected_ = false;
       client.stop();
+      discardQueuedFrames();
       if (nowMs - lastStationAttemptMs >= config::kWifiReconnectMs) {
         lastStationAttemptMs = nowMs;
         WiFi.disconnect(false, false);
@@ -87,12 +109,15 @@ void WifiTelemetry::run() {
 
     if (!client.connected()) {
       backendConnected_ = false;
+      discardQueuedFrames();
       if (nowMs - lastBackendAttemptMs >= config::kWifiReconnectMs) {
         lastBackendAttemptMs = nowMs;
         client.stop();
         if (client.connect(wifi_secrets::kBackendHost,
                            config::kWifiTelemetryPort, 1000)) {
           client.setNoDelay(true);
+          discardQueuedFrames();
+          connectionGeneration_.fetch_add(1);
           backendConnected_ = true;
         }
       }
@@ -104,6 +129,10 @@ void WifiTelemetry::run() {
     if (xQueueReceive(queue_, &frame, pdMS_TO_TICKS(100)) != pdPASS) {
       continue;
     }
+    if (frame.connectionGeneration != connectionGeneration_.load()) {
+      droppedFrames_.fetch_add(1);
+      continue;
+    }
     const size_t written = client.write(
         reinterpret_cast<const uint8_t*>(frame.bytes), frame.length);
     if (written == frame.length) {
@@ -112,6 +141,7 @@ void WifiTelemetry::run() {
       droppedFrames_.fetch_add(1);
       backendConnected_ = false;
       client.stop();
+      discardQueuedFrames();
     }
   }
 }

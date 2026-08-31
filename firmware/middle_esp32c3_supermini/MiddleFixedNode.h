@@ -109,9 +109,34 @@ class MiddleFixedNode {
 
   void configureI2cBus() {
     Wire.end();
+    clearI2cBus();
     Wire.begin(config_.i2c_sda_pin, config_.i2c_scl_pin);
     Wire.setClock(config_.i2c_clock_hz);
     Wire.setTimeOut(config_.i2c_bus_timeout_ms);
+  }
+
+  void clearI2cBus() {
+    pinMode(config_.i2c_sda_pin, INPUT);
+    pinMode(config_.i2c_scl_pin, INPUT);
+    delayMicroseconds(10);
+
+    for (uint8_t pulse = 0; pulse < 16U &&
+                            digitalRead(config_.i2c_sda_pin) == LOW;
+         ++pulse) {
+      digitalWrite(config_.i2c_scl_pin, LOW);
+      pinMode(config_.i2c_scl_pin, OUTPUT_OPEN_DRAIN);
+      delayMicroseconds(5);
+      pinMode(config_.i2c_scl_pin, INPUT);
+      delayMicroseconds(5);
+    }
+
+    digitalWrite(config_.i2c_sda_pin, LOW);
+    pinMode(config_.i2c_sda_pin, OUTPUT_OPEN_DRAIN);
+    delayMicroseconds(5);
+    pinMode(config_.i2c_scl_pin, INPUT);
+    delayMicroseconds(5);
+    pinMode(config_.i2c_sda_pin, INPUT);
+    delayMicroseconds(5);
   }
 
   bool probe(uint8_t address) {

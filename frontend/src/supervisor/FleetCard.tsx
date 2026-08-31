@@ -4,6 +4,7 @@ import type { EmergencyState, EnvironmentState, SensorHealth } from "../types";
 export interface FleetTruckData {
   vehicle_id: string;
   is_primary: boolean;
+  is_simulated: boolean;
   x_m: number;
   y_m: number;
   heading_deg: number;
@@ -11,7 +12,6 @@ export interface FleetTruckData {
   emergency_state: string;
   distance_m?: number;
   link_status?: string;
-  rssi_dbm?: number;
 }
 
 interface FleetCardProps {
@@ -38,15 +38,22 @@ export function FleetCard({
     <article
       className={`fleet-card ${isSelected ? "fleet-card-selected" : ""} ${truck.is_primary ? "fleet-card-primary" : "fleet-card-peer"}`}
       onClick={onSelect}
+      onKeyDown={(event) => {
+        if (event.key === "Enter" || event.key === " ") {
+          event.preventDefault();
+          onSelect?.();
+        }
+      }}
       role="button"
       tabIndex={0}
-      title="Click to locate on fleet map"
+      aria-pressed={Boolean(isSelected)}
+      title={`Show ${truck.vehicle_id} on the fleet map`}
     >
       <header>
         <div>
-          <span className="driver-role-tag">{truck.is_primary ? "LEAD TRUCK" : "V2V HAULER"}</span>
+          <span className="driver-role-tag">{truck.is_primary ? "PRIMARY" : "SIMULATED PEER"}</span>
           <h3 className="truck-title">
-            <span className="truck-icon">🚛</span> {truck.vehicle_id}
+            {truck.vehicle_id}
           </h3>
         </div>
         <span className={`fleet-state fleet-state-${emergencyClass}`}>
@@ -72,16 +79,16 @@ export function FleetCard({
         </div>
         {truck.distance_m !== undefined && !truck.is_primary && (
           <div>
-            <dt>Dist to Lead</dt>
+            <dt>Distance to primary</dt>
             <dd>{formatNumber(truck.distance_m, 1)} m</dd>
           </div>
         )}
         {truck.link_status && !truck.is_primary && (
           <div>
-            <dt>V2X Link</dt>
+            <dt>Simulated link</dt>
             <dd>
               <span className={`link-badge link-${truck.link_status.toLowerCase()}`}>
-                {truck.link_status} {truck.rssi_dbm ? `(${truck.rssi_dbm} dBm)` : ""}
+                {truck.link_status}
               </span>
             </dd>
           </div>

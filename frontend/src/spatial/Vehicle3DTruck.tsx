@@ -774,17 +774,20 @@ export function Vehicle3DTruck({
             const threat = threatBySensor.get(sensor.sensor_id) ?? "UNKNOWN";
             const isAlert = threat === "ALERT" || activeAlertSensorId === sensor.sensor_id;
             const isCaution = threat === "CAUTION";
+            const isUnknown = threat === "UNKNOWN";
 
             const podColor = isAlert
               ? "#ef4444"
               : isCaution
                 ? "#f59e0b"
-                : `var(--${sensorClass(sensor.sensor_id)}, #38bdf8)`;
+                : isUnknown
+                  ? "#94a3b8"
+                  : `var(--${sensorClass(sensor.sensor_id)}, #38bdf8)`;
 
             return (
               <g
                 key={sensor.sensor_id}
-                className={`sensor-pod-3d ${sensorClass(sensor.sensor_id)} ${isAlert ? "sensor-pod-alert" : ""}`}
+                className={`sensor-pod-3d ${sensorClass(sensor.sensor_id)} ${isAlert ? "sensor-pod-alert" : ""} ${isUnknown ? "sensor-pod-unknown" : ""}`}
               >
                 <line
                   x1={origin.x}

@@ -13,12 +13,14 @@ export const TOF_SENSOR_IDS = [
 
 const TOF_SENSOR_ID_SET = new Set<string>(TOF_SENSOR_IDS);
 
+export function primaryVehicleOrNull(world: WorldState): VehiclePose | null {
+  return world.vehicles.find(
+    (vehicle) => vehicle.vehicle_id === world.primary_vehicle_id,
+  ) ?? null;
+}
+
 export function primaryVehicle(world: WorldState): VehiclePose {
-  return (
-    world.vehicles.find((vehicle) => vehicle.vehicle_id === world.primary_vehicle_id) ??
-    world.vehicles[0] ??
-    defaultWorldState.vehicles[0]
-  );
+  return primaryVehicleOrNull(world) ?? defaultWorldState.vehicles[0];
 }
 
 export function nearestRange(readings: RangeReading[]): number | null {
@@ -37,10 +39,16 @@ export function tofSensorHealth(sensors: SensorHealth[]): SensorHealth[] {
       .map((sensor) => [sensor.sensor_id, sensor]),
   );
 
-  return TOF_SENSOR_IDS.flatMap((sensorId) => {
-    const sensor = healthById.get(sensorId);
-    return sensor ? [sensor] : [];
-  });
+  return TOF_SENSOR_IDS.map(
+    (sensorId): SensorHealth =>
+      healthById.get(sensorId) ?? {
+        sensor_id: sensorId,
+        status: "OFFLINE",
+        last_update_ms: 0,
+        confidence: 0,
+        detail: "No status received",
+      },
+  );
 }
 
 export function tofSensorHealthSummary(sensors: SensorHealth[]): {

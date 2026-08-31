@@ -4,6 +4,7 @@ import { availableRangeReadings } from "./rangeReadings";
 import {
   nearestRange,
   primaryVehicle,
+  primaryVehicleOrNull,
   tofSensorHealth,
   tofSensorHealthSummary,
 } from "./selectors";
@@ -19,6 +20,23 @@ describe("world selectors", () => {
       ],
     };
     expect(primaryVehicle(world).x_m).toBe(4);
+    expect(primaryVehicleOrNull(world)?.vehicle_id).toBe("DUMPER_02");
+  });
+
+  it("does not fabricate a primary vehicle when telemetry has none", () => {
+    const world = { ...defaultWorldState, vehicles: [] };
+
+    expect(primaryVehicleOrNull(world)).toBeNull();
+  });
+
+  it("does not promote a different vehicle when the designated primary is absent", () => {
+    const world = {
+      ...defaultWorldState,
+      primary_vehicle_id: "MISSING_PRIMARY",
+      vehicles: [{ ...defaultWorldState.vehicles[0], vehicle_id: "DUMPER_02" }],
+    };
+
+    expect(primaryVehicleOrNull(world)).toBeNull();
   });
 
   it("ignores invalid, non-finite, low-quality, and zero ranges", () => {
@@ -96,5 +114,12 @@ describe("world selectors", () => {
       total: 5,
     });
     expect(tofSensorHealthSummary(mixedHealth.slice(5))).toEqual({ healthy: 0, total: 5 });
+    expect(tofSensorHealth([{ ...sensors[0], status: "OFFLINE" }])).toEqual([
+      { ...sensors[0], status: "OFFLINE" },
+      expect.objectContaining({ sensor_id: "front_fixed", status: "OFFLINE", confidence: 0 }),
+      expect.objectContaining({ sensor_id: "rear_scanner", status: "OFFLINE", confidence: 0 }),
+      expect.objectContaining({ sensor_id: "left_side", status: "OFFLINE", confidence: 0 }),
+      expect.objectContaining({ sensor_id: "right_side", status: "OFFLINE", confidence: 0 }),
+    ]);
   });
 });

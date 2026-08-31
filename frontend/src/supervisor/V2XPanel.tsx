@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type KeyboardEvent } from "react";
 import { formatNumber } from "../state/selectors";
 import type { V2IAdvisoryType, V2XState } from "../types";
 
@@ -11,6 +11,10 @@ interface BroadcastNotice {
   message: string;
 }
 
+type V2XTab = "peers" | "advisories" | "log";
+
+const V2X_TABS: V2XTab[] = ["peers", "advisories", "log"];
+
 function formatPacketTime(timestampMs: number): string {
   if (!timestampMs) return "--:--:--";
   const date = new Date(timestampMs);
@@ -18,36 +22,36 @@ function formatPacketTime(timestampMs: number): string {
 }
 
 export function V2XPanel({ v2x }: V2XPanelProps) {
-  const [activeTab, setActiveTab] = useState<"peers" | "advisories" | "log">("peers");
+  const [activeTab, setActiveTab] = useState<V2XTab>("peers");
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [broadcastNotice, setBroadcastNotice] = useState<BroadcastNotice | null>(null);
 
   if (!v2x) {
     return (
-      <article className="operations-card v2x-card" aria-label="V2X communications monitor">
+      <article className="operations-card v2x-card" aria-label="Simulated V2X monitor">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Vehicle-to-Everything (V2X)</p>
-            <h2>V2V &amp; V2I Communications</h2>
+            <p className="eyebrow">SIMULATED V2X</p>
+            <h2>Vehicle coordination</h2>
           </div>
-          <span className="source-badge">OFFLINE</span>
+          <span className="source-badge">SIMULATED</span>
         </div>
-        <p className="v2x-empty-state">V2X subsystem is offline or telemetry is unavailable.</p>
+        <p className="v2x-empty-state">Simulation data unavailable.</p>
       </article>
     );
   }
 
   if (!v2x.enabled) {
     return (
-      <article className="operations-card v2x-card" aria-label="V2X communications monitor">
+      <article className="operations-card v2x-card" aria-label="Simulated V2X monitor">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Vehicle-to-Everything (V2X)</p>
-            <h2>V2V &amp; V2I Communications</h2>
+            <p className="eyebrow">SIMULATED V2X</p>
+            <h2>Vehicle coordination</h2>
           </div>
-          <span className="source-badge">STANDBY</span>
+          <span className="source-badge">SIMULATED</span>
         </div>
-        <p className="v2x-empty-state">V2X wireless telemetry mesh is in standby mode.</p>
+        <p className="v2x-empty-state">V2X simulation paused.</p>
       </article>
     );
   }
@@ -60,7 +64,7 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
   ) => {
     try {
       setIsBroadcasting(true);
-      setBroadcastNotice({ type: "info", message: "Broadcasting advisory..." });
+      setBroadcastNotice({ type: "info", message: "Sending advisory in simulation..." });
       const payload = {
         message_id: `ADV-${Date.now().toString(36).toUpperCase()}`,
         timestamp_ms: Date.now(),
@@ -85,13 +89,13 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
 
       setBroadcastNotice({
         type: "success",
-        message: `Advisory "${title}" broadcasted to all vehicles!`,
+        message: `Advisory "${title}" sent in simulation.`,
       });
       setTimeout(() => setBroadcastNotice(null), 4500);
-    } catch (err) {
+    } catch {
       setBroadcastNotice({
         type: "error",
-        message: `Broadcast failed: ${err instanceof Error ? err.message : "Connection error"}.`,
+        message: "Advisory could not be sent.",
       });
       setTimeout(() => setBroadcastNotice(null), 5000);
     } finally {
@@ -104,19 +108,40 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
   const activeAdvisories = v2x.active_advisories ?? [];
   const recentMessages = v2x.recent_messages ?? [];
 
+  const selectTabFromKeyboard = (
+    event: KeyboardEvent<HTMLButtonElement>,
+    currentTab: V2XTab,
+  ) => {
+    const currentIndex = V2X_TABS.indexOf(currentTab);
+    let nextTab: V2XTab | null = null;
+
+    if (event.key === "ArrowRight") {
+      nextTab = V2X_TABS[(currentIndex + 1) % V2X_TABS.length];
+    } else if (event.key === "ArrowLeft") {
+      nextTab = V2X_TABS[(currentIndex - 1 + V2X_TABS.length) % V2X_TABS.length];
+    } else if (event.key === "Home") {
+      nextTab = V2X_TABS[0];
+    } else if (event.key === "End") {
+      nextTab = V2X_TABS[V2X_TABS.length - 1];
+    }
+
+    if (!nextTab) return;
+    event.preventDefault();
+    setActiveTab(nextTab);
+    requestAnimationFrame(() => document.getElementById(`v2x-tab-${nextTab}`)?.focus());
+  };
+
   return (
-    <article className="operations-card v2x-card" aria-label="V2X communications monitor">
+    <article className="operations-card v2x-card" aria-label="Simulated V2X monitor">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">Vehicle-to-Everything (V2X)</p>
-          <h2>V2V &amp; V2I Telemetry Exchange</h2>
+          <p className="eyebrow">SIMULATED V2X</p>
+          <h2>V2X simulation</h2>
         </div>
         <div className="v2x-header-badges">
-          <span className="source-badge">
-            {v2x.channel_frequency_mhz ? `${(v2x.channel_frequency_mhz / 1000).toFixed(2)} GHz DSRC` : "5.89 GHz DSRC"}
-          </span>
+          <span className="source-badge">SIMULATED</span>
           <span className="v2x-stat-pill">
-            TX: <strong>{v2x.tx_packet_count}</strong> | RX: <strong>{v2x.rx_packet_count}</strong>
+            Sent: <strong>{v2x.tx_packet_count}</strong> | Received: <strong>{v2x.rx_packet_count}</strong>
           </span>
         </div>
       </div>
@@ -129,9 +154,11 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
           role="tab"
           aria-selected={activeTab === "peers"}
           aria-controls="v2x-tabpanel-peers"
+          tabIndex={activeTab === "peers" ? 0 : -1}
           onClick={() => setActiveTab("peers")}
+          onKeyDown={(event) => selectTabFromKeyboard(event, "peers")}
         >
-          V2V Peers ({activePeers.length})
+          Peers ({activePeers.length})
         </button>
         <button
           type="button"
@@ -140,9 +167,11 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
           role="tab"
           aria-selected={activeTab === "advisories"}
           aria-controls="v2x-tabpanel-advisories"
+          tabIndex={activeTab === "advisories" ? 0 : -1}
           onClick={() => setActiveTab("advisories")}
+          onKeyDown={(event) => selectTabFromKeyboard(event, "advisories")}
         >
-          V2I Advisories ({activeAdvisories.length})
+          Advisories ({activeAdvisories.length})
         </button>
         <button
           type="button"
@@ -151,9 +180,11 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
           role="tab"
           aria-selected={activeTab === "log"}
           aria-controls="v2x-tabpanel-log"
+          tabIndex={activeTab === "log" ? 0 : -1}
           onClick={() => setActiveTab("log")}
+          onKeyDown={(event) => selectTabFromKeyboard(event, "log")}
         >
-          Packet Log ({recentMessages.length})
+          Event log ({recentMessages.length})
         </button>
       </div>
 
@@ -166,7 +197,7 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
             className="v2x-peers-grid"
           >
             {activePeers.length === 0 ? (
-              <p className="v2x-empty-state">No peer vehicles detected within wireless range.</p>
+              <p className="v2x-empty-state">No simulated peers.</p>
             ) : (
               activePeers.map((peer) => (
                 <div
@@ -176,7 +207,7 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
                   <div className="v2x-peer-header">
                     <strong>{peer.vehicle_id}</strong>
                     <span className={`link-badge link-${peer.link_status.toLowerCase()}`}>
-                      {peer.link_status} ({peer.rssi_dbm} dBm)
+                      SIMULATED · {peer.link_status}
                     </span>
                   </div>
                   <div className="v2x-peer-stats">
@@ -216,14 +247,14 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
           >
             {infrastructureNodes.length > 0 && (
               <div className="v2x-infrastructure-summary">
-                <span className="v2x-rsu-title">Active RSUs ({infrastructureNodes.length}):</span>
+                <span className="v2x-rsu-title">Simulated roadside units ({infrastructureNodes.length})</span>
                 <div className="v2x-rsu-chips">
                   {infrastructureNodes.map((rsu) => (
                     <span
                       key={rsu.rsu_id}
                       className={`v2x-rsu-chip rsu-${rsu.status.toLowerCase()}`}
                     >
-                      <strong>{rsu.name}</strong> ({rsu.coverage_radius_m}m coverage • {rsu.active_advisories_count} active)
+                      <strong>{rsu.name}</strong> ({rsu.coverage_radius_m}m simulation radius · {rsu.active_advisories_count} active)
                     </span>
                   ))}
                 </div>
@@ -231,7 +262,7 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
             )}
 
             <div className="v2x-quick-actions">
-              <span className="v2x-actions-label">Dispatch Broadcast:</span>
+              <span className="v2x-actions-label">Send advisory</span>
               <button
                 type="button"
                 className="v2x-action-btn fog-btn"
@@ -239,13 +270,13 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
                 onClick={() =>
                   handleBroadcast(
                     "FOG_WARNING",
-                    "Dense Fog - Reduced Speed Limit",
+                    "Dense fog warning",
                     "Low visibility ahead. Maximum vehicle speed restricted to 20 km/h.",
                     20,
                   )
                 }
               >
-                + Fog Warning (20 km/h)
+                Fog warning (20 km/h)
               </button>
               <button
                 type="button"
@@ -259,7 +290,7 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
                   )
                 }
               >
-                + Berm Hazard Alert
+                Berm hazard
               </button>
               <button
                 type="button"
@@ -269,11 +300,11 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
                   handleBroadcast(
                     "PASSAGE_PRIORITY",
                     "Narrow Pit Priority Granted",
-                    "Loaded dumper DUMPER_01 has passage priority on North Ramp.",
+                    "The assigned loaded vehicle has passage priority on North Ramp.",
                   )
                 }
               >
-                + Passage Priority
+                Passage priority
               </button>
               <button
                 type="button"
@@ -288,7 +319,7 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
                   )
                 }
               >
-                + Road Maintenance
+                Road maintenance
               </button>
               <button
                 type="button"
@@ -303,7 +334,7 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
                   )
                 }
               >
-                + Speed Limit (15 km/h)
+                Speed limit (15 km/h)
               </button>
             </div>
 
@@ -319,7 +350,7 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
 
             <div className="v2x-advisories-list">
               {activeAdvisories.length === 0 ? (
-                <p className="v2x-empty-state">No active infrastructure advisories.</p>
+                <p className="v2x-empty-state">No simulated advisories.</p>
               ) : (
                 activeAdvisories.map((adv) => (
                   <div
@@ -360,7 +391,7 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
             className="v2x-packet-log"
           >
             {recentMessages.length === 0 ? (
-              <p className="v2x-empty-state">No V2X messages logged yet.</p>
+              <p className="v2x-empty-state">No simulation events logged.</p>
             ) : (
               recentMessages
                 .slice(-16)

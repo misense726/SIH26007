@@ -142,6 +142,18 @@ def test_imu_zeroing_is_explicit_and_does_not_claim_absolute_position() -> None:
         assert forbidden not in source
 
 
+def test_offline_local_sensors_clear_cached_values() -> None:
+    sensors = (FIRMWARE_ROOT / "src" / "LocalSensors.cpp").read_text(
+        encoding="utf-8"
+    )
+
+    assert sensors.count("imuReading_.hasSample = false;") >= 2
+    assert sensors.count("imuReading_.calibrated = false;") >= 2
+    assert sensors.count("environmentReading_.hasSample = false;") >= 2
+    assert "bmpInitialized_ = false;\n      environmentReading_.hasSample = false;" in sensors
+    assert "imuInitialized_ = false;\n      imuReading_.hasSample = false;" in sensors
+
+
 def test_frozen_node_packet_examples_and_unknown_sentinel() -> None:
     front = '{"node":"FRONT","seq":42,"ms":18120,"a":-30,"scan":-1,"scan_ms":18090,"front":620,"front_ms":18118,"ok":11}'
     middle = '{"node":"MIDDLE","seq":43,"ms":18124,"left":-1,"left_ms":18100,"right":510,"right_ms":18122,"ok":6}'
@@ -262,10 +274,13 @@ def test_maximum_front_settle_keeps_full_sweep_inside_cache_lifetime() -> None:
     config = (
         PROJECT_ROOT / "firmware" / "front_xiao_esp32c6" / "node_config.h"
     ).read_text(encoding="utf-8")
-    match = re.search(r"\n\s*(\d+),\s*// max_settle_ms", config)
-    assert match, "Missing max_settle_ms in FRONT"
+    match = re.search(
+        r"constexpr\s+uint16_t\s+kMaximumSettleMs\s*=\s*(\d+)\s*;", config
+    )
+    assert match, "Missing kMaximumSettleMs in FRONT"
     maximum_settle_ms = int(match.group(1))
     assert maximum_settle_ms == 100
+    assert "kMaximumSettleMs,            // max_settle_ms" in config
 
     scanner_timing_budget_ms = 20
     optical_guard_ms = 5
@@ -303,8 +318,10 @@ def test_live_tof_profile_uses_validated_fast_near_field_timing() -> None:
 
     assert "VL53L1X::Short,              // scanner_distance_mode" in front_config
     assert "20000,                       // scanner_timing_budget_us" in front_config
-    assert "5,                           // scan_step_deg" in front_config
-    assert "30,                          // default_settle_ms" in front_config
+    assert "constexpr int16_t kScanStepDeg = 5;" in front_config
+    assert "constexpr uint16_t kDefaultSettleMs = 30;" in front_config
+    assert "kScanStepDeg,                // scan_step_deg" in front_config
+    assert "kDefaultSettleMs,            // default_settle_ms" in front_config
     assert "20,                         // sample_period_ms" in middle_config
     assert "constexpr uint32_t kTelemetryPeriodMs = 50;" in main_config
     assert "constexpr bool kRearScannerShortDistanceMode = true;" in main_config
@@ -372,6 +389,15 @@ def test_main_keeps_usb_fallback_and_uses_bounded_wifi_telemetry() -> None:
     assert "<WiFi.h>" in source
     assert "xQueueCreate" in source
     assert "xTaskCreatePinnedToCore" in source
+    assert "if (!backendConnected_.load())" in source
+    assert "void WifiTelemetry::discardQueuedFrames()" in source
+    assert "uint32_t connectionGeneration;" in source
+    assert "std::atomic<uint32_t> connectionGeneration_;" in source
+    assert "connectionGeneration_.fetch_add(1);" in source
+    assert "frame.connectionGeneration != connectionGeneration_.load()" in source
+    assert "while (xQueueReceive(queue_, &discarded, 0) == pdPASS)" in source
+    assert "xQueueReset(queue_)" not in source
+    assert source.count("discardQueuedFrames();") >= 4
     assert "wifiTelemetry.enqueueLine" in source
     assert "laptopTx.enqueueLine" in source
     assert "wifi_secrets.h" in source

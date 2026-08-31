@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { RangeReading, SpatialPoint, VehiclePose, WorldState } from "../types";
 import type { ConnectionState } from "../state/useTelemetry";
 import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
@@ -18,6 +18,14 @@ const awarenessModes: Array<{ value: AwarenessMode; label: string }> = [
 
 function overlayStrength(score: number): number {
   return Math.min(0.92, Math.max(0.22, 1.02 - score));
+}
+
+function processorLabel(device: string | null): string | null {
+  const normalized = device?.trim().toLowerCase();
+  if (!normalized) return null;
+  if (normalized.includes("cuda") || normalized.includes("gpu")) return "GPU";
+  if (normalized.includes("cpu")) return "CPU";
+  return device?.trim() ?? null;
 }
 
 interface CameraAwarenessProps {
@@ -44,6 +52,8 @@ export function CameraAwareness({
   onExpandMap,
 }: CameraAwarenessProps) {
   const [cameraView, setCameraView] = useState<"RAW" | "ENHANCED" | "IR">("RAW");
+  const [cameraStreamFailed, setCameraStreamFailed] = useState(false);
+  const [cameraRetry, setCameraRetry] = useState(0);
   const telemetryConnected = connection === "CONNECTED";
   const cameraVisibilityScore = world.camera.raw_available
     ? world.camera.visibility_score ?? world.environment.visibility_score
@@ -52,7 +62,13 @@ export function CameraAwareness({
     ? world.camera.visibility_state ?? world.environment.visibility_state
     : world.environment.visibility_state;
   const visibility = Math.round(cameraVisibilityScore * 100);
-  const corridorState = telemetryConnected ? world.safe_corridor.state : "GREY";
+  const trustedSensorIds = new Set(readings.map((reading) => reading.sensor_id));
+  const hasCompleteRangeCoverage =
+    sensorSettings.length > 0 &&
+    sensorSettings.every((sensor) => trustedSensorIds.has(sensor.sensor_id));
+  const corridorState = telemetryConnected && hasCompleteRangeCoverage
+    ? world.safe_corridor.state
+    : "GREY";
   const showLiveCamera =
     telemetryConnected && world.camera.mode === "LIVE" && world.camera.raw_available;
   const showEnhancedCamera =
@@ -71,49 +87,71 @@ export function CameraAwareness({
     nearestRange === null ? "" : ` Nearest range ${nearestRange.toFixed(2)} metres.`
   }`;
   const modeStatus = connection === "CONNECTING"
-    ? "Connecting to telemetry. ToF unavailable"
+    ? "ToF unavailable"
     : connection === "DISCONNECTED"
-      ? "Telemetry disconnected. ToF unavailable"
+      ? "ToF unavailable"
       : mode === "AUTO"
         ? showTofOverlay
-          ? "Low visibility. ToF overlay active"
-          : "Camera view. ToF turns on when visibility is low"
+          ? "ToF active"
+          : "Camera active"
         : showTofOverlay
-          ? "ToF overlay active"
-          : "Camera view";
-  const isIrGpu = (world.camera.ir_device ?? "").toLowerCase() === "cuda";
-  const sourceLabel = showLiveCamera
+          ? "ToF active"
+          : "Camera active";
+  const enhancementProcessor = processorLabel(world.camera.enhancement_device);
+  const falseColorProcessor = processorLabel(world.camera.ir_device);
+  const sourceLabel = cameraStreamFailed
+    ? "CAMERA STREAM ERROR"
+    : showLiveCamera
     ? showIRCamera
-      ? isIrGpu
-        ? "IR LIVE · GPU"
-        : "IR LIVE · CPU"
+      ? `FALSE COLOR LIVE${falseColorProcessor ? ` · ${falseColorProcessor}` : ""}`
       : showEnhancedCamera
-        ? "DEHAZED LIVE · GPU"
-        : "CAMERA LIVE · WI-FI"
+        ? `DEHAZED LIVE${enhancementProcessor ? ` · ${enhancementProcessor}` : ""}`
+        : "CAMERA LIVE"
     : showSimulatedCamera
       ? "CAMERA SIMULATED"
+      : telemetryConnected && world.camera.mode === "REPLAY"
+        ? "CAMERA REPLAY"
       : telemetryConnected
         ? "CAMERA UNAVAILABLE"
         : connection === "CONNECTING"
           ? "CONNECTING"
           : "NO TELEMETRY";
-  const cameraStreamSrc = showIRCamera
+  const cameraStreamPath = showIRCamera
     ? "/api/camera/stream?view=ir"
     : showEnhancedCamera
       ? "/api/camera/stream?view=enhanced"
       : "/api/camera/stream?view=raw";
+  const cameraStreamSrc = `${cameraStreamPath}&retry=${cameraRetry}`;
   const cameraAlt = showIRCamera
-    ? "Infrared view from the Raspberry Pi camera"
+    ? "False-color RGB view from the forward camera"
     : showEnhancedCamera
-      ? "ML-dehazed forward view from the Raspberry Pi camera"
-      : "Raw forward view from the Raspberry Pi camera";
+      ? "Dehazed forward camera view"
+      : "Raw forward camera view";
   const frameDetail = showLiveCamera && world.camera.width_px && world.camera.height_px
     ? showIRCamera
-      ? `${world.camera.ir_model ?? "IR"} · ${world.camera.ir_fps.toFixed(1)} FPS · ${Math.round(world.camera.ir_latency_ms ?? 0)} ms`
+      ? `${world.camera.ir_model ?? "False color"} · ${world.camera.ir_fps.toFixed(1)} FPS · ${Math.round(world.camera.ir_latency_ms ?? 0)} ms`
       : showEnhancedCamera
         ? `${world.camera.enhancement_model ?? "ML dehazing"} · ${world.camera.enhancement_fps.toFixed(1)} FPS · ${Math.round(world.camera.enhancement_latency_ms ?? 0)} ms`
         : `${world.camera.width_px}×${world.camera.height_px} · ${world.camera.measured_fps.toFixed(1)} FPS`
     : null;
+
+  useEffect(() => {
+    setCameraStreamFailed(false);
+  }, [cameraView, showLiveCamera, world.camera.stream_status]);
+
+  useEffect(() => {
+    if (
+      (cameraView === "ENHANCED" && !world.camera.enhancement_available) ||
+      (cameraView === "IR" && !world.camera.ir_available)
+    ) {
+      setCameraView("RAW");
+    }
+  }, [cameraView, world.camera.enhancement_available, world.camera.ir_available]);
+
+  function retryCameraStream() {
+    setCameraStreamFailed(false);
+    setCameraRetry((retry) => retry + 1);
+  }
 
   return (
     <article className="camera-awareness">
@@ -174,12 +212,12 @@ export function CameraAwareness({
               title={world.camera.ir_detail ?? undefined}
               onClick={() => setCameraView("IR")}
             >
-              IR
+              False color
             </button>
           </div>
         )}
         <span
-          className={`awareness-mode-status ${showTofOverlay && telemetryConnected ? "active" : ""}`}
+          className="sr-only"
           role="status"
           aria-live="polite"
         >
@@ -188,11 +226,12 @@ export function CameraAwareness({
       </div>
 
       <div className={`camera-stage ${showLiveCamera ? "camera-stage-live" : ""}`}>
-        {showLiveCamera ? (
+        {showLiveCamera && !cameraStreamFailed ? (
           <img
             className="camera-feed"
             src={cameraStreamSrc}
             alt={cameraAlt}
+            onError={() => setCameraStreamFailed(true)}
           />
         ) : (
           <>
@@ -216,18 +255,29 @@ export function CameraAwareness({
             />
           </>
         )}
-        {showLiveCamera && frameDetail ? (
+        {showLiveCamera && !cameraStreamFailed && frameDetail ? (
           <span className="camera-preview-label">{frameDetail}</span>
         ) : showSimulatedCamera ? (
           <span className="camera-preview-label">Simulated camera</span>
         ) : (
           <div className="camera-unavailable">
-            <strong>{telemetryConnected ? "Camera preview unavailable" : "Camera telemetry unavailable"}</strong>
+            <strong>
+              {cameraStreamFailed
+                ? "Camera stream unavailable"
+                : telemetryConnected
+                  ? "Camera preview unavailable"
+                  : "Camera telemetry unavailable"}
+            </strong>
             <span>
-              {telemetryConnected
-                ? world.camera.stream_detail ?? "Synthetic awareness remains active"
+              {cameraStreamFailed
+                ? "Check the camera connection and retry."
+                : telemetryConnected
+                ? "Camera connection unavailable."
                 : "Waiting for live telemetry"}
             </span>
+            {cameraStreamFailed && (
+              <button type="button" onClick={retryCameraStream}>Retry camera</button>
+            )}
           </div>
         )}
         {showTofOverlay && (
@@ -253,14 +303,15 @@ export function CameraAwareness({
           </div>
         )}
 
-        {/* Compact road navigation map */}
-        <div className="camera-minimap-overlay">
-          <CampusMinimap
-            world={world}
-            vehicle={vehicle}
-            onExpand={onExpandMap ?? (() => {})}
-          />
-        </div>
+        {telemetryConnected && (
+          <div className="camera-minimap-overlay">
+            <CampusMinimap
+              world={world}
+              vehicle={vehicle}
+              onExpand={onExpandMap ?? (() => {})}
+            />
+          </div>
+        )}
       </div>
     </article>
   );

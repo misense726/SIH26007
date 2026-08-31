@@ -79,9 +79,10 @@ At boot and recovery, a controller holds every local XSHUT low. It releases one
 sensor, initializes it at `0x29`, assigns and probes the runtime address, then
 continues. It repeats the full local sequence after a probe or timed-read
 failure. XSHUT release uses `pinMode(pin, INPUT)` so the carrier pulls the line
-high. FRONT also clears a stuck SDA line with bounded SCL pulses before
-restarting Wire, uses a 100 kHz bus, holds both sensors down for 50 ms, and
-allows 20 ms after each release.
+high. FRONT and MIDDLE clear a stuck SDA line with at most 16 SCL pulses and a
+STOP condition before restarting Wire. FRONT uses a 100 kHz bus, holds both
+sensors down for 50 ms, and allows 20 ms after each release. MIDDLE uses a
+400 kHz bus.
 
 ## Timing and unknown values
 

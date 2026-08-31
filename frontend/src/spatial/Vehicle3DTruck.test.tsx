@@ -119,5 +119,7 @@ describe("Vehicle3DTruck 3D Model", () => {
 
     expect(markup).not.toMatch(/NaN|Infinity/);
     expect(markup).toContain("Front scanner: UNKNOWN (no return)");
+    expect(markup).toContain("sensor-pod-unknown");
+    expect(markup).toContain('stroke="#94a3b8"');
   });
 });

@@ -1,11 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { CameraAwareness } from "./CameraAwareness";
 import { CampusExtendedMapModal } from "./CampusExtendedMapModal";
 import { ProximityWidget } from "./ProximityWidget";
 import type { AwarenessMode } from "./driverAwareness";
 import { availableRangeReadings } from "../state/rangeReadings";
 import { availableSpatialPoints } from "../state/spatialPoints";
-import { formatNumber, nearestRange, primaryVehicle } from "../state/selectors";
+import {
+  formatNumber,
+  nearestRange,
+  primaryVehicle,
+  primaryVehicleOrNull,
+  TOF_SENSOR_IDS,
+} from "../state/selectors";
 import type { ConnectionState } from "../state/useTelemetry";
 import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
 import type { WorldState } from "../types";
@@ -27,44 +33,70 @@ export function DriverDashboard({
 }: DriverDashboardProps) {
   const [isMapExtended, setIsMapExtended] = useState(false);
   const telemetryConnected = connection === "CONNECTED";
-  const vehicle = primaryVehicle(world);
+  const reportedVehicle = primaryVehicleOrNull(world);
+  const vehicle = reportedVehicle ?? primaryVehicle(world);
+  const vehicleTelemetryAvailable = telemetryConnected && reportedVehicle !== null;
+  const driverConnection: ConnectionState = telemetryConnected && reportedVehicle === null
+    ? "DISCONNECTED"
+    : connection;
   const ranges = availableRangeReadings(
     world.ranges,
     world.sensor_health,
-    telemetryConnected,
+    vehicleTelemetryAvailable,
   );
   const nearest = nearestRange(ranges);
   const points = availableSpatialPoints(
     world.spatial_points,
     world.sensor_health,
-    telemetryConnected,
+    vehicleTelemetryAvailable,
     world.generated_at_ms,
     vehicle,
   );
   const emergencyClass = world.emergency.state.toLowerCase().replace("_", "-");
-  const compactStopState = !telemetryConnected
-    ? "OFFLINE"
-    : world.emergency.state === "EMERGENCY_STOP"
-      ? "STOPPED"
-      : world.emergency.state;
-  const corridorState = telemetryConnected ? world.safe_corridor.state : "GREY";
-  const corridorConfidence = telemetryConnected
+  const emergencyControlState = !vehicleTelemetryAvailable
+    ? "UNVERIFIED"
+    : world.emergency.motor_cut
+      ? "MOTOR CUT"
+      : world.emergency.state === "EMERGENCY_STOP"
+        ? "STOP REQUEST"
+        : world.emergency.state === "SAFE"
+          ? "NO STOP REQUEST"
+          : world.emergency.state;
+  const trustedSensorIds = new Set(ranges.map((reading) => reading.sensor_id));
+  const hasCompleteRangeCoverage = TOF_SENSOR_IDS.every((sensorId) => trustedSensorIds.has(sensorId));
+  const corridorState = vehicleTelemetryAvailable && hasCompleteRangeCoverage
+    ? world.safe_corridor.state
+    : "GREY";
+  const corridorConfidence = vehicleTelemetryAvailable
     ? Math.round(world.safe_corridor.confidence * 100)
     : 0;
+  const corridorLabel = corridorState === "GREY" ? "UNVERIFIED" : corridorState;
+
+  useEffect(() => {
+    if (!vehicleTelemetryAvailable) setIsMapExtended(false);
+  }, [vehicleTelemetryAvailable]);
 
   return (
     <section className="dashboard driver-dashboard" aria-label="Driver dashboard">
-      {!telemetryConnected ? (
+      {!vehicleTelemetryAvailable ? (
         <div
           className="emergency-banner telemetry-banner"
-          role={connection === "DISCONNECTED" ? "alert" : "status"}
-          aria-live={connection === "DISCONNECTED" ? "assertive" : "polite"}
+          role={connection === "CONNECTING" ? "status" : "alert"}
+          aria-live={connection === "CONNECTING" ? "polite" : "assertive"}
         >
-          <strong>{connection === "CONNECTING" ? "CONNECTING" : "TELEMETRY LOST"}</strong>
+          <strong>
+            {connection === "CONNECTING"
+              ? "CONNECTING"
+              : telemetryConnected
+                ? "VEHICLE DATA MISSING"
+                : "TELEMETRY LOST"}
+          </strong>
           <span>
             {connection === "CONNECTING"
               ? "Waiting for live vehicle and sensor data."
-              : "Live vehicle and sensor data are unavailable."}
+              : telemetryConnected
+                ? "No primary vehicle was reported."
+                : "Live vehicle and sensor data are unavailable."}
           </span>
         </div>
       ) : world.emergency.state !== "SAFE" && (
@@ -83,81 +115,82 @@ export function DriverDashboard({
           sensorSettings={sensorSettings}
           mode={awarenessMode}
           onModeChange={onAwarenessModeChange}
-          connection={connection}
+          connection={driverConnection}
           onExpandMap={() => setIsMapExtended(true)}
         />
 
         <aside className="driver-instruments">
-          {/* Top-Right Safe Corridor Primary Status Card */}
           <article className={`safe-corridor-top-card corridor-card-${corridorState.toLowerCase()}`}>
             <div className="corridor-card-header">
               <div>
-                <p className="eyebrow">Corridor Clearance</p>
-                <h3>Safe Corridor</h3>
+                <p className="eyebrow">Route status</p>
+                <h3>Safe corridor</h3>
               </div>
-              <span className="corridor-confidence-badge">
-                {telemetryConnected ? `${corridorConfidence}% Conf.` : "No Telemetry"}
+              <span
+                className="corridor-confidence-badge"
+                aria-label={vehicleTelemetryAvailable ? `Corridor confidence ${corridorConfidence}%` : "No telemetry"}
+              >
+                {!vehicleTelemetryAvailable
+                  ? "OFFLINE"
+                  : hasCompleteRangeCoverage
+                    ? `${corridorConfidence}%`
+                    : `${trustedSensorIds.size}/${TOF_SENSOR_IDS.length} SENSORS`}
               </span>
             </div>
             <div className="corridor-card-body">
               <strong className={`corridor-state-pill corridor-${corridorState.toLowerCase()}`}>
-                {corridorState}
+                {corridorLabel}
               </strong>
               <p className="corridor-card-detail">
-                {corridorState === "GREEN" && "Optimal lane clearance. Path is unobstructed."}
-                {corridorState === "YELLOW" && "Caution: Proximity alert or boundary restriction."}
-                {corridorState === "RED" && "Danger: Hazard zone or obstacle in path. Brake now."}
-                {corridorState === "GREY" && "Corridor evaluation inactive or sensors degraded."}
+                {corridorState === "GREEN" && "Path clear"}
+                {corridorState === "YELLOW" && "Reduce speed"}
+                {corridorState === "RED" && "Stop"}
+                {corridorState === "GREY" && "Sensor coverage incomplete"}
               </p>
             </div>
           </article>
 
-          {/* Vehicle Speed & Heading */}
           <article className="speed-card">
             <p className="eyebrow">Vehicle speed</p>
             <div className="speed-readout">
-              <strong>{telemetryConnected ? formatNumber(vehicle.speed_mps * 3.6, 1) : "--"}</strong>
+              <strong>{vehicleTelemetryAvailable ? formatNumber(vehicle.speed_mps * 3.6, 1) : "--"}</strong>
               <span>km/h</span>
             </div>
             <div className="speed-meta">
               <span>Heading</span>
-              <strong>{telemetryConnected ? `${formatNumber(vehicle.heading_deg, 0)}°` : "--"}</strong>
+              <strong>{vehicleTelemetryAvailable ? `${formatNumber(vehicle.heading_deg, 0)}°` : "--"}</strong>
             </div>
           </article>
 
-          {/* Metrics Grid */}
           <div className="driver-metric-grid">
             <article>
               <span>Nearest obstacle</span>
               <strong>{nearest === null ? "--" : `${formatNumber(nearest, 2)} m`}</strong>
             </article>
             <article>
-              <span>Stop system</span>
-              <strong className={telemetryConnected ? `emergency-${emergencyClass}` : "corridor-grey"}>
-                {compactStopState}
+              <span>Emergency control</span>
+              <strong className={vehicleTelemetryAvailable ? `emergency-${emergencyClass}` : "corridor-grey"}>
+                {emergencyControlState}
               </strong>
             </article>
           </div>
 
-          {/* ToF proximity view */}
           <ProximityWidget
             points={points}
             vehicle={vehicle}
-            validReadingCount={ranges.length}
-            readings={world.ranges}
+            readings={ranges}
             sensorHealth={world.sensor_health}
             sensorSettings={sensorSettings}
-            telemetryConnected={telemetryConnected}
+            telemetryConnected={vehicleTelemetryAvailable}
           />
         </aside>
       </div>
 
-      {/* Expanded road map */}
-      {isMapExtended && (
+      {isMapExtended && vehicleTelemetryAvailable && (
         <CampusExtendedMapModal
           world={world}
           vehicle={vehicle}
-          telemetryConnected={telemetryConnected}
+          telemetryConnected={vehicleTelemetryAvailable}
           onClose={() => setIsMapExtended(false)}
         />
       )}

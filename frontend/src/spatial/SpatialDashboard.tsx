@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 import { availableRangeReadings } from "../state/rangeReadings";
 import { availableSpatialPoints } from "../state/spatialPoints";
-import { formatNumber, primaryVehicle } from "../state/selectors";
+import { formatNumber, primaryVehicle, primaryVehicleOrNull } from "../state/selectors";
 import type { ConnectionState } from "../state/useTelemetry";
 import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
 import type { SpatialPoint, WorldState } from "../types";
@@ -172,8 +172,10 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
     }
   }, []);
 
-  const connected = connection === "CONNECTED";
-  const vehicle = primaryVehicle(world);
+  const transportConnected = connection === "CONNECTED";
+  const reportedVehicle = primaryVehicleOrNull(world);
+  const connected = transportConnected && reportedVehicle !== null;
+  const vehicle = reportedVehicle ?? primaryVehicle(world);
   const maxVisualRange = Math.max(4, ...sensorSettings.map((sensor) => sensor.visual_range_m));
   const ranges = availableRangeReadings(world.ranges, world.sensor_health, connected);
   const points = availableSpatialPoints(
@@ -189,6 +191,10 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
   const latestReadingById = new Map(
     (connected ? world.ranges : []).map((reading) => [reading.sensor_id, reading]),
   );
+  const trustedSensorIds = new Set(ranges.map((reading) => reading.sensor_id));
+  const trustedCoverageCount = sensorSettings.filter((sensor) =>
+    trustedSensorIds.has(sensor.sensor_id),
+  ).length;
 
   // -------------------------------------------------------------
   // MPU-6050 IMU Live Motion Calculation
@@ -227,7 +233,6 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
   const cameraPitchLabel = cameraPitch < 0
     ? `${Math.abs(Math.round(cameraPitch))}° below`
     : `${Math.round(cameraPitch)}° above`;
-
   // Sensor Threat Evaluations
   const sensorThreats = sensorSettings.map((sensor) => {
     const reading = readingById.get(sensor.sensor_id);
@@ -247,6 +252,10 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
 
   const cautions = sensorThreats.filter((st) => st.isCaution && st.rangeM !== null);
   const closestCaution = cautions.sort((a, b) => (a.rangeM ?? 99) - (b.rangeM ?? 99))[0];
+  const hasCompleteCoverage =
+    sensorSettings.length > 0 &&
+    trustedCoverageCount === sensorSettings.length &&
+    sensorThreats.every(({ threat }) => threat !== "UNKNOWN");
 
   const nearestAnyReading = sensorThreats
     .filter((st) => st.reading?.is_valid && st.rangeM !== null)
@@ -353,33 +362,37 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                 type="button"
                 className={`spatial-toggle-btn ${showFovSectors ? "active" : ""}`}
                 onClick={() => setShowFovSectors(!showFovSectors)}
-                title="Toggle Sensor FOV Danger Cones"
+                aria-pressed={showFovSectors}
+                title="Show or hide sensor coverage"
               >
-                <span className="toggle-dot" /> FOV Cones
+                <span className="toggle-dot" /> Coverage
               </button>
               <button
                 type="button"
                 className={`spatial-toggle-btn ${showDistanceRings ? "active" : ""}`}
                 onClick={() => setShowDistanceRings(!showDistanceRings)}
-                title="Toggle Concentric Distance Grid"
+                aria-pressed={showDistanceRings}
+                title="Show or hide distance grid"
               >
-                <span className="toggle-dot" /> Distance Rings
+                <span className="toggle-dot" /> Distance grid
               </button>
               <button
                 type="button"
                 className={`spatial-toggle-btn ${showPointAuras ? "active" : ""}`}
                 onClick={() => setShowPointAuras(!showPointAuras)}
-                title="Toggle Volumetric Obstacle Auras"
+                aria-pressed={showPointAuras}
+                title="Show or hide hazard halos"
               >
-                <span className="toggle-dot" /> Proximity Scaling
+                <span className="toggle-dot" /> Hazard halos
               </button>
               <button
                 type="button"
                 className={`spatial-toggle-btn ${showImuControls ? "active" : ""}`}
                 onClick={() => setShowImuControls(!showImuControls)}
-                title="Toggle MPU-6050 Gyro Attitude & Motion Controls"
+                aria-pressed={showImuControls}
+                title="Show or hide view controls"
               >
-                <span className="toggle-dot" /> MPU-6050 Motion
+                <span className="toggle-dot" /> View controls
               </button>
             </div>
 
@@ -395,10 +408,15 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                   <i className="threat-status-dot" aria-hidden="true" />
                   Caution · {closestCaution.sensor.label} · {closestCaution.rangeM?.toFixed(2)} m
                 </span>
-              ) : connected ? (
+              ) : connected && hasCompleteCoverage ? (
                 <span className="threat-pill threat-clear">
                   <i className="threat-status-dot" aria-hidden="true" />
-                  Clear · {ranges.length}/5 ToF
+                  No proximity hazards · {trustedCoverageCount}/{sensorSettings.length} valid
+                </span>
+              ) : connected ? (
+                <span className="threat-pill threat-offline">
+                  <i className="threat-status-dot" aria-hidden="true" />
+                  Coverage incomplete · {trustedCoverageCount}/{sensorSettings.length} valid
                 </span>
               ) : (
                 <span className="threat-pill threat-offline">
@@ -411,7 +429,7 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
 
           {/* MPU-6050 Live Motion & Attitude Control Panel */}
           {showImuControls && (
-            <div className="imu-motion-panel" aria-label="MPU-6050 Gyro Motion & Attitude Controls">
+            <div className="imu-motion-panel" aria-label="View and motion controls">
               <div className="imu-hud-readout">
                 <div className="imu-hud-badge">
                   <small>MPU-6050 YAW</small>
@@ -422,11 +440,11 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                   <strong>{connected ? `${formatNumber(imuYawRate, 1)}°/s` : "--"}</strong>
                 </div>
                 <div className="imu-hud-badge">
-                  <small>PITCH (TILT)</small>
+                  <small>VISUAL PITCH</small>
                   <strong>{formatNumber(effectivePitch, 1)}°</strong>
                 </div>
                 <div className="imu-hud-badge">
-                  <small>ROLL (BANK)</small>
+                  <small>VISUAL ROLL</small>
                   <strong>{formatNumber(effectiveRoll, 1)}°</strong>
                 </div>
               </div>
@@ -438,14 +456,14 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                     className={`imu-mode-btn ${imuMode === "LIVE_IMU" ? "active" : ""}`}
                     onClick={() => setImuMode("LIVE_IMU")}
                   >
-                    Auto MPU-6050
+                    Live estimate
                   </button>
                   <button
                     type="button"
                     className={`imu-mode-btn ${imuMode === "MANUAL_JOG" ? "active" : ""}`}
                     onClick={() => setImuMode("MANUAL_JOG")}
                   >
-                    Manual Jog
+                    Manual preview
                   </button>
                 </div>
 
@@ -565,6 +583,12 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                 <stop offset="100%" stopColor="var(--accent, #38bdf8)" stopOpacity="0.01" />
               </radialGradient>
 
+              <radialGradient id="fov-unknown-gradient" cx="50%" cy="0%" r="100%">
+                <stop offset="0%" stopColor="#94a3b8" stopOpacity="0.18" />
+                <stop offset="70%" stopColor="#94a3b8" stopOpacity="0.06" />
+                <stop offset="100%" stopColor="#94a3b8" stopOpacity="0.01" />
+              </radialGradient>
+
               <filter id="point-glow" x="-150%" y="-150%" width="400%" height="400%">
                 <feGaussianBlur stdDeviation="3.2" result="blur" />
                 <feMerge>
@@ -597,7 +621,11 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
               <g className="spatial-fov-sectors" aria-label="Sensor FOV coverage zones">
                 {sensorThreats.map(({ sensor, reading, threat, isAlert, isCaution }) => {
                   const latestReading = latestReadingById.get(sensor.sensor_id);
-                  const activeReading = sensor.scanner ? latestReading : reading;
+                  const activeReading = sensor.scanner && latestReading
+                    ? reading
+                      ? { ...reading, angle_deg: latestReading.angle_deg }
+                      : { ...latestReading, range_m: 0, quality: 0, is_valid: false }
+                    : reading;
                   const yaw =
                     sensor.display_pose.yaw_deg +
                     (sensor.scanner ? activeReading?.angle_deg ?? 0 : 0);
@@ -622,13 +650,17 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                     ? "url(#fov-danger-gradient)"
                     : isCaution
                       ? "url(#fov-caution-gradient)"
-                      : "url(#fov-clear-gradient)";
+                      : threat === "UNKNOWN"
+                        ? "url(#fov-unknown-gradient)"
+                        : "url(#fov-clear-gradient)";
 
                   const strokeColor = isAlert
                     ? "#ef4444"
                     : isCaution
                       ? "#f59e0b"
-                      : `var(--${sensorClass(sensor.sensor_id)}, #38bdf8)`;
+                      : threat === "UNKNOWN"
+                        ? "#94a3b8"
+                        : `var(--${sensorClass(sensor.sensor_id)}, #38bdf8)`;
 
                   return (
                     <g
@@ -656,11 +688,13 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
               {sensorSettings.map((sensor) => {
                 const reading = readingById.get(sensor.sensor_id);
                 const latestReading = latestReadingById.get(sensor.sensor_id);
+                const displayReading = sensor.scanner && latestReading
+                  ? reading
+                    ? { ...reading, angle_deg: latestReading.angle_deg }
+                    : { ...latestReading, range_m: 0, quality: 0, is_valid: false }
+                  : reading;
                 const rawOrigin = sensor.display_pose;
-                const rawEndpoint = rangeEndpoint(
-                  sensor,
-                  sensor.scanner ? latestReading : reading,
-                );
+                const rawEndpoint = rangeEndpoint(sensor, displayReading);
 
                 // Transform with MPU-6050 orientation
                 const transformedOrigin = applyImuTransform(rawOrigin, imuOrientation);
@@ -819,31 +853,34 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
             {/* ----------------------------------------------------------- */}
             {/* 4. Complete Moveable 3D Truck Model in Scene                */}
             {/* ----------------------------------------------------------- */}
-            <Vehicle3DTruck
-              sensors={sensorSettings}
-              readings={world.ranges}
-              emergencyState={world.emergency.state}
-              isPrimary={true}
-              callsign={vehicle.vehicle_id || "DUMPER_01"}
-              showSensorMounts={true}
-              showHeadlightBeams={true}
-              showPerimeterShield={true}
-              activeAlertSensorId={closestAlert?.sensor.sensor_id ?? null}
-              imuOrientation={imuOrientation}
-              steerAngleDeg={effectiveSteer}
-              cameraConfig={cameraConfig}
-            />
+            {connected && (
+              <Vehicle3DTruck
+                sensors={sensorSettings}
+                readings={ranges}
+                emergencyState={world.emergency.state}
+                isPrimary={true}
+                callsign={vehicle.vehicle_id}
+                showSensorMounts={true}
+                showHeadlightBeams={true}
+                showPerimeterShield={true}
+                activeAlertSensorId={closestAlert?.sensor.sensor_id ?? null}
+                imuOrientation={imuOrientation}
+                steerAngleDeg={effectiveSteer}
+                cameraConfig={cameraConfig}
+              />
+            )}
 
           </svg>
 
-          <span className="spatial-orbit-hint" aria-hidden="true">
-            Drag to orbit · <strong>{Math.round(cameraOrbit)}° · {cameraPitchLabel}</strong>
-          </span>
-
           {!connected && (
             <div className="spatial-empty-overlay">
-              <strong>{connection === "CONNECTING" ? "Connecting to telemetry" : "Telemetry unavailable"}</strong>
-              <span>Live 3D truck model, MPU-6050 motion, and ToF depth returns will appear when connected.</span>
+              <strong>
+                {connection === "CONNECTING"
+                  ? "Connecting to telemetry"
+                  : transportConnected
+                    ? "Vehicle data unavailable"
+                    : "Telemetry unavailable"}
+              </strong>
             </div>
           )}
 
@@ -865,7 +902,7 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
               <p className="eyebrow">Perimeter Coverage</p>
               <h3>Sensor heads</h3>
             </div>
-            <span className="source-badge">{ranges.length}/5 valid</span>
+            <span className="source-badge">{trustedCoverageCount}/{sensorSettings.length} valid</span>
           </div>
 
           <div className="spatial-sensor-list">
