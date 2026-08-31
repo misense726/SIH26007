@@ -351,8 +351,8 @@ V2X, camera, or IR display features replaces the ToF safety path.
 
 ## Operator dashboard and firmware hardening
 
-Status: locally integrated and software-verified on 2026-08-31. Hardware upload
-and physical recovery tests remain pending.
+Status: locally integrated, Docker-verified, and host-telemetry-verified on
+2026-08-31. Hardware upload and fault-injection recovery tests remain pending.
 
 Implemented:
 
@@ -384,6 +384,11 @@ Verification:
 - TypeScript and Vite production build passed;
 - all 40 firmware contract checks passed;
 - MAIN, FRONT, and MIDDLE compiled for their pinned FQBNs with warnings enabled;
+- Docker Compose rebuilt the committed images; backend and frontend were healthy
+  with zero restarts, and `/healthz` plus the dashboard returned HTTP 200;
+- the host-side MAIN check on the identified CP210x USB-UART port passed all 12
+  live five-ToF checks across 74 packets; it discarded 9 non-telemetry lines and
+  no oversized lines;
 - the simulated dashboard remained connected through WebSocket telemetry;
 - all four views rendered at desktop and 390×844 mobile sizes without horizontal
   overflow or browser console warnings or errors; theme switching passed in
@@ -392,8 +397,10 @@ Verification:
   awareness modes, map expansion, sensor detail, and settings validation were
   exercised in the browser.
 
-Docker runtime health was not rechecked because the local Docker Desktop engine
-was stopped. COM7 and COM13 were present but not identifiable as FogSen boards,
-so no firmware was uploaded. Compilation does not prove reconnect freshness,
-UART delivery, stuck-bus recovery, sensor wiring, servo motion, or long-run
-vehicle stability.
+The Docker stack is serving the dashboard on port 8080 and the backend on ports
+8000 and 8765. COM3 and COM5 identify as Espressif USB-JTAG/serial devices;
+COM11 identifies as the CP210x USB-UART used by MAIN. No firmware was uploaded,
+so the live packet check confirms the connected chain but not that the newly
+compiled images are running. Compilation and telemetry do not prove reconnect
+freshness under fault, stuck-bus recovery, sensor wiring, servo motion, or
+long-run vehicle stability.
