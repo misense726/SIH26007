@@ -1,0 +1,16 @@
+{
+  "name": "FogSen",
+  "short_name": "FogSen",
+  "description": "Vehicle awareness and fleet operations dashboard",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090c11",
+  "theme_color": "#0a0d12",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
