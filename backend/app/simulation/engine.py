@@ -347,6 +347,11 @@ class FullSimulator:
     async def _apply_scenario(self, scenario: SimulationScenario) -> None:
         values = self._scenario_values.get(scenario.value)
         if values is not None:
+            if self._reference_map.map_id != "FOGSEN_TEST_ROUTE_01":
+                self._reference_map = load_reference_map(self._map_path)
+                self._route = self._build_route(self._reference_map)
+                self._configure_pipeline()
+                self._route_distance_m = 0.0
             self._visibility_target = float(values["visibility_score"])
             self._obstacle_enabled = bool(values["obstacle_enabled"])
             self._obstacle_position = self._default_obstacle_position.model_copy()
@@ -368,6 +373,14 @@ class FullSimulator:
 
         scen_def = ALL_SCENARIOS.get(scenario)
         if scen_def is not None:
+            self.mine_graph.reset()
+            self.fleet_manager.reset_fleet()
+            self._v2x_manager.reset()
+            if self._reference_map.map_id != "NMDC_BAILADILA_DEP_05":
+                self._reference_map = self.mine_graph.to_reference_map()
+                self._route = self._build_route(self._reference_map)
+                self._configure_pipeline()
+                self._route_distance_m = 0.0
             self._visibility_target = scen_def.visibility_score
             self._obstacle_enabled = scen_def.obstacle_enabled
             self._obstacle_position = scen_def.obstacle_position.model_copy()
@@ -377,7 +390,7 @@ class FullSimulator:
             self.emergency_controller.reset()
             await self.emergency_output.set_motor_cut(False, f"{scenario.value} scenario selected")
             if scen_def.setup_fn is not None:
-                scen_def.setup_fn(self.fleet_manager, self.mine_graph, self._v2x_manager)
+                scen_def.setup_fn(self)
 
     def simulation_state(self) -> SimulationState:
         return SimulationState(
@@ -562,14 +575,16 @@ class FullSimulator:
             emergency.nearest_obstacle_m,
         )
 
-        # Step fleet simulation with speed-scaled dt (or 0 when paused)
-        fleet_dt = (self._interval_s * self._speed_scale) if self._movement_running else 0.0
-        self.fleet_manager.step(fleet_dt, timestamp)
+        # Synchronize primary vehicle state into fleet manager before stepping fleet
         pv = self.fleet_manager.get_vehicle("DUMPER_01")
         if pv:
             pv.set_position(pose.x_m, pose.y_m, pv.elevation_m, pose.heading_deg)
             pv.speed_mps = speed
             pv.emergency_state = emergency.state.value
+
+        # Step fleet simulation with speed-scaled dt (or 0 when paused)
+        fleet_dt = (self._interval_s * self._speed_scale) if self._movement_running else 0.0
+        self.fleet_manager.step(fleet_dt, timestamp)
 
         all_fleet_poses = self.fleet_manager.get_all_poses(timestamp)
         fleet_vehicles = [pose] + [p for p in all_fleet_poses if p.vehicle_id != "DUMPER_01"]
