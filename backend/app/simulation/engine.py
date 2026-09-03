@@ -5,10 +5,13 @@ import math
 from contextlib import suppress
 from pathlib import Path
 
+from backend.app.analytics.trip_logger import HaulageAnalyticsEngine
 from backend.app.camera import CameraFeed
+from backend.app.fleet.fleet_manager import FleetManager
 from backend.app.localization.fusion import LocalizationFusion
 from backend.app.mapping.occupancy import OccupancyAccumulator
 from backend.app.mapping.transforms import transforms_from_config
+from backend.app.mine_map.graph import MineRoadGraph
 from backend.app.models import (
     AlertEvent,
     CameraState,
@@ -41,6 +44,7 @@ from backend.app.simulation.providers import (
     SimulatedScene,
     radar_models,
 )
+from backend.app.simulation.scenarios import ALL_SCENARIOS
 from backend.app.twin.map_store import load_reference_map, save_reference_map
 from backend.app.twin.route import PolylineRoute
 from backend.app.twin.world_store import WorldStore
@@ -103,6 +107,14 @@ class FullSimulator:
             config["vehicle"]["vehicle"]["max_demo_speed_mps"]
         )
         self._recording_state = RecordingState()
+
+        self.mine_graph = MineRoadGraph()
+        self.analytics = HaulageAnalyticsEngine()
+        self.fleet_manager = FleetManager(
+            self.mine_graph,
+            self._v2x_manager,
+            on_trip_completed=self.analytics.record_trip,
+        )
 
         initial_route = self._build_route(self._reference_map)
         self._route = initial_route
@@ -254,6 +266,7 @@ class FullSimulator:
         )
         self._configure_pipeline()
         self._v2x_manager.reset()
+        self.fleet_manager.reset_fleet()
         self._scenario = self._default_scenario
         await self._apply_scenario(self._default_scenario)
 
@@ -326,24 +339,39 @@ class FullSimulator:
         return self.simulation_state()
 
     async def _apply_scenario(self, scenario: SimulationScenario) -> None:
-        values = self._scenario_values[scenario.value]
-        self._visibility_target = float(values["visibility_score"])
-        self._obstacle_enabled = bool(values["obstacle_enabled"])
-        self._obstacle_position = self._default_obstacle_position.model_copy()
-        self._active_obstacle_radius_m = float(
-            values.get("obstacle_radius_m", self._obstacle_radius_m)
-        )
-        self.occupancy.clear()
-        self.emergency_controller.reset()
-        await self.emergency_output.set_motor_cut(False, f"{scenario.value} scenario selected")
-        if scenario is SimulationScenario.EMERGENCY:
-            pose = self._scene.pose
-            radians = math.radians(pose.heading_deg)
-            obstacle_ahead_m = float(values["obstacle_ahead_m"])
-            self._obstacle_position = Point2D(
-                x_m=pose.x_m + math.sin(radians) * obstacle_ahead_m,
-                y_m=pose.y_m + math.cos(radians) * obstacle_ahead_m,
+        values = self._scenario_values.get(scenario.value)
+        if values is not None:
+            self._visibility_target = float(values["visibility_score"])
+            self._obstacle_enabled = bool(values["obstacle_enabled"])
+            self._obstacle_position = self._default_obstacle_position.model_copy()
+            self._active_obstacle_radius_m = float(
+                values.get("obstacle_radius_m", self._obstacle_radius_m)
             )
+            self.occupancy.clear()
+            self.emergency_controller.reset()
+            await self.emergency_output.set_motor_cut(False, f"{scenario.value} scenario selected")
+            if scenario is SimulationScenario.EMERGENCY:
+                pose = self._scene.pose
+                radians = math.radians(pose.heading_deg)
+                obstacle_ahead_m = float(values["obstacle_ahead_m"])
+                self._obstacle_position = Point2D(
+                    x_m=pose.x_m + math.sin(radians) * obstacle_ahead_m,
+                    y_m=pose.y_m + math.cos(radians) * obstacle_ahead_m,
+                )
+            return
+
+        scen_def = ALL_SCENARIOS.get(scenario)
+        if scen_def is not None:
+            self._visibility_target = scen_def.visibility_score
+            self._obstacle_enabled = scen_def.obstacle_enabled
+            self._obstacle_position = scen_def.obstacle_position.model_copy()
+            self._active_obstacle_radius_m = scen_def.obstacle_radius_m
+            self._speed_scale = scen_def.speed_scale
+            self.occupancy.clear()
+            self.emergency_controller.reset()
+            await self.emergency_output.set_motor_cut(False, f"{scenario.value} scenario selected")
+            if scen_def.setup_fn is not None:
+                scen_def.setup_fn(self.fleet_manager, self.mine_graph, self._v2x_manager)
 
     def simulation_state(self) -> SimulationState:
         return SimulationState(
@@ -527,13 +555,25 @@ class FullSimulator:
             corridor,
             emergency.nearest_obstacle_m,
         )
+
+        # Step fleet simulation and update all active vehicle positions
+        self.fleet_manager.step(self._interval_s, timestamp)
+        pv = self.fleet_manager.get_vehicle("DUMPER_01")
+        if pv:
+            pv.set_position(pose.x_m, pose.y_m, pv.elevation_m, pose.heading_deg)
+            pv.speed_mps = speed
+            pv.emergency_state = emergency.state.value
+
+        all_fleet_poses = self.fleet_manager.get_all_poses(timestamp)
+        fleet_vehicles = [pose] + [p for p in all_fleet_poses if p.vehicle_id != "DUMPER_01"]
+
         current = await self._store.snapshot()
         return await self._store.replace(
             WorldState(
                 generated_at_ms=timestamp,
                 sequence=current.sequence + 1,
                 mode=DataMode.SIMULATED,
-                vehicles=[pose],
+                vehicles=fleet_vehicles,
                 reference_map=self._reference_map,
                 ranges=readings,
                 motion=MotionState(

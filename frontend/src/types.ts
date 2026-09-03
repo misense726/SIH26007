@@ -15,7 +15,170 @@ export type MapFeatureType =
   | "DESTINATION";
 export type GeometryType = "POINT" | "POLYLINE" | "POLYGON";
 export type CorridorState = "GREEN" | "YELLOW" | "RED" | "GREY";
-export type SimulationScenario = "NORMAL" | "FOG" | "OBSTACLE" | "EMERGENCY";
+export type SimulationScenario =
+  | "NORMAL"
+  | "FOG"
+  | "OBSTACLE"
+  | "EMERGENCY"
+  | "SCENARIO_1_DENSE_FOG"
+  | "SCENARIO_2_VEHICLE_AHEAD"
+  | "SCENARIO_3_OPPOSING_VEHICLE"
+  | "SCENARIO_4_STATIC_OBSTACLE"
+  | "SCENARIO_5_ROAD_CLOSURE_REROUTE"
+  | "SCENARIO_6_PAYLOAD_ROUTING"
+  | "SCENARIO_7_FLEET_MONITORING"
+  | "SCENARIO_8_HAULAGE_ANALYTICS";
+
+export type NodeType = "BENCH" | "DUMP" | "JUNCTION" | "WAYPOINT";
+export type RoadStatus = "OPEN" | "RESTRICTED" | "CLOSED";
+
+export interface MineNode {
+  node_id: string;
+  name: string;
+  x_m: number;
+  y_m: number;
+  elevation_m: number;
+  node_type: NodeType;
+  description?: string;
+}
+
+export interface MineEdge {
+  edge_id: string;
+  from_node: string;
+  to_node: string;
+  distance_m: number;
+  gradient_pct: number;
+  max_weight_tonnes: number;
+  road_status: RoadStatus;
+  speed_limit_kmh: number;
+  risk_penalty: number;
+  lanes: number;
+  is_bidirectional: boolean;
+  surface?: string;
+  segment_name?: string;
+}
+
+export interface MineNetwork {
+  network_id: string;
+  name: string;
+  mine_site: string;
+  nodes: Record<string, MineNode>;
+  edges: Record<string, MineEdge>;
+}
+
+export type HaulCycleState =
+  | "IDLE"
+  | "TRAVELLING_TO_PICKUP"
+  | "WAITING_FOR_LOADING"
+  | "LOADED"
+  | "TRAVELLING_TO_DUMP"
+  | "WAITING_FOR_DUMP"
+  | "DUMPING"
+  | "RETURNING_EMPTY"
+  | "PAUSED"
+  | "EMERGENCY";
+
+export interface FleetVehicleSummary {
+  vehicle_id: string;
+  callsign: string;
+  is_primary: boolean;
+  is_simulated: boolean;
+  cycle_state: HaulCycleState;
+  payload_tonnes: number;
+  tare_weight_tonnes: number;
+  total_weight_tonnes: number;
+  x_m: number;
+  y_m: number;
+  elevation_m: number;
+  heading_deg: number;
+  speed_mps: number;
+  speed_kmh: number;
+  emergency_state: string;
+  current_edge_id?: string | null;
+  assigned_pickup: string;
+  assigned_dump: string;
+  total_trips_completed: number;
+  total_tonnes_moved: number;
+  current_destination: string;
+  distance_to_destination_m: number;
+  next_instruction: string;
+}
+
+export interface GuidanceResponse {
+  vehicle_id: string;
+  callsign: string;
+  current_destination: string;
+  distance_remaining_m: number;
+  next_instruction: string;
+  speed_kmh: number;
+  target_vehicle_id: string;
+  target_callsign: string;
+  hazard_distance_m: number;
+  hazard_direction: string;
+  closing_velocity_mps: number;
+  threat_level: "SAFE" | "CAUTION" | "WARNING" | "CRITICAL" | string;
+  advisory_text: string;
+  visibility_score: number;
+  visibility_state: string;
+  estimated_sight_distance_m: number;
+}
+
+export interface TripRecord {
+  trip_id: string;
+  vehicle_id: string;
+  callsign: string;
+  pickup_node: string;
+  dump_node: string;
+  payload_tonnes: number;
+  start_time_ms: number;
+  end_time_ms: number;
+  cycle_duration_s: number;
+  loading_wait_s: number;
+  loaded_travel_s: number;
+  dumping_wait_s: number;
+  empty_return_s: number;
+  idle_s: number;
+  distance_km: number;
+  avg_speed_kmh: number;
+  route_deviations_count: number;
+  route_compliance_pct: number;
+  fuel_litres_est: number;
+}
+
+export interface CycleTimeBreakdown {
+  loading_wait_minutes: number;
+  loaded_travel_minutes: number;
+  dumping_wait_minutes: number;
+  empty_return_minutes: number;
+  idle_minutes: number;
+  total_cycle_minutes: number;
+  loading_pct: number;
+  loaded_travel_pct: number;
+  dumping_pct: number;
+  empty_return_pct: number;
+  idle_pct: number;
+}
+
+export interface HaulageMetrics {
+  total_completed_cycles: number;
+  total_ore_moved_tonnes: number;
+  avg_cycle_time_minutes: number;
+  fleet_utilization_pct: number;
+  total_distance_km: number;
+  route_compliance_pct: number;
+  active_fleet_count: number;
+  cycle_time_breakdown: CycleTimeBreakdown;
+  ore_moved_by_vehicle: Record<string, number>;
+  cycles_by_vehicle: Record<string, number>;
+  hourly_production_rate_tph: number;
+  recent_delay_events: string[];
+}
+
+export interface TripHistoryResponse {
+  trips: TripRecord[];
+  total_trips: number;
+  total_tonnes: number;
+}
 
 export interface Point2D {
   x_m: number;
