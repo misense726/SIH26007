@@ -1,23 +1,10 @@
 from __future__ import annotations
 
-from enum import StrEnum
 from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
-from backend.app.models.telemetry import Point2D
-
-
-class HaulCycleState(StrEnum):
-    IDLE = "IDLE"
-    TRAVELLING_TO_PICKUP = "TRAVELLING_TO_PICKUP"
-    WAITING_FOR_LOADING = "WAITING_FOR_LOADING"
-    LOADED = "LOADED"
-    TRAVELLING_TO_DUMP = "TRAVELLING_TO_DUMP"
-    WAITING_FOR_DUMP = "WAITING_FOR_DUMP"
-    DUMPING = "DUMPING"
-    RETURNING_EMPTY = "RETURNING_EMPTY"
-    PAUSED = "PAUSED"
-    EMERGENCY = "EMERGENCY"
+from backend.app.models.common import Point2D
+from backend.app.models.operations import HaulCycleState
 
 
 class VehicleKinematics(BaseModel):

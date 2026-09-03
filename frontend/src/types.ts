@@ -200,7 +200,10 @@ export interface ReferenceMap {
   version: number;
   created_at_ms: number;
   coordinate_frame: "LOCAL_CARTESIAN_METRES";
-  source: "MANUAL" | "SURVEYED" | "IMPORTED";
+  coordinate_frame_id?: string;
+  source: string;
+  source_detail?: string | null;
+  geographic_anchor?: Record<string, number> | null;
   features: MapFeature[];
 }
 
@@ -508,4 +511,70 @@ export interface WorldState {
   recording: RecordingState;
   simulation: SimulationState;
   v2x?: V2XState;
+  operations?: MineOperationsState;
+}
+
+export interface VehicleOperationalMetadata {
+  vehicle_id: string;
+  callsign: string;
+  is_primary: boolean;
+  is_simulated: boolean;
+  cycle_state: HaulCycleState;
+  payload_tonnes: number;
+  tare_weight_tonnes: number;
+  total_weight_tonnes: number;
+  elevation_m: number;
+  assigned_pickup: string;
+  assigned_dump: string;
+  current_destination: string;
+  distance_to_destination_m: number;
+  next_instruction: string;
+  current_edge_id: string | null;
+  emergency_state: string;
+  total_trips_completed: number;
+  total_tonnes_moved: number;
+  target_payload_tonnes: number;
+  color: string;
+}
+
+export interface TacticalGuidance {
+  vehicle_id: string;
+  callsign: string;
+  current_destination: string;
+  distance_remaining_m: number;
+  next_instruction: string;
+  speed_kmh: number;
+  target_vehicle_id: string;
+  target_callsign: string;
+  hazard_distance_m: number;
+  hazard_direction: string;
+  closing_velocity_mps: number;
+  threat_level: string;
+  advisory_text: string;
+  visibility_score: number;
+  visibility_state: string;
+  estimated_sight_distance_m: number;
+}
+
+export interface HaulageMetricsSummary {
+  total_completed_cycles: number;
+  total_ore_moved_tonnes: number;
+  avg_cycle_time_minutes: number;
+  fleet_utilization_pct: number;
+  total_distance_km: number;
+  route_compliance_pct: number | null;
+  active_fleet_count: number;
+  hourly_production_rate_tph: number;
+  recent_delay_events: string[];
+}
+
+export interface MineOperationsState {
+  network: MineNetwork | null;
+  fleet: Record<string, VehicleOperationalMetadata>;
+  routes: Record<string, NavigationRoute>;
+  guidance: Record<string, TacticalGuidance>;
+  reroute_advisories: RerouteAdvisory[];
+  analytics_summary: HaulageMetricsSummary;
+  provenance: string;
+  network_version: number;
 }

@@ -3,6 +3,9 @@ from __future__ import annotations
 import math
 from typing import Any
 
+from shapely.geometry import Polygon
+from shapely.ops import unary_union
+
 from backend.app.mine_map.models import (
     MineEdge,
     MineNetwork,
@@ -109,13 +112,13 @@ class MineRoadGraph:
         if base_id not in self._network.edges:
             return None
         edge = self._network.edges[base_id]
-        updated = edge.model_copy(
-            update={
-                "road_status": status,
-                **({"risk_penalty": risk_penalty} if risk_penalty is not None else {}),
-                **({"speed_limit_kmh": speed_limit_kmh} if speed_limit_kmh is not None else {}),
-            }
-        )
+        edge_dict = edge.model_dump()
+        edge_dict["road_status"] = status
+        if risk_penalty is not None:
+            edge_dict["risk_penalty"] = max(0.0, float(risk_penalty))
+        if speed_limit_kmh is not None:
+            edge_dict["speed_limit_kmh"] = max(1.0, float(speed_limit_kmh))
+        updated = MineEdge.model_validate(edge_dict)
         self._network.edges[base_id] = updated
         self._rebuild_adjacency()
         return updated
@@ -225,12 +228,38 @@ class MineRoadGraph:
             )
         )
 
+        # Generate BERM features along the outer boundaries of the road network for raycasting
+        road_polys = [
+            Polygon([(point.x_m, point.y_m) for point in f.points]).buffer(0)
+            for f in features
+            if f.feature_type is MapFeatureType.ROAD
+        ]
+        if road_polys:
+            road_union = unary_union(road_polys)
+            boundary = road_union.boundary
+            lines = boundary.geoms if hasattr(boundary, "geoms") else [boundary]
+            for i, line in enumerate(lines):
+                coords = list(line.coords)
+                if len(coords) >= 2:
+                    features.append(
+                        MapFeature(
+                            feature_id=f"berm-boundary-{i+1}",
+                            feature_type=MapFeatureType.BERM,
+                            geometry_type=GeometryType.POLYLINE,
+                            label=f"Haul Road Berm {i+1}",
+                            properties={"synthetic": True},
+                            points=[Point2D(x_m=round(x, 2), y_m=round(y, 2)) for x, y in coords],
+                        )
+                    )
+
         return ReferenceMap(
             map_id=map_id,
             name="NMDC Bailadila Deposit 5 Iron Ore Mine Road Network",
             version=1,
             coordinate_frame="LOCAL_CARTESIAN_METRES",
-            source="SURVEYED",
+            coordinate_frame_id="LOCAL_CARTESIAN_METRES",
+            source="MANUAL",
+            source_detail="Synthetic Bailadila Deposit 5/14 open-cast topology",
             features=features,
         )
 

@@ -20,7 +20,20 @@ const MAP_FEATURE_TYPES = new Set([
   "DESTINATION",
 ]);
 const GEOMETRY_TYPES = new Set(["POINT", "POLYLINE", "POLYGON"]);
-const SIMULATION_SCENARIOS = new Set(["NORMAL", "FOG", "OBSTACLE", "EMERGENCY"]);
+const SIMULATION_SCENARIOS = new Set([
+  "NORMAL",
+  "FOG",
+  "OBSTACLE",
+  "EMERGENCY",
+  "SCENARIO_1_DENSE_FOG",
+  "SCENARIO_2_VEHICLE_AHEAD",
+  "SCENARIO_3_OPPOSING_VEHICLE",
+  "SCENARIO_4_STATIC_OBSTACLE",
+  "SCENARIO_5_ROAD_CLOSURE_REROUTE",
+  "SCENARIO_6_PAYLOAD_ROUTING",
+  "SCENARIO_7_FLEET_MONITORING",
+  "SCENARIO_8_HAULAGE_ANALYTICS",
+]);
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);

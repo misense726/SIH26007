@@ -4,8 +4,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 from backend.app.main import create_app
+from backend.app.mapping.raycasting import reference_segments
 from backend.app.mine_map.graph import MineRoadGraph, build_default_bailadila_network
 from backend.app.mine_map.models import NodeType, RoadStatus
+from backend.app.models.telemetry import MapFeatureType
+from backend.app.safety.corridor import CorridorEvaluator
 
 
 def test_mine_network_topology() -> None:
@@ -63,11 +66,28 @@ def test_mine_to_reference_map_conversion() -> None:
     ref_map = graph.to_reference_map("TEST_MINE_MAP")
     assert ref_map.map_id == "TEST_MINE_MAP"
     assert len(ref_map.features) > 0
+    assert ref_map.source == "MANUAL"
+    assert ref_map.source_detail == "Synthetic Bailadila Deposit 5/14 open-cast topology"
 
-    road_features = [f for f in ref_map.features if f.feature_type.value == "ROAD"]
-    centerline_features = [f for f in ref_map.features if f.feature_type.value == "CENTERLINE"]
+    road_features = ref_map.features_of_type(MapFeatureType.ROAD)
+    centerline_features = ref_map.features_of_type(MapFeatureType.CENTERLINE)
+    berm_features = ref_map.features_of_type(MapFeatureType.BERM)
     assert len(road_features) > 0
     assert len(centerline_features) > 0
+    assert len(berm_features) > 0
+
+    # Verify that CorridorEvaluator handles the multi-road reference map without error
+    evaluator = CorridorEvaluator(
+        ref_map,
+        road_margin_m=0.3,
+        obstacle_inflation_m=0.5,
+        confidence_floor=0.4,
+    )
+    assert evaluator.road is not None
+
+    # Verify that raycasting can extract segments from generated berms
+    segs = reference_segments(ref_map)
+    assert len(segs) > 0
 
 
 def test_mine_network_endpoints() -> None:

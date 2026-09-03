@@ -1,3 +1,10 @@
+from backend.app.models.common import Point2D, TelemetryModel, now_ms
+from backend.app.models.operations import (
+    HaulageMetricsSummary,
+    MineOperationsState,
+    TacticalGuidance,
+    VehicleOperationalMetadata,
+)
 from backend.app.models.telemetry import (
     AlertEvent,
     CameraState,
@@ -15,7 +22,6 @@ from backend.app.models.telemetry import (
     MotionState,
     ObjectSource,
     OccupancyState,
-    Point2D,
     RadarObject,
     RangeReading,
     RecordingState,
@@ -78,6 +84,12 @@ __all__ = [
     "VisibilityMetrics",
     "VisibilityState",
     "WorldState",
+    "TelemetryModel",
+    "MineOperationsState",
+    "VehicleOperationalMetadata",
+    "TacticalGuidance",
+    "HaulageMetricsSummary",
+    "now_ms",
     "V2IAdvisoryMessage",
     "V2IAdvisoryType",
     "V2XInfrastructureNode",

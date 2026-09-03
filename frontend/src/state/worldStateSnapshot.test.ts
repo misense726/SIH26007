@@ -23,7 +23,7 @@ describe("world state snapshot validation", () => {
     expect(isWorldStateSnapshot(snapshotCopy())).toBe(true);
   });
 
-  it.fails.each(bailadilaScenarios)(
+  it.each(bailadilaScenarios)(
     "accepts the %s simulation scenario",
     (scenario) => {
       const snapshot = snapshotCopy();

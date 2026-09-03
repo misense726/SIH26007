@@ -31,10 +31,15 @@ class CorridorEvaluator:
         self.road_margin_m = road_margin_m
         self.obstacle_inflation_m = obstacle_inflation_m
         self.confidence_floor = confidence_floor
-        road_feature = reference_map.feature(MapFeatureType.ROAD)
-        if road_feature is None:
-            raise ValueError("Reference map requires a ROAD feature")
-        self.road = Polygon([(point.x_m, point.y_m) for point in road_feature.points]).buffer(0)
+        road_features = reference_map.features_of_type(MapFeatureType.ROAD)
+        if not road_features:
+            raise ValueError("Reference map requires at least one ROAD feature")
+        self.road = unary_union(
+            [
+                Polygon([(point.x_m, point.y_m) for point in feature.points]).buffer(0)
+                for feature in road_features
+            ]
+        )
         self.hazard_features = [
             feature
             for feature in reference_map.features

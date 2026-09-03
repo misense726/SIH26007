@@ -28,7 +28,12 @@ from backend.app.models import (
     VehiclePose,
     WorldState,
 )
-from backend.app.models.telemetry import now_ms
+from backend.app.models.common import now_ms
+from backend.app.models.operations import (
+    HaulageMetricsSummary,
+    MineOperationsState,
+    TacticalGuidance,
+)
 from backend.app.perception.change_detection import ChangeDetector
 from backend.app.safety.corridor import CorridorEvaluator
 from backend.app.safety.emergency import EmergencyController, SafetyParameters
@@ -567,11 +572,10 @@ class FullSimulator:
         all_fleet_poses = self.fleet_manager.get_all_poses(timestamp)
         fleet_vehicles = [pose] + [p for p in all_fleet_poses if p.vehicle_id != "DUMPER_01"]
 
-        current = await self._store.snapshot()
-        return await self._store.replace(
+        operations = self._build_operations_state(timestamp)
+        return await self._store.publish(
             WorldState(
                 generated_at_ms=timestamp,
-                sequence=current.sequence + 1,
                 mode=DataMode.SIMULATED,
                 vehicles=fleet_vehicles,
                 reference_map=self._reference_map,
@@ -605,7 +609,66 @@ class FullSimulator:
                 recording=self._recording_state,
                 simulation=self.simulation_state(),
                 v2x=self._v2x_manager.snapshot(),
+                operations=operations,
+            ),
+            generated_at_ms=timestamp,
+        )
+
+    def _build_operations_state(self, timestamp: int) -> MineOperationsState:
+        fleet_dict = {}
+        routes_dict = {}
+        guidance_dict = {}
+        for vid, veh in self.fleet_manager.vehicles.items():
+            fleet_dict[vid] = veh.to_operational_metadata()
+            if veh.current_route:
+                routes_dict[vid] = veh.current_route
+            warning = self.fleet_manager.get_tactical_collision_warning(vid)
+            dest = (
+                veh.assigned_dump
+                if veh.payload_tonnes > 0
+                else veh.assigned_pickup
             )
+            guidance_dict[vid] = TacticalGuidance(
+                vehicle_id=vid,
+                callsign=veh.callsign,
+                current_destination=dest,
+                distance_remaining_m=round(veh.distance_to_dest_m, 1),
+                next_instruction=veh.next_instruction,
+                speed_kmh=round(veh.speed_mps * 3.6, 1),
+                target_vehicle_id=warning.target_vehicle_id,
+                target_callsign=warning.target_callsign,
+                hazard_distance_m=warning.distance_m,
+                hazard_direction=warning.direction,
+                closing_velocity_mps=warning.closing_velocity_mps,
+                threat_level=warning.threat_level,
+                advisory_text=warning.advisory_text,
+                visibility_score=round(self._scene.visibility_target, 2),
+                visibility_state=self._visibility_state(self._scene.visibility_target).value,
+                estimated_sight_distance_m=round(max(8.0, self._scene.visibility_target * 120.0), 1),
+            )
+
+        metrics = self.analytics.get_haulage_metrics(active_fleet_count=len(self.fleet_manager.vehicles))
+        analytics_summary = HaulageMetricsSummary(
+            total_completed_cycles=metrics.total_completed_cycles,
+            total_ore_moved_tonnes=metrics.total_ore_moved_tonnes,
+            avg_cycle_time_minutes=metrics.avg_cycle_time_minutes,
+            fleet_utilization_pct=metrics.fleet_utilization_pct,
+            total_distance_km=metrics.total_distance_km,
+            route_compliance_pct=metrics.route_compliance_pct,
+            active_fleet_count=metrics.active_fleet_count,
+            hourly_production_rate_tph=metrics.hourly_production_rate_tph,
+            recent_delay_events=list(metrics.recent_delay_events),
+        )
+
+        return MineOperationsState(
+            network=self.mine_graph.network,
+            fleet=fleet_dict,
+            routes=routes_dict,
+            guidance=guidance_dict,
+            reroute_advisories=[],
+            analytics_summary=analytics_summary,
+            provenance="SIMULATED_RUNTIME",
+            network_version=self._reference_map.version if self._reference_map else 1,
         )
 
     @staticmethod

@@ -6,11 +6,9 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from backend.app.models.common import Point2D, TelemetryModel, now_ms
+from backend.app.models.operations import MineOperationsState
 from backend.app.models.v2x import V2XState
-
-
-def now_ms() -> int:
-    return time.time_ns() // 1_000_000
 
 
 class DataMode(StrEnum):
@@ -94,15 +92,6 @@ class SimulationScenario(StrEnum):
     SCENARIO_8_HAULAGE_ANALYTICS = "SCENARIO_8_HAULAGE_ANALYTICS"
 
 
-class TelemetryModel(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-
-class Point2D(TelemetryModel):
-    x_m: float
-    y_m: float
-
-
 class MapFeature(TelemetryModel):
     feature_id: str
     feature_type: MapFeatureType
@@ -118,7 +107,10 @@ class ReferenceMap(TelemetryModel):
     version: int = Field(default=1, ge=1)
     created_at_ms: int = Field(default_factory=now_ms, ge=0)
     coordinate_frame: Literal["LOCAL_CARTESIAN_METRES"] = "LOCAL_CARTESIAN_METRES"
-    source: Literal["MANUAL", "SURVEYED", "IMPORTED"] = "MANUAL"
+    coordinate_frame_id: str = "LOCAL_CARTESIAN_METRES"
+    source: str = "MANUAL"
+    source_detail: str | None = None
+    geographic_anchor: dict[str, float] | None = None
     features: list[MapFeature] = Field(default_factory=list)
 
     def feature(self, feature_type: MapFeatureType) -> MapFeature | None:
@@ -126,6 +118,9 @@ class ReferenceMap(TelemetryModel):
             (feature for feature in self.features if feature.feature_type is feature_type),
             None,
         )
+
+    def features_of_type(self, feature_type: MapFeatureType) -> list[MapFeature]:
+        return [feature for feature in self.features if feature.feature_type is feature_type]
 
 
 class SafeCorridor(TelemetryModel):
@@ -353,6 +348,7 @@ class WorldState(TelemetryModel):
     recording: RecordingState = Field(default_factory=RecordingState)
     simulation: SimulationState = Field(default_factory=SimulationState)
     v2x: V2XState = Field(default_factory=V2XState)
+    operations: MineOperationsState = Field(default_factory=MineOperationsState)
 
     def primary_vehicle(self) -> VehiclePose:
         for vehicle in self.vehicles:

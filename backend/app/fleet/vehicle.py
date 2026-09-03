@@ -11,7 +11,9 @@ from backend.app.fleet.models import (
     VehicleKinematics,
 )
 from backend.app.mine_map.graph import MineRoadGraph
-from backend.app.models.telemetry import DataMode, Point2D, VehiclePose
+from backend.app.models.common import Point2D
+from backend.app.models.operations import VehicleOperationalMetadata
+from backend.app.models.telemetry import DataMode, VehiclePose
 from backend.app.navigation.models import NavigationRoute, RouteRequest
 from backend.app.navigation.router import RouteOptimizer
 
@@ -440,4 +442,33 @@ class FleetVehicle:
             current_destination=dest_name,
             distance_to_destination_m=round(self.distance_to_dest_m, 1),
             next_instruction=self.next_instruction,
+        )
+
+    def to_operational_metadata(self) -> VehicleOperationalMetadata:
+        dest_name = (
+            self.assigned_dump
+            if self.cycle_state in {HaulCycleState.LOADED, HaulCycleState.TRAVELLING_TO_DUMP, HaulCycleState.WAITING_FOR_DUMP, HaulCycleState.DUMPING}
+            else self.assigned_pickup
+        )
+        return VehicleOperationalMetadata(
+            vehicle_id=self.vehicle_id,
+            callsign=self.callsign,
+            is_primary=self.is_primary,
+            is_simulated=True,
+            cycle_state=self.cycle_state,
+            payload_tonnes=round(self.payload_tonnes, 1),
+            tare_weight_tonnes=self.tare_weight_tonnes,
+            total_weight_tonnes=round(self.tare_weight_tonnes + self.payload_tonnes, 1),
+            elevation_m=round(self.elevation_m, 1),
+            assigned_pickup=self.assigned_pickup,
+            assigned_dump=self.assigned_dump,
+            current_destination=dest_name,
+            distance_to_destination_m=round(self.distance_to_dest_m, 1),
+            next_instruction=self.next_instruction,
+            current_edge_id=self.current_edge_id,
+            emergency_state=self.emergency_state,
+            total_trips_completed=self.total_trips_completed,
+            total_tonnes_moved=round(self.total_tonnes_moved, 1),
+            target_payload_tonnes=self.target_payload_tonnes,
+            color=self.color,
         )
