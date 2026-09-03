@@ -375,39 +375,31 @@ async def navigation_guidance(
     world_state = await request.app.state.world_store.snapshot()
     fleet_manager = getattr(request.app.state, "fleet_manager", None)
 
-    callsign = "Bailadila Shovel Hauler #01"
-    destination = "Primary Crusher #01"
-    dist_rem = 120.0
-    instruction = "Follow green safe corridor. Maintain safe headway."
-    speed_kmh = 24.0
+    if fleet_manager is None:
+        if world_state.mode == DataMode.LIVE:
+            raise HTTPException(
+                status_code=503,
+                detail="Operational vehicle guidance is offline in live hardware mode",
+            )
+        raise HTTPException(
+            status_code=503,
+            detail="Fleet guidance subsystem is offline",
+        )
 
-    if fleet_manager:
-        veh = fleet_manager.get_vehicle(vehicle_id)
-        if veh:
-            callsign = veh.callsign
-            destination = veh.assigned_dump if veh.payload_tonnes > 0 else veh.assigned_pickup
-            dist_rem = veh.distance_to_dest_m
-            instruction = veh.next_instruction
-            speed_kmh = veh.speed_mps * 3.6
+    veh = fleet_manager.get_vehicle(vehicle_id)
+    if veh is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Vehicle '{vehicle_id}' not found in active fleet",
+        )
 
-    # Collision threat warning
-    if fleet_manager:
-        threat = fleet_manager.get_tactical_collision_warning(vehicle_id)
-        target_id = threat.target_vehicle_id
-        target_call = threat.target_callsign
-        haz_dist = threat.distance_m
-        haz_dir = threat.direction
-        closing_vel = threat.closing_velocity_mps
-        threat_lvl = threat.threat_level
-        adv_text = threat.advisory_text
-    else:
-        target_id = "NONE"
-        target_call = "No Hazard"
-        haz_dist = 999.0
-        haz_dir = "FRONT"
-        closing_vel = 0.0
-        threat_lvl = "SAFE"
-        adv_text = "Corridor clear."
+    callsign = veh.callsign
+    destination = veh.assigned_dump if veh.payload_tonnes > 0 else veh.assigned_pickup
+    dist_rem = veh.distance_to_dest_m
+    instruction = veh.next_instruction
+    speed_kmh = veh.speed_mps * 3.6
+
+    threat = fleet_manager.get_tactical_collision_warning(vehicle_id)
 
     vis_score = world_state.environment.visibility_score
     vis_state = world_state.environment.visibility_state.value
@@ -421,13 +413,13 @@ async def navigation_guidance(
         distance_remaining_m=round(dist_rem, 1),
         next_instruction=instruction,
         speed_kmh=round(speed_kmh, 1),
-        target_vehicle_id=target_id,
-        target_callsign=target_call,
-        hazard_distance_m=haz_dist,
-        hazard_direction=haz_dir,
-        closing_velocity_mps=closing_vel,
-        threat_level=threat_lvl,
-        advisory_text=adv_text,
+        target_vehicle_id=threat.target_vehicle_id,
+        target_callsign=threat.target_callsign,
+        hazard_distance_m=threat.distance_m,
+        hazard_direction=threat.direction,
+        closing_velocity_mps=threat.closing_velocity_mps,
+        threat_level=threat.threat_level,
+        advisory_text=threat.advisory_text,
         visibility_score=round(vis_score, 2),
         visibility_state=vis_state,
         estimated_sight_distance_m=sight_distance,
@@ -448,7 +440,7 @@ async def haulage_metrics(request: Request) -> HaulageMetrics:
     if analytics is None:
         raise HTTPException(status_code=503, detail="Analytics subsystem is offline")
     fleet_manager = getattr(request.app.state, "fleet_manager", None)
-    count = len(fleet_manager.vehicles) if fleet_manager else 4
+    count = len(fleet_manager.vehicles) if fleet_manager else 0
     return analytics.get_haulage_metrics(active_fleet_count=count)
 
 

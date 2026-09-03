@@ -19,11 +19,13 @@ def _now_ms() -> int:
 class HaulageAnalyticsEngine:
     """Logs haul cycles and computes fleet production, cycle time breakdown, and utilization."""
 
-    def __init__(self, max_history: int = 200) -> None:
+    def __init__(self, max_history: int = 200, seed_baseline: bool = True) -> None:
         self.max_history = max_history
         self._lock = threading.Lock()
         self._trips: list[TripRecord] = []
-        self._seed_shift_baseline_trips()
+        self._delay_events: list[str] = []
+        if seed_baseline:
+            self._seed_shift_baseline_trips()
 
     def _seed_shift_baseline_trips(self) -> None:
         """Seed realistic completed trips for the current shift at NMDC Bailadila."""
@@ -147,6 +149,8 @@ class HaulageAnalyticsEngine:
         # Fleet utilization = percentage of time spent in active haulage (loaded travel + empty return)
         active_time = avg_loaded_travel_min + avg_empty_return_min
         utilization_pct = min(100.0, max(0.0, (active_time / tot_m) * 100.0))
+        if active_fleet_count == 0:
+            utilization_pct = 0.0
 
         ore_by_veh: dict[str, float] = {}
         cycles_by_veh: dict[str, int] = {}
@@ -154,10 +158,16 @@ class HaulageAnalyticsEngine:
             ore_by_veh[t.vehicle_id] = round(ore_by_veh.get(t.vehicle_id, 0.0) + t.payload_tonnes, 1)
             cycles_by_veh[t.vehicle_id] = cycles_by_veh.get(t.vehicle_id, 0) + 1
 
-        # Production rate: tonnes per hour based on 3-hour shift window
-        hourly_rate = round(total_tonnes / 3.0, 1)
+        # Production rate: tonnes per hour based on observed span of trips
+        min_start = min(t.start_time_ms for t in trips)
+        max_end = max(t.end_time_ms for t in trips)
+        span_ms = max_end - min_start
+        span_hours = span_ms / 3_600_000.0 if span_ms > 0 else (sum(t.cycle_duration_s for t in trips) / 3600.0)
+        hourly_rate = round(total_tonnes / max(0.1, span_hours), 1)
 
-        delays = [
+        avg_compliance = sum(t.route_compliance_pct for t in trips) / total_cycles
+
+        delays = list(self._delay_events) if self._delay_events else [
             "Dense fog speed regulation on North Incline (average 3.2m travel delay)",
             "Gyratory Crusher bin hopper queuing observed at 08:45 AM",
             "Shovel #04 repositioning pause (2.5m wait recorded)",
@@ -169,7 +179,7 @@ class HaulageAnalyticsEngine:
             avg_cycle_time_minutes=round(avg_total_cycle_min, 2),
             fleet_utilization_pct=round(utilization_pct, 1),
             total_distance_km=round(total_distance, 2),
-            route_compliance_pct=100.0,
+            route_compliance_pct=round(avg_compliance, 1),
             active_fleet_count=active_fleet_count,
             cycle_time_breakdown=breakdown,
             ore_moved_by_vehicle=ore_by_veh,

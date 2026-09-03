@@ -175,8 +175,10 @@ class FleetManager:
         """Step all fleet vehicles, exchange V2V BSMs, check collision threats."""
         completed_trips: list[TripRecord] = []
 
-        # 1. Advance each vehicle
+        # 1. Advance secondary fleet vehicles (primary vehicle motion is integrated by FullSimulator)
         for veh in self.vehicles.values():
+            if veh.is_primary:
+                continue
             trip = veh.step(dt_s, timestamp_ms, self.mine_graph, self.router)
             if trip:
                 completed_trips.append(trip)

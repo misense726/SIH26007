@@ -151,7 +151,7 @@ def create_app(
             )
             app.state.live_runtime = app.state.runtime
             app.state.mine_graph = MineRoadGraph()
-            app.state.analytics = HaulageAnalyticsEngine()
+            app.state.analytics = HaulageAnalyticsEngine(seed_baseline=False)
             app.state.fleet_manager = None
         else:
             app.state.simulator = FullSimulator(

@@ -101,3 +101,7 @@ def test_navigation_api_route_endpoint() -> None:
         assert g_data["vehicle_id"] == "DUMPER_01"
         assert "threat_level" in g_data
         assert "visibility_state" in g_data
+
+        # Unknown vehicle returns 404
+        res_unknown = client.get("/api/navigation/guidance?vehicle_id=NONEXISTENT_VEHICLE")
+        assert res_unknown.status_code == 404

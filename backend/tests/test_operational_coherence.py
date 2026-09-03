@@ -237,10 +237,6 @@ async def test_full_simulator_reset_restores_closed_road_to_baseline() -> None:
     assert reset_edge.road_status is RoadStatus.OPEN
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Analytics reports 100 percent route compliance instead of aggregating recorded trip compliance.",
-)
 def test_analytics_route_compliance_comes_from_controlled_records(
     empty_analytics: HaulageAnalyticsEngine,
 ) -> None:
@@ -266,10 +262,6 @@ def test_analytics_route_compliance_comes_from_controlled_records(
     assert metrics.route_compliance_pct == 70.0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Analytics divides production by a fixed three-hour window instead of the controlled record span.",
-)
 def test_analytics_production_rate_comes_from_controlled_record_span(
     empty_analytics: HaulageAnalyticsEngine,
 ) -> None:
