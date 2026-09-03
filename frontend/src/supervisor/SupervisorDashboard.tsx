@@ -183,7 +183,7 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
       </div>
 
       {activeTab === "analytics" ? (
-        <HaulageAnalyticsTab />
+        <HaulageAnalyticsTab onSelectTruck={setSelectedTruckId} />
       ) : (
         <>
           <div className="supervisor-grid">

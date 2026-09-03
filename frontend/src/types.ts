@@ -568,6 +568,34 @@ export interface HaulageMetricsSummary {
   recent_delay_events: string[];
 }
 
+export interface NavigationRoute {
+  route_id: string;
+  vehicle_id: string;
+  start_node_id: string;
+  end_node_id: string;
+  payload_tonnes: number;
+  path_nodes: string[];
+  edge_ids: string[];
+  total_distance_m: number;
+  estimated_time_s: number;
+  max_gradient_pct: number;
+  average_speed_kmh: number;
+  total_cost: number;
+  waypoints: Point2D[];
+  instructions: string[];
+}
+
+export interface RerouteAdvisory {
+  advisory_id: string;
+  vehicle_id: string;
+  timestamp_ms: number;
+  trigger_edge_id: string;
+  trigger_reason: string;
+  original_route_id: string;
+  new_route: NavigationRoute;
+  alternate_found: boolean;
+}
+
 export interface MineOperationsState {
   network: MineNetwork | null;
   fleet: Record<string, VehicleOperationalMetadata>;

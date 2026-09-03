@@ -21,22 +21,54 @@ export function VehicleDetailDrawer({
 }: VehicleDetailDrawerProps) {
   if (!truckId) return null;
 
-  const vehicleId = summary?.vehicle_id ?? truckId;
-  const callsign = summary?.callsign ?? vehicleId;
-  const cycleState = summary?.cycle_state ?? "TRAVELLING_TO_DUMP";
-  const payload = summary?.payload_tonnes ?? 0;
-  const tareWeight = summary?.tare_weight_tonnes ?? 85.0;
-  const totalWeight = tareWeight + payload;
-  const speedKmh = summary ? summary.speed_kmh : 0;
-  const headingDeg = summary ? summary.heading_deg : 0;
-  const dest = summary?.current_destination ?? "Primary Crusher #01";
-  const distRem = summary?.distance_to_destination_m ?? 0;
-  const nextInstr = summary?.next_instruction ?? "Maintain designated haul corridor.";
-  const tripsCompleted = summary?.total_trips_completed ?? 0;
-  const tonnesMoved = summary?.total_tonnes_moved ?? 0;
+  if (!summary) {
+    return (
+      <aside className="vehicle-detail-drawer" aria-label={`Vehicle telemetry detail for ${truckId}`}>
+        <div className="drawer-header">
+          <div>
+            <div className="drawer-eyebrow-row">
+              <span className="drawer-eyebrow">Haul Fleet Telemetry</span>
+              <span className="payload-status-badge badge-grey">UNVERIFIED</span>
+            </div>
+            <h3 className="drawer-title">{truckId}</h3>
+          </div>
+          <button
+            type="button"
+            className="drawer-close-btn"
+            onClick={onClose}
+            aria-label="Close vehicle details"
+          >
+            ✕
+          </button>
+        </div>
+        <div className="drawer-content">
+          <div className="drawer-state-card state-unverified">
+            <span className="state-label">Operational Status</span>
+            <strong className="state-value">UNVERIFIED</strong>
+            <span className="state-sub">Vehicle telemetry metadata unavailable</span>
+          </div>
+        </div>
+      </aside>
+    );
+  }
+
+  const vehicleId = summary.vehicle_id;
+  const callsign = summary.callsign;
+  const cycleState = summary.cycle_state;
+  const payload = summary.payload_tonnes;
+  const tareWeight = summary.tare_weight_tonnes;
+  const totalWeight = summary.total_weight_tonnes;
+  const speedKmh = summary.speed_kmh;
+  const headingDeg = summary.heading_deg;
+  const dest = summary.current_destination;
+  const distRem = summary.distance_to_destination_m;
+  const nextInstr = summary.next_instruction;
+  const tripsCompleted = summary.total_trips_completed;
+  const tonnesMoved = summary.total_tonnes_moved;
+  const currentEdge = summary.current_edge_id;
 
   const isLoaded = payload > 10;
-  const isEmergency = summary?.emergency_state && summary.emergency_state !== "SAFE";
+  const isEmergency = summary.emergency_state && summary.emergency_state !== "SAFE";
 
   return (
     <aside className="vehicle-detail-drawer" aria-label={`Vehicle telemetry detail for ${callsign}`}>
@@ -83,7 +115,7 @@ export function VehicleDetailDrawer({
           </div>
           <div className="drawer-metric-box">
             <span>Elevation</span>
-            <strong>{summary ? formatNumber(summary.elevation_m, 1) : "560.0"}</strong>
+            <strong>{formatNumber(summary.elevation_m, 1)}</strong>
             <small>RL (m)</small>
           </div>
         </div>
@@ -129,6 +161,11 @@ export function VehicleDetailDrawer({
               <small>remaining</small>
             </div>
           </div>
+          {currentEdge && (
+            <div className="current-edge-badge">
+              <span>Current Edge:</span> <strong>{currentEdge}</strong>
+            </div>
+          )}
           <div className="drawer-instruction-box">
             <span className="instruction-arrow">➔</span>
             <p>{nextInstr}</p>

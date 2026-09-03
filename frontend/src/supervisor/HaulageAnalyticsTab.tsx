@@ -1,9 +1,31 @@
 import { useEffect, useState } from "react";
-import type { HaulageMetrics, TripHistoryResponse, TripRecord } from "../types";
+import type { HaulageMetrics, TripHistoryResponse } from "../types";
 import { fetchHaulageMetrics, fetchTripHistory } from "../api/mineApi";
 import { formatNumber } from "../state/selectors";
 
-export function HaulageAnalyticsTab() {
+interface HaulageAnalyticsTabProps {
+  onSelectTruck?: (truckId: string) => void;
+}
+
+interface TruckPerformanceItem {
+  vehicleId: string;
+  callsign: string;
+  tonnes: number;
+  cycles: number;
+  avgCycleMinutes: number;
+  compliancePct: number;
+  isUnderperforming: boolean;
+  issueReason: string | null;
+}
+
+const CALLSIGN_MAP: Record<string, string> = {
+  DUMPER_01: "Bailadila Shovel Hauler #01",
+  DUMPER_02: "Komatsu 930E #02",
+  DUMPER_03: "CAT 793F #03",
+  HAULER_04: "BEML BH205E #04",
+};
+
+export function HaulageAnalyticsTab({ onSelectTruck }: HaulageAnalyticsTabProps) {
   const [metrics, setMetrics] = useState<HaulageMetrics | null>(null);
   const [history, setHistory] = useState<TripHistoryResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -45,6 +67,63 @@ export function HaulageAnalyticsTab() {
   }
 
   const bd = metrics?.cycle_time_breakdown;
+  const dumperCount = metrics ? Object.keys(metrics.ore_moved_by_vehicle).length : null;
+
+  // Compute per-truck performance analytics and identify underperforming vehicles
+  const truckPerformanceList: TruckPerformanceItem[] = [];
+  if (metrics) {
+    const allVids = Array.from(
+      new Set([
+        ...Object.keys(metrics.ore_moved_by_vehicle),
+        ...Object.keys(metrics.cycles_by_vehicle),
+        "DUMPER_01",
+        "DUMPER_02",
+        "DUMPER_03",
+        "HAULER_04",
+      ]),
+    );
+
+    for (const vid of allVids) {
+      const tonnes = metrics.ore_moved_by_vehicle[vid] ?? 0;
+      const cycles = metrics.cycles_by_vehicle[vid] ?? 0;
+      const vehTrips = history?.trips.filter((t) => t.vehicle_id === vid) ?? [];
+      const avgCycleMinutes =
+        vehTrips.length > 0
+          ? vehTrips.reduce((acc, t) => acc + t.cycle_duration_s, 0) / (vehTrips.length * 60)
+          : (bd?.total_cycle_minutes ?? 0);
+      const compliancePct =
+        vehTrips.length > 0
+          ? vehTrips.reduce((acc, t) => acc + t.route_compliance_pct, 0) / vehTrips.length
+          : (metrics.route_compliance_pct ?? 100);
+
+      let isUnderperforming = false;
+      let issueReason: string | null = null;
+
+      if (cycles > 0 && compliancePct < 85.0) {
+        isUnderperforming = true;
+        issueReason = `Low route compliance (${compliancePct.toFixed(0)}% < 85%)`;
+      } else if (cycles > 0 && avgCycleMinutes > 20.0) {
+        isUnderperforming = true;
+        issueReason = `High cycle time (${avgCycleMinutes.toFixed(1)}m > 18m benchmark)`;
+      } else if (cycles === 0 && metrics.total_completed_cycles >= 4) {
+        isUnderperforming = true;
+        issueReason = "Zero completed cycles in shift";
+      }
+
+      truckPerformanceList.push({
+        vehicleId: vid,
+        callsign: CALLSIGN_MAP[vid] ?? vid,
+        tonnes,
+        cycles,
+        avgCycleMinutes,
+        compliancePct,
+        isUnderperforming,
+        issueReason,
+      });
+    }
+  }
+
+  const underperformingTrucks = truckPerformanceList.filter((t) => t.isUnderperforming);
 
   return (
     <div className="haulage-analytics-dashboard" aria-label="Haulage efficiency analytics">
@@ -54,10 +133,16 @@ export function HaulageAnalyticsTab() {
           <p className="eyebrow">NMDC Bailadila Complex • Open-Cast Operations</p>
           <h2>Fleet Haulage Efficiency & Production KPIs</h2>
         </div>
-        <div className="analytics-header-badges">
-          <span className="analytics-shift-badge">Shift #1 (Day)</span>
-          <span className="analytics-live-tag">Live Ingest</span>
-        </div>
+        {metrics && (
+          <div className="analytics-header-badges">
+            <span className="analytics-shift-badge">Shift #1 (Day)</span>
+            <span className="analytics-live-tag">
+              {(metrics as { provenance?: string }).provenance === "LIVE_RUNTIME"
+                ? "Live Ingest"
+                : "Shift Telemetry"}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* 2. Primary KPI Stat Cards Row */}
@@ -81,7 +166,11 @@ export function HaulageAnalyticsTab() {
             </strong>
             <span className="kpi-unit">trips</span>
           </div>
-          <span className="kpi-trend positive">100% Route Compliance</span>
+          <span className="kpi-trend positive">
+            {metrics?.route_compliance_pct != null
+              ? `${metrics.route_compliance_pct.toFixed(0)}% Route Compliance`
+              : "--"}
+          </span>
         </article>
 
         <article className="analytics-kpi-card kpi-time">
@@ -120,15 +209,138 @@ export function HaulageAnalyticsTab() {
           <span className="kpi-label">Active Haul Fleet</span>
           <div className="kpi-value-row">
             <strong className="kpi-main-val">
-              {metrics ? metrics.active_fleet_count : 4}
+              {metrics ? metrics.active_fleet_count : "--"}
             </strong>
             <span className="kpi-unit">dumpers</span>
           </div>
-          <span className="kpi-trend">All units V2V mesh connected</span>
+          <span className="kpi-trend">
+            {metrics ? "All units tracked" : "--"}
+          </span>
         </article>
       </div>
 
-      {/* 3. Cycle Time Stage Distribution */}
+      {/* 3. Underperforming Trucks Section */}
+      <article className="operations-card underperforming-section" aria-label="Fleet performance alerts">
+        <div className="panel-heading">
+          <div>
+            <p className="eyebrow">Performance oversight</p>
+            <h3>Truck Performance & Underperforming Alerts</h3>
+          </div>
+          <span className={`alert-count ${underperformingTrucks.length > 0 ? "alert-count-active" : ""}`}>
+            {underperformingTrucks.length} Attention Needed
+          </span>
+        </div>
+
+        {underperformingTrucks.length === 0 ? (
+          <div className="alerts-empty">
+            <span className="alerts-check">✓</span>
+            <strong>All active dumpers operating within optimal cycle benchmarks.</strong>
+          </div>
+        ) : (
+          <div className="underperforming-grid">
+            {underperformingTrucks.map((truck) => (
+              <div
+                key={truck.vehicleId}
+                className="underperforming-card"
+                role="button"
+                tabIndex={0}
+                onClick={() => onSelectTruck?.(truck.vehicleId)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    onSelectTruck?.(truck.vehicleId);
+                  }
+                }}
+              >
+                <div className="underperforming-header">
+                  <div>
+                    <span className="badge-underperforming">UNDERPERFORMING</span>
+                    <strong>{truck.callsign}</strong>
+                    <span className="font-mono text-muted">{truck.vehicleId}</span>
+                  </div>
+                  <span className="inspect-truck-arrow" aria-hidden="true">➔</span>
+                </div>
+                <p className="underperforming-reason">⚠ {truck.issueReason}</p>
+                <div className="underperforming-metrics">
+                  <span>Ore: <strong>{truck.tonnes.toFixed(0)} T</strong></span>
+                  <span>Cycles: <strong>{truck.cycles}</strong></span>
+                  <span>Avg Cycle: <strong>{truck.avgCycleMinutes.toFixed(1)}m</strong></span>
+                  <span>Compliance: <strong>{truck.compliancePct.toFixed(0)}%</strong></span>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </article>
+
+      {/* 4. Fleet Haulage Efficiency Comparison Table */}
+      {truckPerformanceList.length > 0 && (
+        <article className="operations-card efficiency-table-card">
+          <div className="panel-heading">
+            <div>
+              <p className="eyebrow">Fleet-wide ranking</p>
+              <h3>Haulage Efficiency of All Trucks</h3>
+            </div>
+            <span className="source-badge">{truckPerformanceList.length} Units Tracked</span>
+          </div>
+
+          <div className="trip-table-container">
+            <table className="trip-history-table efficiency-table">
+              <thead>
+                <tr>
+                  <th>Truck</th>
+                  <th>Callsign</th>
+                  <th>Ore Moved</th>
+                  <th>Completed Cycles</th>
+                  <th>Avg Cycle Time</th>
+                  <th>Route Compliance</th>
+                  <th>Status</th>
+                  <th>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {truckPerformanceList.map((t) => (
+                  <tr
+                    key={t.vehicleId}
+                    className={`truck-row ${t.isUnderperforming ? "row-underperforming" : ""}`}
+                    onClick={() => onSelectTruck?.(t.vehicleId)}
+                  >
+                    <td className="font-mono font-bold">{t.vehicleId}</td>
+                    <td>{t.callsign}</td>
+                    <td><strong>{t.tonnes.toFixed(0)} T</strong></td>
+                    <td>{t.cycles} cycles</td>
+                    <td>{t.avgCycleMinutes.toFixed(1)} min</td>
+                    <td>
+                      <span className={`compliance-badge ${t.compliancePct < 85 ? "badge-low-compliance" : ""}`}>
+                        {t.compliancePct.toFixed(0)}%
+                      </span>
+                    </td>
+                    <td>
+                      <span className={`performance-status-pill ${t.isUnderperforming ? "pill-warning" : "pill-optimal"}`}>
+                        {t.isUnderperforming ? "NEEDS REVIEW" : "OPTIMAL"}
+                      </span>
+                    </td>
+                    <td>
+                      <button
+                        type="button"
+                        className="table-action-btn"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onSelectTruck?.(t.vehicleId);
+                        }}
+                      >
+                        Inspect Details
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </article>
+      )}
+
+      {/* 5. Cycle Time Stage Distribution */}
       <div className="analytics-breakdown-section">
         <div className="panel-heading">
           <div>
@@ -218,7 +430,7 @@ export function HaulageAnalyticsTab() {
         </div>
       </div>
 
-      {/* 4. Production by Vehicle & Operational Delay Notices */}
+      {/* 6. Production by Vehicle & Operational Delay Notices */}
       <div className="analytics-lower-grid">
         {/* Production Tonnage per Dumper */}
         <article className="operations-card vehicle-tonnage-card">
@@ -227,7 +439,9 @@ export function HaulageAnalyticsTab() {
               <p className="eyebrow">Fleet contribution</p>
               <h3>Ore Moved by Vehicle</h3>
             </div>
-            <span className="source-badge">4 Dumpers</span>
+            <span className="source-badge">
+              {dumperCount != null ? `${dumperCount} Dumpers` : "--"}
+            </span>
           </div>
 
           <div className="vehicle-tonnage-list">
@@ -237,9 +451,21 @@ export function HaulageAnalyticsTab() {
                 const maxT = Math.max(100, ...Object.values(metrics.ore_moved_by_vehicle));
                 const pct = (tonnes / maxT) * 100;
                 return (
-                  <div key={vid} className="veh-tonnage-row">
+                  <div
+                    key={vid}
+                    className="veh-tonnage-row clickable-row"
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => onSelectTruck?.(vid)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        onSelectTruck?.(vid);
+                      }
+                    }}
+                  >
                     <div className="veh-tonnage-meta">
-                      <strong>{vid}</strong>
+                      <strong>{CALLSIGN_MAP[vid] ?? vid}</strong>
                       <span>{cycles} completed cycles</span>
                     </div>
                     <div className="veh-bar-container">
@@ -275,7 +501,7 @@ export function HaulageAnalyticsTab() {
         </article>
       </div>
 
-      {/* 5. Completed Haul Trips History Table */}
+      {/* 7. Completed Haul Trips History Table */}
       <article className="operations-card trip-history-card">
         <div className="panel-heading">
           <div>
@@ -304,7 +530,11 @@ export function HaulageAnalyticsTab() {
             </thead>
             <tbody>
               {history?.trips.map((t) => (
-                <tr key={t.trip_id}>
+                <tr
+                  key={t.trip_id}
+                  className="clickable-trip-row"
+                  onClick={() => onSelectTruck?.(t.vehicle_id)}
+                >
                   <td className="font-mono text-muted">{t.trip_id}</td>
                   <td><strong>{t.callsign}</strong></td>
                   <td>{t.pickup_node.replace("PICKUP_", "").replace("_", " ")}</td>

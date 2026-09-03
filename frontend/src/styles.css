@@ -6452,3 +6452,164 @@ footer {
 .scenario-btn.active strong {
   color: #38bdf8;
 }
+
+/* Underperforming Trucks & Efficiency Ranking */
+.underperforming-section {
+  margin-top: 18px;
+}
+
+.underperforming-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 14px;
+  margin-top: 10px;
+}
+
+.underperforming-card {
+  padding: 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.06);
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, background-color 140ms ease;
+}
+
+.underperforming-card:hover {
+  border-color: var(--danger);
+  background: rgba(248, 113, 113, 0.12);
+  transform: translateY(-2px);
+}
+
+.underperforming-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.underperforming-header div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.badge-underperforming {
+  display: inline-block;
+  align-self: flex-start;
+  padding: 2px 7px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 0.58rem;
+  font-weight: 700;
+  color: #ffffff;
+  background: var(--danger);
+  letter-spacing: 0.05em;
+}
+
+.inspect-truck-arrow {
+  color: var(--danger);
+  font-size: 1.1rem;
+}
+
+.underperforming-reason {
+  margin: 10px 0;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--danger);
+}
+
+.underperforming-metrics {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 6px;
+  font-size: 0.7rem;
+  color: var(--text-soft);
+}
+
+.underperforming-metrics strong {
+  color: var(--text-strong);
+}
+
+.efficiency-table-card {
+  margin-top: 18px;
+}
+
+.efficiency-table .truck-row {
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.efficiency-table .truck-row:hover {
+  background: var(--surface-control-hover);
+}
+
+.efficiency-table .row-underperforming {
+  background: rgba(248, 113, 113, 0.05);
+}
+
+.performance-status-pill {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-family: var(--mono);
+  font-size: 0.6rem;
+  font-weight: 700;
+}
+
+.performance-status-pill.pill-optimal {
+  color: var(--safe);
+  border: 1px solid var(--safe-line);
+  background: var(--safe-soft);
+}
+
+.performance-status-pill.pill-warning {
+  color: var(--danger);
+  border: 1px solid var(--danger-line);
+  background: var(--danger-soft);
+}
+
+.table-action-btn {
+  padding: 4px 9px;
+  border: 1px solid var(--accent-line);
+  border-radius: 6px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.66rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.table-action-btn:hover {
+  background: var(--accent);
+  color: var(--accent-contrast);
+}
+
+.clickable-row,
+.clickable-trip-row {
+  cursor: pointer;
+}
+
+.clickable-row:hover,
+.clickable-trip-row:hover {
+  background: var(--surface-control-hover);
+}
+
+.badge-low-compliance {
+  background: rgba(248, 113, 113, 0.2);
+  color: var(--danger);
+}
+
+.current-edge-badge {
+  margin-top: 6px;
+  font-size: 0.72rem;
+  color: var(--text-soft);
+  font-family: var(--mono);
+}
+
+.current-edge-badge strong {
+  color: var(--accent);
+}
+
+.state-unverified {
+  border-color: var(--border-strong) !important;
+  background: var(--surface-subtle) !important;
+}

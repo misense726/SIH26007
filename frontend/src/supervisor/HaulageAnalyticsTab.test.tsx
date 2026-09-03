@@ -34,7 +34,7 @@ describe("HaulageAnalyticsTab", () => {
     ).toBe(true);
   });
 
-  it.fails.each([
+  it.each([
     ["live data", "Live Ingest"],
     ["four active trucks", "4 Dumpers"],
     ["default compliance", "100% Route Compliance"],

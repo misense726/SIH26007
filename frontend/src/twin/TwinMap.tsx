@@ -208,7 +208,7 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
       leafletMapRef.current = null;
       markersRef.current.clear();
     };
-  }, [viewMode, allTrucks]);
+  }, [viewMode]);
 
   // Update Leaflet markers
   useEffect(() => {
@@ -492,6 +492,14 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
                         </text>
                       </g>
                     )}
+                    {node.node_type === "WAYPOINT" && (
+                      <g>
+                        <circle r="2.5" fill="#64748b" opacity="0.6" />
+                        <text y="7" textAnchor="middle" fontSize="5" fill="#64748b" fontFamily="monospace">
+                          {node.node_id.replace("WP_", "")}
+                        </text>
+                      </g>
+                    )}
                   </g>
                 );
               })}
@@ -508,6 +516,12 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
                   className={`map-truck-group ${isSelected ? "truck-selected" : ""}`}
                   transform={`translate(${pt.x}, ${pt.y})`}
                   onClick={() => onSelectTruck?.(truck.vehicle_id)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelectTruck?.(truck.vehicle_id);
+                    }
+                  }}
                   role="button"
                   tabIndex={0}
                   aria-label={`Inspect ${truck.label} on mine twin`}

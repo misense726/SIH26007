@@ -13,7 +13,7 @@ describe("VehicleDetailDrawer", () => {
     expect(markup).toBe("");
   });
 
-  it.fails("renders missing fleet summary as UNVERIFIED without fabricated details", () => {
+  it("renders missing fleet summary as UNVERIFIED without fabricated details", () => {
     const markup = renderToStaticMarkup(
       <VehicleDetailDrawer
         truckId="DUMPER_01"

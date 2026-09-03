@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import type { GuidanceResponse, WorldState } from "../types";
 import { fetchNavigationGuidance } from "../api/mineApi";
+import type { GuidanceResponse, WorldState } from "../types";
 
 interface DriverGuidanceHUDProps {
   world: WorldState;
@@ -11,7 +11,10 @@ export function DriverGuidanceHUD({
   world,
   vehicleTelemetryAvailable,
 }: DriverGuidanceHUDProps) {
-  const [guidance, setGuidance] = useState<GuidanceResponse | null>(null);
+  const [restGuidance, setRestGuidance] = useState<GuidanceResponse | null>(null);
+
+  // Use canonical guidance from WorldState if present, otherwise polled fallback
+  const canonicalGuidance = world.operations?.guidance?.[world.primary_vehicle_id];
 
   useEffect(() => {
     let mounted = true;
@@ -19,26 +22,28 @@ export function DriverGuidanceHUD({
     async function loadGuidance() {
       try {
         const data = await fetchNavigationGuidance(world.primary_vehicle_id);
-        if (mounted) setGuidance(data);
+        if (mounted) setRestGuidance(data);
       } catch {
         // Fallback or offline
       }
     }
 
     loadGuidance();
-    const interval = setInterval(loadGuidance, 1200);
+    const interval = setInterval(loadGuidance, 1500);
     return () => {
       mounted = false;
       clearInterval(interval);
     };
-  }, [world.primary_vehicle_id, world.sequence]);
+  }, [world.primary_vehicle_id]);
+
+  const guidance = canonicalGuidance ?? restGuidance;
 
   const visScore = world.environment.visibility_score;
   const visState = world.environment.visibility_state;
   const estimatedSightM = Math.max(8, Math.round(visScore * 120));
 
-  // If vehicle telemetry is unavailable, fail-closed to UNVERIFIED/GREY
-  if (!vehicleTelemetryAvailable) {
+  // If vehicle telemetry is unavailable or guidance not yet received, fail-closed to UNVERIFIED/GREY
+  if (!vehicleTelemetryAvailable || !guidance) {
     return (
       <div className="driver-guidance-hud hud-offline" aria-label="Tactical guidance offline">
         <div className="guidance-hud-card">
@@ -46,23 +51,27 @@ export function DriverGuidanceHUD({
             <span className="hud-eyebrow">Tactical Guidance</span>
             <span className="hud-status-badge badge-grey">UNVERIFIED</span>
           </div>
-          <p className="hud-instruction">Waiting for vehicle telemetry connection...</p>
+          <p className="hud-instruction">
+            {!vehicleTelemetryAvailable
+              ? "Waiting for vehicle telemetry connection..."
+              : "Waiting for verified tactical guidance stream..."}
+          </p>
         </div>
       </div>
     );
   }
 
-  const destination = guidance?.current_destination ?? "Primary Crusher #01";
-  const distanceRem = guidance?.distance_remaining_m ?? 85.0;
-  const instruction = guidance?.next_instruction ?? "Follow green safe corridor. Maintain safe headway.";
+  const destination = guidance.current_destination;
+  const distanceRem = guidance.distance_remaining_m;
+  const instruction = guidance.next_instruction;
 
-  const threatLevel = guidance?.threat_level ?? "SAFE";
+  const threatLevel = guidance.threat_level;
   const threatClass = threatLevel.toLowerCase();
-  const targetCallsign = guidance?.target_callsign ?? "Perimeter Clear";
-  const targetDist = guidance?.hazard_distance_m ?? 999;
-  const targetDir = guidance?.hazard_direction ?? "FRONT";
-  const closingVel = guidance?.closing_velocity_mps ?? 0.0;
-  const advisoryText = guidance?.advisory_text ?? "Haul corridor clear of closing traffic.";
+  const targetCallsign = guidance.target_callsign;
+  const targetDist = guidance.hazard_distance_m;
+  const targetDir = guidance.hazard_direction;
+  const closingVel = guidance.closing_velocity_mps;
+  const advisoryText = guidance.advisory_text;
 
   return (
     <section className="driver-guidance-hud" aria-label="Driver tactical guidance and collision warning">
