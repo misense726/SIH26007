@@ -270,6 +270,7 @@ class FullSimulator:
             rear_scanner_angle_deg=self._rear_scanner_angle_deg,
         )
         self._configure_pipeline()
+        self.mine_graph.reset()
         self._v2x_manager.reset()
         self.fleet_manager.reset_fleet()
         self._scenario = self._default_scenario
@@ -561,8 +562,9 @@ class FullSimulator:
             emergency.nearest_obstacle_m,
         )
 
-        # Step fleet simulation and update all active vehicle positions
-        self.fleet_manager.step(self._interval_s, timestamp)
+        # Step fleet simulation with speed-scaled dt (or 0 when paused)
+        fleet_dt = (self._interval_s * self._speed_scale) if self._movement_running else 0.0
+        self.fleet_manager.step(fleet_dt, timestamp)
         pv = self.fleet_manager.get_vehicle("DUMPER_01")
         if pv:
             pv.set_position(pose.x_m, pose.y_m, pv.elevation_m, pose.heading_deg)
@@ -665,7 +667,7 @@ class FullSimulator:
             fleet=fleet_dict,
             routes=routes_dict,
             guidance=guidance_dict,
-            reroute_advisories=[],
+            reroute_advisories=list(self.fleet_manager.reroute_advisories),
             analytics_summary=analytics_summary,
             provenance="SIMULATED_RUNTIME",
             network_version=self._reference_map.version if self._reference_map else 1,

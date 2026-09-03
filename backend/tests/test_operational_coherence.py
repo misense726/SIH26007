@@ -118,10 +118,6 @@ def empty_analytics(monkeypatch: pytest.MonkeyPatch) -> HaulageAnalyticsEngine:
     return HaulageAnalyticsEngine()
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Route reporting incorrectly derives physical distance from weighted distance cost.",
-)
 def test_zero_distance_weight_preserves_physical_route_and_instruction_distances() -> None:
     graph = _linear_graph()
     route = RouteOptimizer(graph).find_route(
@@ -137,10 +133,6 @@ def test_zero_distance_weight_preserves_physical_route_and_instruction_distances
     assert route.instructions[-1] == "In 250m arrive at End."
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Routing does not reject edges whose maximum weight is below vehicle tare plus payload.",
-)
 def test_route_rejects_gross_weight_above_edge_limit() -> None:
     graph = _linear_graph(edge_max_weight_tonnes=100.0)
 
@@ -156,10 +148,6 @@ def test_route_rejects_gross_weight_above_edge_limit() -> None:
     assert route is None
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="FleetVehicle advances its route edge but leaves current_node_id at the initial node.",
-)
 def test_fleet_vehicle_node_and_edge_advance_with_route_progress() -> None:
     graph = _linear_graph()
     router = RouteOptimizer(graph)
@@ -185,10 +173,6 @@ def test_fleet_vehicle_node_and_edge_advance_with_route_progress() -> None:
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    reason="FullSimulator pause stops only the primary route while secondary fleet vehicles keep advancing.",
-)
 async def test_full_simulator_pause_freezes_secondary_fleet_poses_and_timers() -> None:
     simulator = FullSimulator(WorldStore(), deepcopy(project_config()), telemetry_hz=10)
     await simulator.apply_control(reset=True, running=False)
@@ -235,10 +219,6 @@ async def test_full_simulator_pause_freezes_secondary_fleet_poses_and_timers() -
 
 
 @pytest.mark.asyncio
-@pytest.mark.xfail(
-    strict=True,
-    reason="Simulator reset rebuilds the fleet but does not restore mutated road status in the mine graph.",
-)
 async def test_full_simulator_reset_restores_closed_road_to_baseline() -> None:
     simulator = FullSimulator(WorldStore(), deepcopy(project_config()), telemetry_hz=10)
     edge_id = "E_STEEP_RAMP_A"
@@ -313,10 +293,6 @@ def test_analytics_production_rate_comes_from_controlled_record_span(
     assert metrics.hourly_production_rate_tph == 100.0
 
 
-@pytest.mark.xfail(
-    strict=True,
-    reason="Collision warning selection ranks time-to-collision without first preferring CRITICAL severity.",
-)
 def test_collision_warning_prefers_critical_over_lower_severity() -> None:
     fleet = FleetManager(MineRoadGraph())
     primary = fleet.get_vehicle("DUMPER_01")

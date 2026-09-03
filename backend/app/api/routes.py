@@ -346,6 +346,7 @@ async def update_mine_edge_status(
                 )
                 if advisory:
                     veh.assign_route(advisory.new_route)
+                    fleet_manager.add_reroute_advisory(advisory)
 
     return updated
 

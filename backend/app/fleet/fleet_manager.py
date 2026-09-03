@@ -7,6 +7,7 @@ from typing import Any, Callable, NamedTuple
 from backend.app.fleet.models import FleetVehicleSummary, HaulCycleState, TripRecord
 from backend.app.fleet.vehicle import FleetVehicle
 from backend.app.mine_map.graph import MineRoadGraph
+from backend.app.models.operations import RerouteAdvisory
 from backend.app.models.telemetry import DataMode, VehiclePose
 from backend.app.models.v2x import (
     V2IAdvisoryMessage,
@@ -45,6 +46,7 @@ class FleetManager:
 
         self.vehicles: dict[str, FleetVehicle] = {}
         self.active_collision_warnings: dict[str, TacticalCollisionWarning] = {}
+        self.reroute_advisories: list[RerouteAdvisory] = []
         self._initialize_default_fleet()
 
     def _initialize_default_fleet(self) -> None:
@@ -136,7 +138,13 @@ class FleetManager:
     def reset_fleet(self) -> None:
         self.vehicles.clear()
         self.active_collision_warnings.clear()
+        self.reroute_advisories.clear()
         self._initialize_default_fleet()
+
+    def add_reroute_advisory(self, advisory: RerouteAdvisory) -> None:
+        self.reroute_advisories.append(advisory)
+        if len(self.reroute_advisories) > 20:
+            self.reroute_advisories.pop(0)
 
     def get_vehicle(self, vehicle_id: str) -> FleetVehicle | None:
         return self.vehicles.get(vehicle_id)
@@ -184,83 +192,63 @@ class FleetManager:
         return completed_trips
 
     def _exchange_v2v_bsms(self, timestamp_ms: int) -> None:
-        """Transmit V2V Basic Safety Messages between all active dumpers."""
-        primary_veh = self.vehicles.get("DUMPER_01")
-        if not primary_veh:
-            return
-
-        # Synchronize peers into v2x_manager
-        for v_id, veh in self.vehicles.items():
-            if v_id == "DUMPER_01":
-                continue
-
-            dx = veh.x_m - primary_veh.x_m
-            dy = veh.y_m - primary_veh.y_m
-            dist = math.hypot(dx, dy)
-            bearing = (math.degrees(math.atan2(dx, dy)) - primary_veh.heading_deg + 360.0) % 360.0
-
-            # Signal strength proxy based on distance
-            rssi = max(-95, int(-45 - (dist * 0.4)))
-            link_status = (
-                "EXCELLENT" if dist < 30.0 else "GOOD" if dist < 80.0 else "DEGRADED" if dist < 140.0 else "LOST"
-            )
-
-            peer = V2XPeerNode(
-                vehicle_id=veh.vehicle_id,
-                last_seen_ms=timestamp_ms,
-                x_m=round(veh.x_m, 2),
-                y_m=round(veh.y_m, 2),
-                distance_m=round(dist, 1),
-                bearing_deg=round(bearing, 1),
-                speed_mps=round(veh.speed_mps, 2),
-                heading_deg=round(veh.heading_deg, 1),
-                emergency_state=veh.emergency_state,
-                rssi_dbm=rssi,
-                link_status=link_status,
-            )
-            # Register in v2x manager
+        """Transmit V2V Basic Safety Messages between all active dumpers over simulated radio mesh."""
+        # 1. Every active vehicle generates its own BSM
+        bsm_map: dict[str, V2VBasicSafetyMessage] = {}
+        for veh in self.vehicles.values():
             bsm = V2VBasicSafetyMessage(
                 message_id=f"BSM-{veh.vehicle_id}-{timestamp_ms}",
                 timestamp_ms=timestamp_ms,
                 vehicle_id=veh.vehicle_id,
-                x_m=veh.x_m,
-                y_m=veh.y_m,
-                heading_deg=veh.heading_deg,
-                speed_mps=veh.speed_mps,
+                x_m=round(veh.x_m, 2),
+                y_m=round(veh.y_m, 2),
+                heading_deg=round(veh.heading_deg % 360.0, 1),
+                speed_mps=round(max(0.0, veh.speed_mps), 2),
                 emergency_state=veh.emergency_state,
                 corridor_state="GREEN",
                 brake_applied=veh.speed_mps < 0.5,
             )
-            self.v2x_manager.receive_bsm(bsm)
+            bsm_map[veh.vehicle_id] = bsm
+
+        # 2. Distribute BSMs to every other vehicle within communication range (P2P mesh)
+        for v_a in self.vehicles.values():
+            for v_b_id, bsm in bsm_map.items():
+                if v_b_id == v_a.vehicle_id:
+                    continue
+                dist = math.hypot(bsm.x_m - v_a.x_m, bsm.y_m - v_a.y_m)
+                if dist <= 250.0:
+                    v_a.received_bsms[v_b_id] = bsm
+
+        # 3. Synchronize non-primary BSMs into the primary v2x_manager
+        primary_veh = self.vehicles.get("DUMPER_01")
+        if primary_veh:
+            for v_id, bsm in bsm_map.items():
+                if v_id != "DUMPER_01":
+                    self.v2x_manager.receive_bsm(bsm)
 
     def _evaluate_collision_threats(self) -> None:
-        """Detect closing hazards and directional threat levels for driver HUD."""
+        """Detect closing hazards and directional threat levels for driver HUD using received V2V BSMs."""
         self.active_collision_warnings.clear()
 
-        veh_list = list(self.vehicles.values())
-        for i in range(len(veh_list)):
-            v_a = veh_list[i]
+        for v_a in self.vehicles.values():
             highest_threat: TacticalCollisionWarning | None = None
             min_ttc = float("inf")
 
-            for j in range(len(veh_list)):
-                if i == j:
-                    continue
-                v_b = veh_list[j]
-
-                dx = v_b.x_m - v_a.x_m
-                dy = v_b.y_m - v_a.y_m
+            # Evaluate threat against all peers from which v_a has received BSMs
+            for peer_id, bsm in v_a.received_bsms.items():
+                dx = bsm.x_m - v_a.x_m
+                dy = bsm.y_m - v_a.y_m
                 dist = math.hypot(dx, dy)
                 if dist < 0.001:
                     continue
 
                 # Relative velocity along line of sight (closing speed)
                 rad_a = math.radians(v_a.heading_deg)
-                rad_b = math.radians(v_b.heading_deg)
+                rad_b = math.radians(bsm.heading_deg)
                 vx_a = math.sin(rad_a) * v_a.speed_mps
                 vy_a = math.cos(rad_a) * v_a.speed_mps
-                vx_b = math.sin(rad_b) * v_b.speed_mps
-                vy_b = math.cos(rad_b) * v_b.speed_mps
+                vx_b = math.sin(rad_b) * bsm.speed_mps
+                vy_b = math.cos(rad_b) * bsm.speed_mps
 
                 rel_vx = vx_b - vx_a
                 rel_vy = vy_b - vy_a
@@ -289,24 +277,38 @@ class FleetManager:
                 # Threat level evaluation
                 threat_level = "SAFE"
                 advisory_text = "Clear"
+                v_b = self.vehicles.get(peer_id)
+                callsign = v_b.callsign if v_b else peer_id
 
                 if dist < 12.0:
                     threat_level = "CRITICAL"
-                    advisory_text = f"CRITICAL: Immediate collision risk with {v_b.callsign} ({dist:.1f}m)!"
+                    advisory_text = f"CRITICAL: Immediate collision risk with {callsign} ({dist:.1f}m)!"
                 elif dist < 24.0 and closing_vel > 0.3:
                     threat_level = "WARNING"
-                    advisory_text = f"WARNING: {v_b.callsign} approaching {direction} at {closing_vel:.1f} m/s ({dist:.1f}m)."
+                    advisory_text = f"WARNING: {callsign} approaching {direction} at {closing_vel:.1f} m/s ({dist:.1f}m)."
                 elif dist < 40.0 and closing_vel > 0.5:
                     threat_level = "CAUTION"
-                    advisory_text = f"CAUTION: Vehicle ahead {v_b.callsign} closing ({dist:.1f}m)."
+                    advisory_text = f"CAUTION: Vehicle ahead {callsign} closing ({dist:.1f}m)."
 
                 # Time to collision
                 ttc = dist / closing_vel if closing_vel > 0.1 else 999.0
-                if threat_level != "SAFE" and ttc < min_ttc:
+
+                severity_rank = {"CRITICAL": 4, "WARNING": 3, "CAUTION": 2, "SAFE": 1}
+                current_rank = severity_rank.get(threat_level, 0)
+                highest_rank = severity_rank.get(highest_threat.threat_level, 0) if highest_threat else 0
+
+                is_higher_threat = False
+                if threat_level != "SAFE":
+                    if highest_threat is None or current_rank > highest_rank:
+                        is_higher_threat = True
+                    elif current_rank == highest_rank and (ttc < min_ttc or (ttc == min_ttc and dist < highest_threat.distance_m)):
+                        is_higher_threat = True
+
+                if is_higher_threat:
                     min_ttc = ttc
                     highest_threat = TacticalCollisionWarning(
-                        target_vehicle_id=v_b.vehicle_id,
-                        target_callsign=v_b.callsign,
+                        target_vehicle_id=peer_id,
+                        target_callsign=callsign,
                         distance_m=round(dist, 1),
                         bearing_deg=round(rel_bearing, 0),
                         direction=direction,

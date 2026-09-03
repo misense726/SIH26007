@@ -33,6 +33,11 @@ class MineRoadGraph:
         self._adjacency: dict[str, list[MineEdge]] = {}
         self._rebuild_adjacency()
 
+    def reset(self) -> None:
+        """Reset the graph to the default Bailadila network state."""
+        self._network = build_default_bailadila_network()
+        self._rebuild_adjacency()
+
     @property
     def network(self) -> MineNetwork:
         return self._network

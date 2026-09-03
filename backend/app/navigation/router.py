@@ -7,7 +7,7 @@ from typing import NamedTuple
 
 from backend.app.mine_map.graph import MineRoadGraph
 from backend.app.mine_map.models import MineEdge, RoadStatus
-from backend.app.models.telemetry import Point2D
+from backend.app.models.common import Point2D, now_ms
 from backend.app.navigation.models import (
     NavigationRoute,
     RerouteAdvisory,
@@ -29,6 +29,7 @@ class EdgeTraversalCost(NamedTuple):
     effective_speed_kmh: float
     travel_time_s: float
     traversal_gradient: float
+    distance_m: float
 
 
 class RouteOptimizer:
@@ -48,6 +49,11 @@ class RouteOptimizer:
         """Calculate weighted multi-criteria traversal cost for a directed edge."""
         # Closed roads cannot be traversed
         if edge.road_status == RoadStatus.CLOSED:
+            return None
+
+        # Gross vehicle weight check against edge capacity
+        gross_weight = tare_weight_tonnes + payload_tonnes
+        if gross_weight > edge.max_weight_tonnes:
             return None
 
         distance = edge.distance_m
@@ -134,6 +140,7 @@ class RouteOptimizer:
             effective_speed_kmh=effective_speed_kmh,
             travel_time_s=travel_time_s,
             traversal_gradient=grad,
+            distance_m=distance,
         )
 
     def find_route(self, request: RouteRequest) -> NavigationRoute | None:
@@ -208,7 +215,7 @@ class RouteOptimizer:
         traversed_edge_costs.reverse()
 
         # Compute totals and breakdowns
-        total_dist = sum(c.distance_cost / request.weights.w1_distance for c in traversed_edge_costs) if request.weights.w1_distance > 0 else 0.0
+        total_dist = sum(c.distance_m for c in traversed_edge_costs)
         total_time_s = sum(c.travel_time_s for c in traversed_edge_costs)
         max_grad = max((abs(c.traversal_gradient) for c in traversed_edge_costs), default=0.0)
         avg_speed_kmh = (
@@ -274,7 +281,7 @@ class RouteOptimizer:
                 continue
 
             cost_info = edge_costs[i]
-            dist_m = round(cost_info.distance_cost, 0)
+            dist_m = round(cost_info.distance_m, 0)
             grad = cost_info.traversal_gradient
 
             grade_desc = (
@@ -327,7 +334,7 @@ class RouteOptimizer:
         return RerouteAdvisory(
             advisory_id=f"REROUTE-{uuid.uuid4().hex[:8].upper()}",
             vehicle_id=current_route.vehicle_id,
-            timestamp_ms=0,
+            timestamp_ms=now_ms(),
             trigger_edge_id=closed_edge_id,
             trigger_reason=reason,
             original_route_id=current_route.route_id,

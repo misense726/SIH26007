@@ -14,6 +14,7 @@ from backend.app.mine_map.graph import MineRoadGraph
 from backend.app.models.common import Point2D
 from backend.app.models.operations import VehicleOperationalMetadata
 from backend.app.models.telemetry import DataMode, VehiclePose
+from backend.app.models.v2x import V2VBasicSafetyMessage
 from backend.app.navigation.models import NavigationRoute, RouteRequest
 from backend.app.navigation.router import RouteOptimizer
 
@@ -86,6 +87,7 @@ class FleetVehicle:
         self.total_trips_completed = 0
         self.total_tonnes_moved = 0.0
 
+        self.received_bsms: dict[str, V2VBasicSafetyMessage] = {}
         self.last_heading_error_deg = 0.0
         self._initialize_at_node(initial_node_id)
 
@@ -104,8 +106,13 @@ class FleetVehicle:
         self.route_waypoint_index = 0
         self.distance_along_route_m = 0.0
         self.distance_to_dest_m = route.total_distance_m
+        if route.path_nodes:
+            self.current_node_id = route.path_nodes[0]
+        if route.edge_ids:
+            self.current_edge_id = route.edge_ids[0]
         if route.instructions:
             self.next_instruction = route.instructions[0]
+        self._update_route_progress()
 
     def trigger_emergency(self, reason: str = "Safety collision hazard") -> None:
         if self.cycle_state != HaulCycleState.EMERGENCY:
@@ -135,12 +142,17 @@ class FleetVehicle:
         router: RouteOptimizer,
     ) -> TripRecord | None:
         """Advance vehicle state and kinematics by dt_s. Returns completed TripRecord if cycle ended."""
-        if self.trip_start_ms == 0:
-            self.trip_start_ms = current_time_ms
-
         if self.cycle_state == HaulCycleState.PAUSED:
             self.speed_mps = 0.0
             return None
+
+        if dt_s <= 0.0:
+            self._update_route_progress()
+            self.speed_mps = 0.0
+            return None
+
+        if self.trip_start_ms == 0:
+            self.trip_start_ms = current_time_ms
 
         if self.cycle_state == HaulCycleState.EMERGENCY:
             # Apply maximum emergency braking
@@ -297,15 +309,12 @@ class FleetVehicle:
             return True
         return self.route_waypoint_index >= len(self.current_route.waypoints) - 1
 
-    def _follow_route(self, dt_s: float, mine_graph: MineRoadGraph) -> None:
-        """Advance kinematics along active route waypoints."""
+    def _update_route_progress(self) -> None:
         if not self.current_route or not self.current_route.waypoints:
-            self.speed_mps = 0.0
             return
 
         waypoints = self.current_route.waypoints
         if self.route_waypoint_index >= len(waypoints):
-            self.speed_mps = 0.0
             return
 
         target_wp = waypoints[self.route_waypoint_index]
@@ -321,6 +330,22 @@ class FleetVehicle:
             dy = target_wp.y_m - self.y_m
             dist_to_wp = math.hypot(dx, dy)
 
+        if self.current_route.path_nodes:
+            if self._is_at_route_end() and dist_to_wp < 2.0:
+                self.current_node_id = self.current_route.path_nodes[-1]
+            elif self.route_waypoint_index > 0:
+                node_idx = min(self.route_waypoint_index - 1, len(self.current_route.path_nodes) - 1)
+                self.current_node_id = self.current_route.path_nodes[node_idx]
+            else:
+                self.current_node_id = self.current_route.path_nodes[0]
+
+        if self.current_route.edge_ids:
+            if self.route_waypoint_index > 0:
+                edge_idx = min(self.route_waypoint_index - 1, len(self.current_route.edge_ids) - 1)
+                self.current_edge_id = self.current_route.edge_ids[edge_idx]
+            else:
+                self.current_edge_id = self.current_route.edge_ids[0]
+
         # Update remaining distance to route destination
         remaining_m = dist_to_wp
         for i in range(self.route_waypoint_index, len(waypoints) - 1):
@@ -328,6 +353,23 @@ class FleetVehicle:
             w2 = waypoints[i + 1]
             remaining_m += math.hypot(w2.x_m - w1.x_m, w2.y_m - w1.y_m)
         self.distance_to_dest_m = remaining_m
+
+    def _follow_route(self, dt_s: float, mine_graph: MineRoadGraph) -> None:
+        """Advance kinematics along active route waypoints."""
+        if not self.current_route or not self.current_route.waypoints:
+            self.speed_mps = 0.0
+            return
+
+        waypoints = self.current_route.waypoints
+        if self.route_waypoint_index >= len(waypoints):
+            self.speed_mps = 0.0
+            return
+
+        self._update_route_progress()
+
+        target_wp = waypoints[self.route_waypoint_index]
+        dx = target_wp.x_m - self.x_m
+        dy = target_wp.y_m - self.y_m
 
         # Target heading towards current waypoint
         target_heading = (math.degrees(math.atan2(dx, dy)) + 360.0) % 360.0
@@ -343,13 +385,12 @@ class FleetVehicle:
 
         # Speed regulation based on gradient, payload, and turns
         current_gradient = 0.0
-        if self.current_route.edge_ids and self.route_waypoint_index > 0:
-            edge_idx = min(self.route_waypoint_index - 1, len(self.current_route.edge_ids) - 1)
-            eid = self.current_route.edge_ids[edge_idx]
-            self.current_edge_id = eid
-            e = mine_graph.get_edge(eid)
+        edge_speed_limit_kmh = 40.0
+        if self.current_edge_id:
+            e = mine_graph.get_edge(self.current_edge_id)
             if e:
                 current_gradient = e.gradient_pct
+                edge_speed_limit_kmh = e.speed_limit_kmh
 
         # Top speed calculations
         if self.payload_tonnes > 50.0:
@@ -359,6 +400,9 @@ class FleetVehicle:
                 top_speed_kmh = self.kinematics.max_speed_loaded_kmh
         else:
             top_speed_kmh = self.kinematics.max_speed_flat_kmh
+
+        # Enforce road segment speed limit
+        top_speed_kmh = min(top_speed_kmh, edge_speed_limit_kmh)
 
         # Turn slowing
         if abs(heading_diff) > 25.0:
