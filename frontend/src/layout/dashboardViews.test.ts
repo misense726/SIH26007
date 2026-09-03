@@ -1,8 +1,9 @@
 import { describe, expect, it } from "vitest";
 import {
-  dashboardViewFromHash,
   dashboardViewHash,
   dashboardViewLabel,
+  dashboardViewsForRole,
+  resolveDashboardRoute,
 } from "./dashboardViews";
 
 describe("dashboard navigation", () => {
@@ -11,16 +12,32 @@ describe("dashboard navigation", () => {
     expect(dashboardViewHash("SPATIAL")).toBe("#spatial");
     expect(dashboardViewHash("SUPERVISOR")).toBe("#fleet");
     expect(dashboardViewHash("SETTINGS")).toBe("#calibration");
+    expect(dashboardViewLabel("SUPERVISOR")).toBe("Fleet");
   });
 
-  it("reads deep links without depending on letter case", () => {
-    expect(dashboardViewFromHash("#SPATIAL")).toBe("SPATIAL");
-    expect(dashboardViewFromHash("#fleet")).toBe("SUPERVISOR");
+  it("assigns awareness tools to Driver and fleet operations to Supervisor", () => {
+    expect(dashboardViewsForRole("DRIVER").map((view) => view.value)).toEqual([
+      "DRIVER",
+      "SPATIAL",
+      "SETTINGS",
+    ]);
+    expect(dashboardViewsForRole("SUPERVISOR").map((view) => view.value)).toEqual([
+      "SUPERVISOR",
+    ]);
   });
 
-  it("falls back to the driver view for empty or unknown links", () => {
-    expect(dashboardViewFromHash("")).toBe("DRIVER");
-    expect(dashboardViewFromHash("#unknown")).toBe("DRIVER");
-    expect(dashboardViewLabel("DRIVER")).toBe("Driver");
+  it("normalizes allowed, forbidden, and unknown destinations by role", () => {
+    expect(resolveDashboardRoute("DRIVER", "#SPATIAL")).toEqual({
+      view: "SPATIAL",
+      hash: "#spatial",
+    });
+    expect(resolveDashboardRoute("DRIVER", "#fleet")).toEqual({
+      view: "DRIVER",
+      hash: "#driver",
+    });
+    expect(resolveDashboardRoute("SUPERVISOR", "#unknown")).toEqual({
+      view: "SUPERVISOR",
+      hash: "#fleet",
+    });
   });
 });

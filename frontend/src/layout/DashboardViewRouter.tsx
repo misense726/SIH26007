@@ -1,17 +1,34 @@
-import { DriverDashboard } from "../driver/DriverDashboard";
+import { lazy, Suspense, type ReactNode } from "react";
 import type { AwarenessMode } from "../driver/driverAwareness";
-import { SensorSettingsPage } from "../settings/SensorSettingsPage";
 import {
   type SensorDisplaySetting,
   type SensorId,
   type SensorSettingsState,
 } from "../settings/sensorSettingsApi";
 import type { SettingsConnection } from "../settings/useSensorSettings";
-import { SpatialDashboard } from "../spatial/SpatialDashboard";
 import type { ConnectionState } from "../state/useTelemetry";
-import { SupervisorDashboard } from "../supervisor/SupervisorDashboard";
 import type { WorldState } from "../types";
 import type { DashboardView } from "./dashboardViews";
+
+const DriverDashboard = lazy(async () => {
+  const module = await import("../driver/DriverDashboard");
+  return { default: module.DriverDashboard };
+});
+
+const SpatialDashboard = lazy(async () => {
+  const module = await import("../spatial/SpatialDashboard");
+  return { default: module.SpatialDashboard };
+});
+
+const SupervisorDashboard = lazy(async () => {
+  const module = await import("../supervisor/SupervisorDashboard");
+  return { default: module.SupervisorDashboard };
+});
+
+const SensorSettingsPage = lazy(async () => {
+  const module = await import("../settings/SensorSettingsPage");
+  return { default: module.SensorSettingsPage };
+});
 
 interface DashboardViewRouterProps {
   view: DashboardView;
@@ -40,8 +57,10 @@ export function DashboardViewRouter({
   onSensorSave,
   onZeroImu,
 }: DashboardViewRouterProps) {
+  let dashboard: ReactNode;
+
   if (view === "DRIVER") {
-    return (
+    dashboard = (
       <DriverDashboard
         world={world}
         awarenessMode={awarenessMode}
@@ -50,32 +69,34 @@ export function DashboardViewRouter({
         sensorSettings={sensorSettings.sensors}
       />
     );
-  }
-
-  if (view === "SPATIAL") {
-    return (
+  } else if (view === "SPATIAL") {
+    dashboard = (
       <SpatialDashboard
         world={world}
         connection={connection}
         sensorSettings={sensorSettings.sensors}
       />
     );
-  }
-
-  if (view === "SUPERVISOR") {
-    return <SupervisorDashboard world={world} connection={connection} />;
+  } else if (view === "SUPERVISOR") {
+    dashboard = <SupervisorDashboard world={world} connection={connection} />;
+  } else {
+    dashboard = (
+      <SensorSettingsPage
+        world={world}
+        telemetryConnection={connection}
+        settings={sensorSettings}
+        settingsConnection={settingsConnection}
+        message={settingsMessage}
+        onSensorChange={onSensorChange}
+        onSensorSave={onSensorSave}
+        onZeroImu={onZeroImu}
+      />
+    );
   }
 
   return (
-    <SensorSettingsPage
-      world={world}
-      telemetryConnection={connection}
-      settings={sensorSettings}
-      settingsConnection={settingsConnection}
-      message={settingsMessage}
-      onSensorChange={onSensorChange}
-      onSensorSave={onSensorSave}
-      onZeroImu={onZeroImu}
-    />
+    <Suspense fallback={<div className="dashboard-loading" role="status">Loading console…</div>}>
+      {dashboard}
+    </Suspense>
   );
 }
