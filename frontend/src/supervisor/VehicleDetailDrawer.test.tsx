@@ -13,6 +13,20 @@ describe("VehicleDetailDrawer", () => {
     expect(markup).toBe("");
   });
 
+  it.fails("renders missing fleet summary as UNVERIFIED without fabricated details", () => {
+    const markup = renderToStaticMarkup(
+      <VehicleDetailDrawer
+        truckId="DUMPER_01"
+        onClose={() => {}}
+      />,
+    );
+
+    expect(markup).toContain("UNVERIFIED");
+    expect(markup).not.toContain("TRAVELLING TO DUMP");
+    expect(markup).not.toContain("85 T Total Mass");
+    expect(markup).not.toContain("Primary Crusher #01");
+  });
+
   it("renders vehicle details, payload mass, and cycle state when selected", () => {
     const markup = renderToStaticMarkup(
       <VehicleDetailDrawer

@@ -13,6 +13,25 @@ describe("DriverGuidanceHUD", () => {
     );
     expect(markup).toContain("UNVERIFIED");
     expect(markup).toContain("Tactical Guidance");
+    expect(markup).not.toContain(">SAFE<");
+    expect(markup).not.toContain("Primary Crusher #01");
+    expect(markup).not.toContain("green safe corridor");
+    expect(markup).not.toContain("Haul corridor clear");
+  });
+
+  it.fails("fails closed when connected guidance is missing", () => {
+    const markup = renderToStaticMarkup(
+      <DriverGuidanceHUD
+        world={defaultWorldState}
+        vehicleTelemetryAvailable={true}
+      />,
+    );
+
+    expect(markup).toContain("UNVERIFIED");
+    expect(markup).not.toContain(">SAFE<");
+    expect(markup).not.toContain("Primary Crusher #01");
+    expect(markup).not.toContain("green safe corridor");
+    expect(markup).not.toContain("Haul corridor clear");
   });
 
   it("renders collision warning card, destination, and atmospheric sight when connected", () => {
