@@ -129,19 +129,21 @@ function floorGrid(cameraConfig: CameraViewConfig = {}) {
         );
       })}
 
-      {/* Directional Compass Axes */}
-      <text x="500" y="58" textAnchor="middle" className="spatial-axis-marker axis-front">
-        ▲ FRONT (FORWARD)
-      </text>
-      <text x="500" y="605" textAnchor="middle" className="spatial-axis-marker axis-rear">
-        ▼ REAR
-      </text>
-      <text x="75" y="448" textAnchor="middle" className="spatial-axis-marker axis-side">
-        ◄ LEFT
-      </text>
-      <text x="925" y="448" textAnchor="middle" className="spatial-axis-marker axis-side">
-        RIGHT ►
-      </text>
+      {[
+        { label: "Front", x_m: 0, y_m: 4.3 },
+        { label: "Rear", x_m: 0, y_m: -3.8 },
+        { label: "Left", x_m: -4.3, y_m: 0 },
+        { label: "Right", x_m: 4.3, y_m: 0 },
+      ].map(({ label, ...position }) => {
+        const screen = projectVehiclePointWithCamera({ ...position, z_m: 0 }, cameraConfig);
+        return (
+          <text key={label} x={Math.max(40, Math.min(960, screen.x))}
+            y={Math.max(30, Math.min(600, screen.y + 20))}
+            textAnchor="middle" className="spatial-axis-marker">
+            {label}
+          </text>
+        );
+      })}
     </g>
   );
 }
@@ -149,6 +151,8 @@ function floorGrid(cameraConfig: CameraViewConfig = {}) {
 function sensorClass(sensorId: string): string {
   return `sensor-${sensorId.replaceAll("_", "-")}`;
 }
+
+const DEFAULT_TRUCK_ORBIT_DEG = 145;
 
 export function SpatialDashboard({ world, connection, sensorSettings }: SpatialDashboardProps) {
   const [showFovSectors, setShowFovSectors] = useState(true);
@@ -159,7 +163,7 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
   const [manualPitch, setManualPitch] = useState(0);
   const [manualRoll, setManualRoll] = useState(0);
   const [manualYaw, setManualYaw] = useState(0);
-  const [cameraOrbit, setCameraOrbit] = useState(0);
+  const [cameraOrbit, setCameraOrbit] = useState(DEFAULT_TRUCK_ORBIT_DEG);
   const [cameraPitch, setCameraPitch] = useState(DEFAULT_CAMERA_PITCH_DEG);
   const [isCameraDragging, setIsCameraDragging] = useState(false);
   const cameraDrag = useRef<{ pointerId: number; clientX: number; clientY: number } | null>(null);
@@ -265,7 +269,7 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
     setManualPitch(0);
     setManualRoll(0);
     setManualYaw(0);
-    setCameraOrbit(0);
+    setCameraOrbit(DEFAULT_TRUCK_ORBIT_DEG);
     setCameraPitch(DEFAULT_CAMERA_PITCH_DEG);
   };
 

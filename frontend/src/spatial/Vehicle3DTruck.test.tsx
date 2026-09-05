@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { defaultSensorSettings } from "../settings/sensorSettingsApi";
 import { Vehicle3DTruck } from "./Vehicle3DTruck";
+import { buildTruckMesh, surfaceNormal } from "./truckMesh";
 
 describe("Vehicle3DTruck 3D Model", () => {
   it("renders truck chassis, cab, wheels, and sensor pods", () => {
@@ -22,7 +23,7 @@ describe("Vehicle3DTruck 3D Model", () => {
     expect(markup).toContain("truck-wheels");
     expect(markup).toContain("truck-sensor-mounts");
     expect(markup).toContain("truck-solid-core");
-    expect(markup.match(/truck-tire-face/g)).toHaveLength(36);
+    expect(new Set(markup.match(/data-part="wheel-[^"]+"/g)).size).toBe(6);
   });
 
   it("activates danger alerts and perimeter shields when sensor threshold is breached", () => {
@@ -89,10 +90,54 @@ describe("Vehicle3DTruck 3D Model", () => {
 
         expect(markup).not.toMatch(/NaN|Infinity/);
         expect(markup).toContain("truck-solid-core");
-        expect(markup.match(/truck-tire-assembly/g)).toHaveLength(6);
+        expect(new Set(markup.match(/data-part="wheel-[^"]+"/g)).size).toBe(6);
         expect(markup.match(/sensor-pod-3d/g)).toHaveLength(5);
       }
     }
+  });
+
+  it("keeps each round tire closed with outward-facing surfaces", () => {
+    const mesh = buildTruckMesh();
+    const wheels = [...new Set(mesh.filter((f) => f.part.startsWith("wheel-")).map((f) => f.part))];
+    expect(wheels).toHaveLength(6);
+    for (const wheel of wheels) {
+      const faces = mesh.filter((f) => f.part === wheel);
+      const vertices = faces.flatMap((f) => f.points);
+      const center = {
+        x_m: (Math.min(...vertices.map((p) => p.x_m)) + Math.max(...vertices.map((p) => p.x_m))) / 2,
+        y_m: (Math.min(...vertices.map((p) => p.y_m)) + Math.max(...vertices.map((p) => p.y_m))) / 2,
+        z_m: (Math.min(...vertices.map((p) => p.z_m)) + Math.max(...vertices.map((p) => p.z_m))) / 2,
+      };
+      const edges = new Map<string, number>();
+      const vertexKey = (p: typeof center) => [p.x_m, p.y_m, p.z_m].map((n) => n.toFixed(5)).join(",");
+      for (const face of faces) {
+        const normal = surfaceNormal(face.points);
+        const p = face.points[0];
+        expect(normal.x_m * (p.x_m - center.x_m) + normal.y_m * (p.y_m - center.y_m) + normal.z_m * (p.z_m - center.z_m)).toBeGreaterThan(0);
+        face.points.forEach((p, i) => {
+          const key = [vertexKey(p), vertexKey(face.points[(i + 1) % face.points.length])].sort().join("|");
+          edges.set(key, (edges.get(key) ?? 0) + 1);
+        });
+      }
+      expect([...edges.values()].every((count) => count === 2)).toBe(true);
+      // Multiple radial heights distinguish circular tires from the previous boxes.
+      expect(new Set(vertices.map((p) => p.z_m.toFixed(5))).size).toBeGreaterThan(20);
+    }
+  });
+
+  it("steers only the front wheels and tolerates invalid steering and attitude", () => {
+    const straight = buildTruckMesh(0);
+    const steered = buildTruckMesh(25);
+    expect(steered.filter((f) => !f.part.startsWith("wheel-front")))
+      .toEqual(straight.filter((f) => !f.part.startsWith("wheel-front")));
+    expect(steered.filter((f) => f.part.startsWith("wheel-front")))
+      .not.toEqual(straight.filter((f) => f.part.startsWith("wheel-front")));
+    expect(buildTruckMesh(Number.NaN)).toEqual(straight);
+    const markup = renderToStaticMarkup(<svg><Vehicle3DTruck sensors={[]} readings={[]}
+      steerAngleDeg={Number.NaN} imuOrientation={{ pitch_deg: Number.NaN, roll_deg: Infinity, yaw_deg: Number.NaN }}
+      cameraConfig={{ orbitYawDeg: Number.NaN, cameraPitchDeg: Infinity }} /></svg>);
+    expect(markup).not.toMatch(/NaN|Infinity/);
+    expect(markup).toContain("truck-solid-core");
   });
 
   it("renders malformed live sensor data as an unknown return without breaking geometry", () => {
