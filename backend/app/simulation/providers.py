@@ -74,6 +74,7 @@ class SimulatedRangeSensorProvider(RangeSensorProvider):
         self._sequence = list(acquisition["sequence"])
         self._stagger_ms = int(acquisition["stagger_ms"])
         self._static_circles = []
+        self.last_targets: dict[str, str | None] = {}
         for feature in reference_map.features:
             if feature.feature_type is MapFeatureType.STATIC_OBSTACLE:
                 self._static_circles.append(
@@ -107,6 +108,7 @@ class SimulatedRangeSensorProvider(RangeSensorProvider):
             origin = sensor_origin_world(transform, scene.pose)
             world_bearing = scene.pose.heading_deg + transform.orientation_deg + sample_angle
             hit = cast_ray(origin, world_bearing, maximum, self._segments, dynamic_circles)
+            self.last_targets[sensor_id] = hit.target_id
             fog_penalty = max(0.0, 0.35 - scene.visibility_target) * 0.18
             quality = max(0.7, 0.97 - fog_penalty)
             noise = 0.004 * math.sin(scene.elapsed_s * 4.7 + index * 1.37)

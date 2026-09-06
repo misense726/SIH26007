@@ -6,6 +6,8 @@ import { NavigationMap } from "./NavigationMap";
 import { clipRoad, localPoint } from "./routeGeometry";
 import { isWorldStateSnapshot } from "../state/worldStateSnapshot";
 import type { WorldState } from "../types";
+import { MineFleetMap } from "../twin/MineFleetMap";
+import { createSupervisorViewModel } from "../supervisor/supervisorViewModel";
 
 const vehicle = {
   ...defaultWorldState.vehicles[0],
@@ -30,11 +32,26 @@ const world: WorldState = {
     elapsed_s: 12,
     obstacle: { x_m: 0, y_m: 5 },
     obstacle_radius_m: 0.9,
+    obstacle_detected: true,
     next_instruction: "Obstacle ahead. Prepare to stop",
   },
 };
 
 describe("mine route rendering", () => {
+  it("renders the angled supervisor mine map and shares encounter guidance", () => {
+    const model = createSupervisorViewModel(world);
+    const markup = renderToStaticMarkup(
+      <MineFleetMap
+        features={[]}
+        vehicles={model.vehicles}
+        haul={world.haul_route}
+      />,
+    );
+    expect(markup).toContain("Angled mine map");
+    expect(markup).toContain("3D site");
+    expect(markup).not.toMatch(/NaN|Infinity/);
+    expect(model.issues.some((i) => i.id === "haul-encounter")).toBe(true);
+  });
   it("uses the same vehicle-frame transform for road, truck and obstacle", () => {
     expect(
       localPoint({ x_m: 4, y_m: 0 }, { ...vehicle, heading_deg: 90 }).y_m,
@@ -62,6 +79,7 @@ describe("mine route rendering", () => {
     expect(markup).toContain("DUMPER_02 3D model");
     expect(markup).toContain("Road obstruction");
     expect(markup).toContain("primary truck");
+    expect(markup).not.toContain('stroke="#7dd3fc"');
     expect(markup).not.toMatch(/NaN|Infinity/);
   });
   it("shows guidance and hides moving markers when telemetry disconnects", () => {

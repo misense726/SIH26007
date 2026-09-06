@@ -3,6 +3,7 @@ export type VisibilityState = "GOOD" | "MODERATE" | "LOW" | "VERY_LOW";
 export type EmergencyLevel = "SAFE" | "WARNING" | "CRITICAL" | "EMERGENCY_STOP";
 export type SensorStatus = "HEALTHY" | "DEGRADED" | "STALE" | "OFFLINE";
 export type MapFeatureType =
+  | "TERRAIN"
   | "ROAD"
   | "CENTERLINE"
   | "BERM"
@@ -296,6 +297,12 @@ export interface V2XState {
 }
 
 export interface HaulRouteState {
+  cycle?: number;
+  traffic_slowing?: boolean;
+  lead_waiting?: boolean;
+  obstacle_detected?: boolean;
+  obstacle_distance_m?: number | null;
+  planned_path?: Point2D[];
   origin: string;
   destination: string;
   phase: "HAULING" | "OBSTACLE" | "WAITING" | "ARRIVED";

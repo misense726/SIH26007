@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from "react";
 import type { VehiclePose, WorldState } from "../types";
 import "./navigation.css";
+import { MineCartography, planProjection } from "../maps/MineCartography";
 
 export function NavigationMap({
   world,
@@ -66,7 +67,13 @@ export function NavigationMap({
     <section className="route-navigation" aria-label="Route navigation">
       <header
         className="route-guidance"
-        data-phase={connected ? haul?.phase : "OFFLINE"}
+        data-phase={
+          connected
+            ? haul?.traffic_slowing || haul?.lead_waiting
+              ? "OBSTACLE"
+              : haul?.phase
+            : "OFFLINE"
+        }
       >
         <span className="route-turn-symbol" aria-hidden="true">
           {haul?.phase === "ARRIVED"
@@ -78,7 +85,9 @@ export function NavigationMap({
         <div>
           <span>
             {connected
-              ? (haul?.destination ?? "Assigned route")
+              ? haul?.destination === "Dump point"
+                ? "Crusher / unloading"
+                : (haul?.destination ?? "Assigned route")
               : "Navigation unavailable"}
           </span>
           <h3>
@@ -136,18 +145,22 @@ export function NavigationMap({
             fill="url(#mine-terrain)"
             className="mine-terrain"
           />
-          {features
-            .filter((f) => f.geometry_type === "POLYGON")
-            .map((f) => (
-              <polygon
-                key={f.feature_id}
-                points={f.points.map((p) => `${p.x_m},${-p.y_m}`).join(" ")}
-                className={
-                  f.feature_type === "HAZARD_ZONE" ? "nav-hazard" : "nav-road"
-                }
-                strokeWidth="0.4"
-              />
-            ))}
+          {haul && (
+            <MineCartography features={features} project={planProjection} />
+          )}
+          {!haul &&
+            features
+              .filter((f) => f.geometry_type === "POLYGON")
+              .map((f) => (
+                <polygon
+                  key={f.feature_id}
+                  points={f.points.map((p) => `${p.x_m},${-p.y_m}`).join(" ")}
+                  className={
+                    f.feature_type === "HAZARD_ZONE" ? "nav-hazard" : "nav-road"
+                  }
+                  strokeWidth="0.4"
+                />
+              ))}
           <polyline
             points={path}
             fill="none"
@@ -155,6 +168,18 @@ export function NavigationMap({
             strokeWidth="1.65"
             strokeLinejoin="round"
           />
+          {connected && haul?.obstacle_detected && (
+            <polyline
+              points={haul.planned_path
+                ?.map((p) => `${p.x_m},${-p.y_m}`)
+                .join(" ")}
+              fill="none"
+              stroke="#74e5fb"
+              strokeWidth="0.65"
+              strokeLinejoin="round"
+              aria-label="Planned path around rock"
+            />
+          )}
           <polyline
             points={path}
             fill="none"
@@ -162,36 +187,38 @@ export function NavigationMap({
             strokeWidth="1.05"
             strokeLinejoin="round"
           />
-          {features
-            .filter(
-              (f) =>
-                f.feature_type === "START" || f.feature_type === "DESTINATION",
-            )
-            .map((f) => {
-              const p = f.points[0];
-              return (
-                <g
-                  key={f.feature_id}
-                  transform={`translate(${p.x_m} ${-p.y_m})`}
-                >
-                  <circle r="2.8" className="nav-site" />
-                  <circle
-                    r="0.9"
-                    fill={f.feature_type === "START" ? "#d97706" : "#23835e"}
-                  />
-                  <text
-                    y="5.5"
-                    textAnchor="middle"
-                    fontSize={Math.max(1.8, markerScale * 1.6)}
-                    fontWeight="700"
-                    className="nav-label"
+          {!haul &&
+            features
+              .filter(
+                (f) =>
+                  f.feature_type === "START" ||
+                  f.feature_type === "DESTINATION",
+              )
+              .map((f) => {
+                const p = f.points[0];
+                return (
+                  <g
+                    key={f.feature_id}
+                    transform={`translate(${p.x_m} ${-p.y_m})`}
                   >
-                    {f.label}
-                  </text>
-                </g>
-              );
-            })}
-          {connected && haul?.obstacle && (
+                    <circle r="2.8" className="nav-site" />
+                    <circle
+                      r="0.9"
+                      fill={f.feature_type === "START" ? "#d97706" : "#23835e"}
+                    />
+                    <text
+                      y="5.5"
+                      textAnchor="middle"
+                      fontSize={Math.max(1.8, markerScale * 1.6)}
+                      fontWeight="700"
+                      className="nav-label"
+                    >
+                      {f.label}
+                    </text>
+                  </g>
+                );
+              })}
+          {connected && haul?.obstacle && haul.obstacle_detected && (
             <g
               transform={`translate(${haul.obstacle.x_m} ${-haul.obstacle.y_m})`}
               aria-label="Obstruction on haul road"

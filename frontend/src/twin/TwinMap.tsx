@@ -3,7 +3,8 @@ import L from "leaflet";
 import { DEFAULT_CAMPUS_CONFIG, EMPTY_MAP_TILE } from "../maps/campusConfig";
 import { cartesianToGeodetic } from "../maps/locationProvider";
 import type { SupervisorVehicle } from "../supervisor/supervisorViewModel";
-import type { MapFeature, Point2D } from "../types";
+import type { HaulRouteState, MapFeature, Point2D } from "../types";
+import { MineFleetMap } from "./MineFleetMap";
 
 const WIDTH = 960;
 const HEIGHT = 520;
@@ -66,6 +67,7 @@ function statusColor(vehicle: SupervisorVehicle): string {
 }
 
 interface TwinMapProps {
+  haul?: HaulRouteState | null;
   vehicles: SupervisorVehicle[];
   features: MapFeature[];
   mapName: string;
@@ -73,7 +75,11 @@ interface TwinMapProps {
   onSelectTruck?: (truckId: string | null) => void;
 }
 
-export function TwinMap({
+export function TwinMap(props: TwinMapProps) {
+  return props.haul ? <MineFleetMap {...props} /> : <StandardTwinMap {...props} />;
+}
+
+function StandardTwinMap({
   vehicles,
   features,
   mapName,

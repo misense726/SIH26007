@@ -443,118 +443,21 @@ h3 {
   stroke-linejoin: round;
 }
 
-.simulation-controls {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  margin-bottom: 18px;
-  padding: 9px 10px;
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  background: var(--surface-control);
-}
 
-.simulation-control-heading {
-  display: flex;
-  min-width: 155px;
-  align-items: center;
-  gap: 10px;
-}
 
-.simulation-control-heading strong {
-  font-family: var(--mono);
-  font-size: 0.7rem;
-  font-weight: 500;
-}
 
-.simulation-label {
-  padding: 6px 8px;
-  border: 1px solid var(--accent);
-  border-radius: 999px;
-  color: var(--accent-contrast);
-  background: var(--accent);
-  font-family: var(--mono);
-  font-size: 0.58rem;
-  font-weight: 700;
-}
 
-.scenario-buttons {
-  display: grid;
-  flex: 1;
-  grid-template-columns: repeat(4, minmax(72px, 1fr));
-  gap: 5px;
-}
 
-.scenario-buttons button,
-.simulation-actions button {
-  min-height: 34px;
-  border: 1px solid var(--border-strong);
-  border-radius: 8px;
-  color: var(--text-soft);
-  background: var(--surface-subtle);
-  cursor: pointer;
-  font-size: 0.68rem;
-  font-weight: 600;
-}
 
-.scenario-buttons button:hover,
-.simulation-actions button:hover {
-  color: var(--text-strong);
-  border-color: var(--accent-line);
-  background: var(--accent-soft);
-}
 
-.scenario-buttons button.active {
-  color: var(--accent-contrast);
-  border-color: var(--accent);
-  background: var(--accent);
-}
 
-.scenario-buttons .scenario-fog.active {
-  color: var(--sensor-contrast);
-  border-color: var(--sensor);
-  background: var(--sensor);
-}
 
-.scenario-buttons .scenario-obstacle.active {
-  color: var(--warning-contrast);
-  border-color: var(--warning);
-  background: var(--warning);
-}
 
-.scenario-buttons .scenario-emergency.active {
-  color: var(--danger-contrast);
-  border-color: var(--danger);
-  background: var(--danger);
-}
 
-.scenario-buttons button:disabled,
-.simulation-actions button:disabled {
-  cursor: wait;
-  opacity: 0.55;
-}
 
-.simulation-actions {
-  display: flex;
-  gap: 5px;
-}
 
-.simulation-actions button {
-  padding: 0 12px;
-  white-space: nowrap;
-}
 
-.simulation-request-status {
-  min-width: 70px;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 0.57rem;
-  text-align: right;
-}
 
-.simulation-request-status.status-error {
-  color: var(--danger);
-}
 
 .connection,
 .mode-pill,
@@ -3042,7 +2945,6 @@ footer {
 }
 
 .view-switcher,
-.simulation-controls,
 .theme-toggle,
 .awareness-mode-switcher,
 .awareness-mode-status,
@@ -3125,23 +3027,9 @@ footer {
     flex: 1;
   }
 
-  .simulation-controls {
-    align-items: stretch;
-    flex-wrap: wrap;
-  }
 
-  .simulation-control-heading {
-    flex: 1;
-  }
 
-  .scenario-buttons {
-    order: 3;
-    flex-basis: 100%;
-  }
 
-  .simulation-request-status {
-    display: none;
-  }
 
   .supervisor-lower-grid {
     grid-template-columns: 1fr;
@@ -3267,26 +3155,10 @@ footer {
     gap: 5px;
   }
 
-  .simulation-controls {
-    gap: 9px;
-    padding: 9px;
-  }
 
-  .simulation-control-heading {
-    min-width: 125px;
-  }
 
-  .scenario-buttons {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
 
-  .simulation-actions {
-    margin-left: auto;
-  }
 
-  .simulation-actions button {
-    padding: 0 9px;
-  }
 
   .camera-awareness,
   .speed-card,

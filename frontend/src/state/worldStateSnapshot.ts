@@ -8,6 +8,7 @@ const EMERGENCY_STATES = new Set(["SAFE", "WARNING", "CRITICAL", "EMERGENCY_STOP
 const SENSOR_STATES = new Set(["HEALTHY", "DEGRADED", "STALE", "OFFLINE"]);
 const VISIBILITY_STATES = new Set(["GOOD", "MODERATE", "LOW", "VERY_LOW"]);
 const MAP_FEATURE_TYPES = new Set([
+  "TERRAIN",
   "ROAD",
   "CENTERLINE",
   "BERM",
@@ -467,6 +468,11 @@ export function isWorldStateSnapshot(value: unknown): value is WorldState {
       hasStrings(value.haul_route, ["origin", "destination", "next_instruction"]) &&
       ["HAULING", "OBSTACLE", "WAITING", "ARRIVED"].includes(String(value.haul_route.phase)) &&
       hasFiniteNumbers(value.haul_route, ["distance_m", "total_distance_m", "remaining_m", "elapsed_s", "obstacle_radius_m"]) &&
+      (value.haul_route.planned_path === undefined || (Array.isArray(value.haul_route.planned_path) && value.haul_route.planned_path.every(isPoint2D))) &&
+      (value.haul_route.obstacle_distance_m === undefined || isNullableFiniteNumber(value.haul_route.obstacle_distance_m)) &&
+      (value.haul_route.traffic_slowing === undefined || typeof value.haul_route.traffic_slowing === "boolean") &&
+      (value.haul_route.lead_waiting === undefined || typeof value.haul_route.lead_waiting === "boolean") &&
+      (value.haul_route.obstacle_detected === undefined || typeof value.haul_route.obstacle_detected === "boolean") &&
       (value.haul_route.obstacle === null || isPoint2D(value.haul_route.obstacle))
     ))
   );

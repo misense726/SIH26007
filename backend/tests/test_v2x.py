@@ -270,7 +270,7 @@ def test_v2x_api_endpoints() -> None:
         assert state["enabled"] is True
         assert state["node_id"] == "DUMPER_01"
         assert len(state["infrastructure_nodes"]) >= 2
-        assert [peer["vehicle_id"] for peer in state["active_peers"]] == ["DUMPER_02"]
+        assert {peer["vehicle_id"] for peer in state["active_peers"]} == {"DUMPER_02", "DUMPER_03"}
 
         # POST /api/v2x/messages/bsm
         bsm_payload = {

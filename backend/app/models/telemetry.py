@@ -41,6 +41,7 @@ class SensorStatus(StrEnum):
 
 
 class MapFeatureType(StrEnum):
+    TERRAIN = "TERRAIN"
     ROAD = "ROAD"
     CENTERLINE = "CENTERLINE"
     BERM = "BERM"
@@ -324,6 +325,12 @@ class SimulationControlRequest(TelemetryModel):
 
 
 class HaulRouteState(TelemetryModel):
+    cycle: int = Field(default=1, ge=1)
+    traffic_slowing: bool = False
+    obstacle_detected: bool = False
+    obstacle_distance_m: float | None = None
+    lead_waiting: bool = False
+    planned_path: list[Point2D] = Field(default_factory=list)
     origin: str = "Mine loading bay"
     destination: str = "Dump point"
     phase: Literal["HAULING", "OBSTACLE", "WAITING", "ARRIVED"] = "HAULING"

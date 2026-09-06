@@ -529,7 +529,12 @@ export function SpatialDashboard({
 
             {/* Live Threat Pill HUD */}
             <div className="spatial-threat-pill">
-              {closestAlert ? (
+              {connected && hasCompleteCoverage && world.haul_route && (world.haul_route.obstacle_detected || world.haul_route.traffic_slowing || world.haul_route.lead_waiting) ? (
+                <span className={`threat-pill ${world.emergency.motor_cut ? "threat-danger" : "threat-caution"}`} role="status">
+                  <i className="threat-status-dot" aria-hidden="true" />
+                  {world.haul_route.next_instruction}
+                </span>
+              ) : closestAlert ? (
                 <span className="threat-pill threat-danger">
                   <i className="threat-status-dot" aria-hidden="true" />
                   Hazard · {closestAlert.sensor.label} ·{" "}

@@ -31,7 +31,9 @@ export function HaulRoad({
   return (
     <g className="haul-road-layer" aria-label="Reference haul road">
       {world.reference_map?.features
-        .filter((f) => f.feature_type === "ROAD")
+        .filter(
+          (f) => f.feature_type === "ROAD" || f.feature_type === "HAZARD_ZONE",
+        )
         .map((f) => (
           <polygon
             key={f.feature_id}
@@ -39,52 +41,11 @@ export function HaulRoad({
               clipRoad(f.points.map((p) => localPoint(p, vehicle))),
               camera,
             )}
-            fill="#34404a"
-            stroke="#c1a46b"
-            strokeWidth="5"
+            fill={f.feature_type === "ROAD" ? "#756d58" : "#595644"}
+            stroke="#8d8367"
+            strokeWidth="1.5"
           />
         ))}
-      {world.reference_map?.features
-        .filter((f) => f.feature_type === "ROUTE")
-        .flatMap((f) => {
-          const segments: ReactNode[] = [];
-          for (let i = 1; i < f.points.length; i++) {
-            const start = f.points[i - 1],
-              end = f.points[i];
-            const length = Math.hypot(end.x_m - start.x_m, end.y_m - start.y_m);
-            for (let t = 0; t < length; t += 1.5) {
-              const point = {
-                x_m: start.x_m + ((end.x_m - start.x_m) * t) / length,
-                y_m: start.y_m + ((end.y_m - start.y_m) * t) / length,
-              };
-              const local = localPoint(point, vehicle);
-              if (Math.hypot(local.x_m, local.y_m) > 10) continue;
-              const next = localPoint(
-                {
-                  x_m: point.x_m + ((end.x_m - start.x_m) * 0.65) / length,
-                  y_m: point.y_m + ((end.y_m - start.y_m) * 0.65) / length,
-                },
-                vehicle,
-              );
-              const a = projectVehiclePointWithCamera(local, camera),
-                b = projectVehiclePointWithCamera(next, camera);
-              segments.push(
-                <line
-                  key={`${f.feature_id}-${i}-${t}`}
-                  x1={a.x}
-                  y1={a.y}
-                  x2={b.x}
-                  y2={b.y}
-                  stroke="#7dd3fc"
-                  strokeWidth="4"
-                  opacity="0.7"
-                  strokeLinecap="round"
-                />,
-              );
-            }
-          }
-          return segments;
-        })}
     </g>
   );
 }
@@ -93,12 +54,16 @@ function RoadObstacle({
   point,
   radius,
   camera,
+  label = "Rock",
+  height = radius * 1.2,
 }: {
   point: VehiclePoint3D;
   radius: number;
   camera: CameraViewConfig;
+  label?: string;
+  height?: number;
 }) {
-  const vertices = [0, 0.75].flatMap((z_m) => [
+  const vertices = [0, height].flatMap((z_m) => [
     { x_m: point.x_m - radius, y_m: point.y_m - radius, z_m },
     { x_m: point.x_m + radius, y_m: point.y_m - radius, z_m },
     { x_m: point.x_m + radius, y_m: point.y_m + radius, z_m },
@@ -123,27 +88,33 @@ function RoadObstacle({
           0,
         ),
     );
-  const label = projectVehiclePointWithCamera({ ...point, z_m: 1.15 }, camera);
+  const labelPoint = projectVehiclePointWithCamera(
+    { ...point, z_m: height + 0.4 },
+    camera,
+  );
   return (
-    <g aria-label="Road obstruction" className="haul-obstacle">
+    <g
+      aria-label={label === "Rock" ? "Road obstruction" : label}
+      className="haul-obstacle"
+    >
       {faces.map((f) => (
         <polygon
           key={f.i}
           points={polygon(f.points, camera)}
-          fill={f.i === 4 ? "#fbbf24" : f.i % 2 ? "#9a3412" : "#c2410c"}
-          stroke="#fdba74"
+          fill={f.i === 4 ? "#a6a18c" : f.i % 2 ? "#595b53" : "#79796a"}
+          stroke="#c7b894"
           strokeWidth="1.2"
         />
       ))}
       <text
-        x={label.x}
-        y={label.y}
+        x={labelPoint.x}
+        y={labelPoint.y}
         textAnchor="middle"
         fill="#fef3c7"
         fontSize="12"
         fontWeight="700"
       >
-        Road obstruction
+        {label}
       </text>
     </g>
   );
@@ -168,6 +139,29 @@ export function HaulTraffic({
     },
   ];
   if (world.haul_route) {
+    const crusher = world.reference_map?.features.find(
+      (f) => f.feature_type === "DESTINATION",
+    )?.points[0];
+    if (crusher) {
+      const point = localPoint(
+        { x_m: crusher.x_m + 4, y_m: crusher.y_m },
+        vehicle,
+      );
+      if (Math.hypot(point.x_m, point.y_m) < 14)
+        entities.push({
+          id: "crusher",
+          point,
+          node: (
+            <RoadObstacle
+              point={point}
+              radius={1.5}
+              height={2.8}
+              camera={camera}
+              label="Crusher"
+            />
+          ),
+        });
+    }
     for (const peer of world.vehicles) {
       if (
         peer.vehicle_id === vehicle.vehicle_id ||
@@ -199,7 +193,7 @@ export function HaulTraffic({
       });
     }
     const obstacle = world.haul_route.obstacle;
-    if (obstacle) {
+    if (obstacle && world.haul_route.obstacle_detected) {
       const point = localPoint(obstacle, vehicle);
       if (Math.hypot(point.x_m, point.y_m) <= 10)
         entities.push({
@@ -225,6 +219,39 @@ export function HaulTraffic({
       {entities.map((e) => (
         <Fragment key={e.id}>{e.node}</Fragment>
       ))}
+      {world.haul_route?.phase === "ARRIVED" &&
+        world.haul_route.destination === "Dump point" && (
+          <g aria-label="Unloading ore at crusher">
+            {Array.from({ length: 6 }, (_, i) => {
+              const start = projectVehiclePointWithCamera(
+                { x_m: ((i % 3) - 1) * 0.25, y_m: -1, z_m: 1.1 },
+                camera,
+              );
+              const end = projectVehiclePointWithCamera(
+                { x_m: ((i % 3) - 1) * 0.3, y_m: -2, z_m: 0.1 },
+                camera,
+              );
+              return (
+                <circle key={i} r="3" fill="#8e6a4c">
+                  <animate
+                    attributeName="cx"
+                    values={`${start.x};${end.x}`}
+                    dur="0.9s"
+                    begin={`${i * 0.15}s`}
+                    repeatCount="indefinite"
+                  />
+                  <animate
+                    attributeName="cy"
+                    values={`${start.y};${end.y}`}
+                    dur="0.9s"
+                    begin={`${i * 0.15}s`}
+                    repeatCount="indefinite"
+                  />
+                </circle>
+              );
+            })}
+          </g>
+        )}
     </>
   );
 }

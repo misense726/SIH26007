@@ -5,22 +5,37 @@ simulation is **Mine to dump**. Opening the dashboard without a view hash select
 Spatial after simulated telemetry connects. Explicit view links still work;
 LIVE mode retains the driver view.
 
-The truck leaves the mine loading bay, passes an oncoming dumper, encounters a
-road obstruction, and reaches the dump point. The obstruction appears after
-12 simulation seconds. Deterministic ToF range logic stops the truck. After six
-seconds stopped, the simulation clears the obstruction and resets its simulated
-stop output. The truck resumes and stops at the destination. **Reset route**
-restarts the run. **Pause** freezes travel and encounter timing for both vehicles.
+The continuous haul circuit follows a narrow, unmarked track through a conceptual
+open-cast mine. A small rock appears on the outbound track. A valid front ToF
+return enables the rock warning and a configured left-side detour. The rock stays
+in place; it is not deleted to let the truck pass. Both opposing trucks reduce
+speed during their encounter. A third truck ahead waits, then takes the service
+road. The primary truck stops at the crusher to unload, returns to the loading
+area, pauses to load, and starts another trip. Each encounter has distinct guidance.
+
+The scenario toolbar is removed. The status header retains SIMULATED, including
+on mobile. Existing simulation control endpoints remain available for testing.
+Pausing through the API freezes travel and encounter timing for all vehicles.
 
 The road, vehicle poses, obstacle and trip progress originate in backend
 `WorldState`. The range provider raycasts the same obstacle and peer position
-that the spatial scene and navigation map draw. The peer also publishes simulated
+that the spatial scene and navigation map draw. Both peers publish simulated
 V2V messages. No camera, radar or browser animation controls braking.
 
 The navigation map is a local site plan with a blue route, heading markers,
 obstruction marker, distance remaining, progress, zoom, drag and follow controls.
 It works offline and uses no Google Maps services, imagery or API keys. This is
 a fictional mine route in local metres, not a surveyed geographic location.
+The supervisor starts with an angled mine map and offers a flat plan view.
+Pit benches, contours, the service spur and loading/unloading locations are
+backend map features. TERRAIN features are cartography only, never sensed obstacles.
+The pit exclusion polygon remains a real corridor hazard.
+
+This is a configured simulation controller, not Tesla autonomy or a general
+obstacle planner. ToF confirms geometry, not rock classification. The simulator
+knows the spawned object's identity and uses that identity for the rock label.
+Real hardware keeps its existing sensor limits and deterministic stop controller.
+The detour is configured for this track; this does not prove safe real-world passing.
 
 Configuration is under `demo.haul` in `config/demo.yaml`. It owns route points,
 road width, traffic position/speed, obstacle position/radius and encounter times.
@@ -29,7 +44,8 @@ Hardware providers and calibration are unchanged.
 
 The detailed yellow truck mesh, steering, attitude, headlights, sensor effects
 and three-layer ToF points are retained. A second instance uses its own gradient
-IDs and a scene offset. Road geometry is clipped before projection, and traffic
+IDs and a scene offset. Road markings are absent in Spatial; blue route guidance
+is confined to the navigation map. Road geometry is clipped before projection, and traffic
 is sorted by camera depth. This remains a 2.5D scene; SVG face sorting is not a
 full depth buffer and the illustrative truck dimensions are not a physical
 vehicle collision envelope.

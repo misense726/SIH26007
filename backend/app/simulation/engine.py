@@ -439,10 +439,16 @@ class FullSimulator:
         self._timestamp_ms += round(self._interval_s * 1000.0)
         timestamp = self._timestamp_ms
         peer = None
+        lead = None
         if self._haul is not None:
+            if (self._movement_running and self._haul.unloaded
+                    and self._haul.dwell_s >= self._haul.config["site_dwell_s"]):
+                self._haul.next_cycle()
+                self._route_distance_m = 0.0
+                self._configure_pipeline()
             was_enabled = self._obstacle_enabled
             self._obstacle_enabled = self._haul.advance(
-                self._interval_s, self._movement_running, self.emergency_output.active
+                self._interval_s, self._movement_running
             )
             self._obstacle_position = self._haul.obstacle_position()
             self._active_obstacle_radius_m = self._haul.config["obstacle_radius_m"]
@@ -459,25 +465,39 @@ class FullSimulator:
                 self._route_speed_mps * self._speed_scale,
                 self._max_demo_speed_mps,
             )
+            if self._haul is not None:
+                requested_speed = self._haul.speed_limit(
+                    self._route_distance_m, requested_speed, self._interval_s
+                )
             remaining_m = max(0.0, self._route.total_length_m - self._route_distance_m)
             travelled_m = min(requested_speed * self._interval_s, remaining_m)
             self._route_distance_m += travelled_m
             speed = travelled_m / self._interval_s
         route_sample = self._route.sample(self._route_distance_m)
-        heading_delta = (route_sample.heading_deg - self._last_heading_deg + 180.0) % 360.0 - 180.0
+        offset = self._haul.offset(self._route_distance_m) if self._haul else 0.0
+        heading = math.radians(route_sample.heading_deg)
+        vehicle_heading = route_sample.heading_deg
+        if self._haul is not None:
+            slope = (self._haul.offset(self._route_distance_m + 0.05)
+                     - self._haul.offset(self._route_distance_m - 0.05)) / 0.1
+            vehicle_heading = (vehicle_heading + math.degrees(math.atan(slope))) % 360
+        heading_delta = (vehicle_heading - self._last_heading_deg + 180.0) % 360.0 - 180.0
         yaw_rate = heading_delta / self._interval_s
-        self._last_heading_deg = route_sample.heading_deg
+        self._last_heading_deg = vehicle_heading
         ground_pose = VehiclePose(
             timestamp_ms=timestamp,
             vehicle_id="DUMPER_01",
-            x_m=route_sample.x_m,
-            y_m=route_sample.y_m,
-            heading_deg=route_sample.heading_deg,
+            x_m=route_sample.x_m + math.cos(heading) * offset,
+            y_m=route_sample.y_m - math.sin(heading) * offset,
+            heading_deg=vehicle_heading,
             speed_mps=speed,
             position_confidence=1.0,
             mode=DataMode.SIMULATED,
         )
         self._advance_scanners()
+        if self._haul is not None:
+            peer = self._haul.peer(timestamp, self._movement_running)
+            lead = self._haul.lead(timestamp, self._movement_running)
         self._scene = SimulatedScene(
             timestamp_ms=timestamp,
             elapsed_s=self._elapsed_s,
@@ -493,11 +513,11 @@ class FullSimulator:
             rear_scanner_angle_deg=self._rear_scanner_angle_deg,
             aruco_visible=self._aruco_visible(),
             traffic_targets=(
-                (CircleTarget(
-                    peer.vehicle_id,
-                    Point2D(x_m=peer.x_m, y_m=peer.y_m),
+                tuple(CircleTarget(
+                    other.vehicle_id,
+                    Point2D(x_m=other.x_m, y_m=other.y_m),
                     self._haul.config["peer_radius_m"],
-                ),)
+                ) for other in (peer, lead))
                 if peer is not None else ()
             ),
         )
@@ -517,6 +537,8 @@ class FullSimulator:
             mode=DataMode.SIMULATED,
         )
         readings = await self.range_provider.read_ranges()
+        if self._haul is not None:
+            self._haul.observe(readings, self.range_provider.last_targets)
         camera_sample = await self.camera_provider.read_camera()
         camera_state = CameraState(
             timestamp_ms=timestamp,
@@ -583,16 +605,16 @@ class FullSimulator:
             corridor,
             emergency.nearest_obstacle_m,
         )
-        if peer is not None:
+        for other in ([peer, lead] if peer is not None else []):
             self._v2x_manager.receive_bsm(
                 V2VBasicSafetyMessage(
-                    message_id=f"haul-peer-{timestamp}",
+                    message_id=f"haul-{other.vehicle_id}-{timestamp}",
                     timestamp_ms=timestamp,
-                    vehicle_id=peer.vehicle_id,
-                    x_m=peer.x_m,
-                    y_m=peer.y_m,
-                    heading_deg=peer.heading_deg,
-                    speed_mps=peer.speed_mps,
+                    vehicle_id=other.vehicle_id,
+                    x_m=other.x_m,
+                    y_m=other.y_m,
+                    heading_deg=other.heading_deg,
+                    speed_mps=other.speed_mps,
                 )
             )
         sequence = await self._store.sequence()
@@ -601,7 +623,7 @@ class FullSimulator:
                 generated_at_ms=timestamp,
                 sequence=sequence + 1,
                 mode=DataMode.SIMULATED,
-                vehicles=[pose, peer] if peer is not None else [pose],
+                vehicles=[pose, peer, lead] if peer is not None else [pose],
                 reference_map=self._reference_map,
                 ranges=readings,
                 motion=MotionState(
@@ -635,7 +657,7 @@ class FullSimulator:
                 v2x=self._v2x_manager.snapshot(),
                 haul_route=(
                     self._haul.snapshot(
-                        self._route_distance_m, self._obstacle_enabled, emergency.motor_cut
+                        self._route_distance_m, self._obstacle_enabled, emergency.motor_cut, speed
                     )
                     if self._haul is not None else None
                 ),

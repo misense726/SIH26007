@@ -23,8 +23,8 @@ FogSen currently includes:
 - configuration for the vehicle, five ToFs, calibration, safety, and the demo;
 - provider interfaces for simulated, wired live, replay, and future hardware;
 - a React and TypeScript dashboard connected to backend telemetry;
-- a default mine-to-dump spatial simulation with oncoming traffic, an obstacle
-  encounter, simulated automatic stop and a navigation map;
+- a continuous mine-to-crusher circuit with sensor-confirmed rock avoidance,
+  opposing traffic, a turning lead truck, an angled mine map and navigation;
 - separate Driver workspace navigation for Awareness, Spatial, and Calibration,
   and a Supervisor workspace for Fleet command;
 - supervisor Overview, Fleet, Alerts, and Network sections with active exceptions

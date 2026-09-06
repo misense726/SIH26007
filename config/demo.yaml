@@ -36,13 +36,23 @@ demo:
       obstacle_ahead_m: 0.9
       obstacle_radius_m: 0.45
   haul:
-    route_points_m: [[0, 0], [0, 30], [0.6, 33], [2.3, 35.7], [5, 37.4], [8, 38], [30, 38]]
-    road_half_width_m: 4.8
-    peer_start_distance_m: 18
+    route_points_m: [[0, 0], [0, 22], [2, 26], [6, 28], [20, 30], [28, 34], [32, 40], [32, 44], [29, 48], [25, 50], [10, 52], [-8, 47], [-18, 37], [-22, 24], [-20, 12], [-16, 6], [-10, 2], [0, 0]]
+    road_half_width_m: 3.4
+    dump_waypoint: 7
+    site_dwell_s: 4
+    traffic_slow_distance_m: 9
+    traffic_speed_scale: 0.35
+    acceleration_mps2: 0.6
+    rock_detour_offset_m: -1.65
+    rock_detour_span_m: 4.5
+    lead_distance_m: 38
+    lead_yield_s: 3
+    lead_speed_mps: 0.9
+    lead_branch_points_m: [[26, 20], [40, 20]]
+    peer_start_distance_m: 45
     peer_speed_mps: 0.8
-    peer_lane_offset_m: 2.8
+    peer_lane_offset_m: 2.1
     peer_radius_m: 0.85
-    obstacle_appears_s: 12
-    obstacle_distance_m: 24
-    obstacle_radius_m: 0.9
-    obstacle_hold_s: 6
+    obstacle_appears_s: 2
+    obstacle_distance_m: 19
+    obstacle_radius_m: 0.32

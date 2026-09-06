@@ -178,7 +178,7 @@ function SelectedVehiclePanel({
 
 export function SupervisorDashboard({ world, connection }: SupervisorDashboardProps) {
   const model = useMemo(() => createSupervisorViewModel(world), [world]);
-  const [activeSection, setActiveSection] = useState<SupervisorSection>("overview");
+  const [activeSection, setActiveSection] = useState<SupervisorSection>(world.haul_route ? "fleet" : "overview");
   const [selectedTruckId, setSelectedTruckId] = useState<string | null>(world.primary_vehicle_id);
 
   useEffect(() => {
@@ -289,6 +289,7 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
                 <button type="button" className="panel-text-action" onClick={() => setActiveSection("fleet")}>Open fleet view</button>
               </header>
               <TwinMap
+                haul={world.haul_route}
                 vehicles={model.vehicles}
                 features={world.reference_map?.features ?? []}
                 mapName={model.mapName}
@@ -354,6 +355,7 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
               <span className="panel-context-label">Select a marker or vehicle row</span>
             </header>
             <TwinMap
+              haul={world.haul_route}
               vehicles={model.vehicles}
               features={world.reference_map?.features ?? []}
               mapName={model.mapName}

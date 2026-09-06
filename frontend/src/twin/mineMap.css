@@ -1,0 +1,54 @@
+.mine-fleet-map {
+  background: #344d3c;
+  overflow: hidden;
+  border-radius: 12px;
+}
+.mine-fleet-map > svg {
+  display: block;
+  width: 100%;
+  height: min(55vh, 560px);
+  min-height: 320px;
+  touch-action: none;
+  cursor: grab;
+}
+.mine-map-tools,
+.mine-map-key {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 12px 18px;
+  color: #eef1dc;
+  background: #263f32;
+}
+.mine-map-tools > div {
+  display: flex;
+  gap: 5px;
+}
+.mine-map-tools button {
+  color: #eff3e5;
+  background: #46634e;
+  border: 1px solid #6f8873;
+  border-radius: 5px;
+  padding: 9px 12px;
+  cursor: pointer;
+}
+.mine-map-tools button:focus-visible,
+.mine-fleet-map g[role="button"]:focus-visible {
+  outline: 3px solid #8cd1ff;
+}
+.mine-map-key {
+  font-size: 12px;
+  justify-content: flex-start;
+  gap: 24px;
+}
+@media (max-width: 680px) {
+  .mine-fleet-map > svg {
+    min-height: 240px;
+    height: 240px;
+  }
+  .mine-map-tools {
+    padding: 10px;
+  }
+}

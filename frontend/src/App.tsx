@@ -5,7 +5,6 @@ import { AppShell } from "./layout/AppShell";
 import { DashboardViewRouter } from "./layout/DashboardViewRouter";
 import { useDashboardNavigation } from "./layout/useDashboardNavigation";
 import { DashboardErrorBoundary } from "./components/DashboardErrorBoundary";
-import { SimulationControls } from "./simulation/SimulationControls";
 import { useTelemetry } from "./state/useTelemetry";
 import { applyTheme, readInitialTheme, saveTheme, type Theme } from "./theme";
 import "./styles.css";
@@ -45,10 +44,6 @@ export default function App() {
       mode={world.mode}
     >
       <DashboardErrorBoundary resetKey={view}>
-        {connection === "CONNECTED" && world.mode === "SIMULATED" && view !== "SETTINGS" && (
-          <SimulationControls simulation={world.simulation} />
-        )}
-
         <DashboardViewRouter
           view={view}
           world={world}

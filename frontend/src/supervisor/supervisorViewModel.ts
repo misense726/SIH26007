@@ -268,6 +268,17 @@ export function createSupervisorViewModel(world: WorldState): SupervisorViewMode
     });
   }
 
+  const haul = world.haul_route;
+  if (haul && (haul.obstacle_detected || haul.traffic_slowing || haul.lead_waiting)) {
+    issues.push({
+      id: "haul-encounter",
+      severity: "WARNING",
+      kind: "SAFETY",
+      vehicleId: world.primary_vehicle_id,
+      title: haul.next_instruction,
+      detail: haul.obstacle_detected ? "Range-confirmed rock on the assigned track." : "Vehicle coordination on the haul track.",
+    });
+  }
   issues.sort((left, right) => {
     if (left.severity !== right.severity) return left.severity === "CRITICAL" ? -1 : 1;
     return left.vehicleId.localeCompare(right.vehicleId);
