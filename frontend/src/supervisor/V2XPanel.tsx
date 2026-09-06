@@ -11,9 +11,9 @@ interface BroadcastNotice {
   message: string;
 }
 
-type V2XTab = "peers" | "advisories" | "log";
+type V2XTab = "links" | "advisories" | "log";
 
-const V2X_TABS: V2XTab[] = ["peers", "advisories", "log"];
+const V2X_TABS: V2XTab[] = ["links", "advisories", "log"];
 
 function formatPacketTime(timestampMs: number): string {
   if (!timestampMs) return "--:--:--";
@@ -21,8 +21,15 @@ function formatPacketTime(timestampMs: number): string {
   return date.toTimeString().split(" ")[0];
 }
 
+function formatPeerAge(lastSeenMs: number, referenceTimestampMs: number): string {
+  const ageMs = Math.max(0, referenceTimestampMs - lastSeenMs);
+  if (ageMs < 1_000) return "Now";
+  if (ageMs < 60_000) return `${Math.round(ageMs / 1_000)}s ago`;
+  return `${Math.round(ageMs / 60_000)}m ago`;
+}
+
 export function V2XPanel({ v2x }: V2XPanelProps) {
-  const [activeTab, setActiveTab] = useState<V2XTab>("peers");
+  const [activeTab, setActiveTab] = useState<V2XTab>("links");
   const [isBroadcasting, setIsBroadcasting] = useState(false);
   const [broadcastNotice, setBroadcastNotice] = useState<BroadcastNotice | null>(null);
 
@@ -31,8 +38,8 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
       <article className="operations-card v2x-card" aria-label="Simulated V2X monitor">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">SIMULATED V2X</p>
-            <h2>Vehicle coordination</h2>
+            <p className="eyebrow">NETWORK SIMULATION</p>
+            <h2>Coordination network</h2>
           </div>
           <span className="source-badge">SIMULATED</span>
         </div>
@@ -46,12 +53,12 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
       <article className="operations-card v2x-card" aria-label="Simulated V2X monitor">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">SIMULATED V2X</p>
-            <h2>Vehicle coordination</h2>
+            <p className="eyebrow">NETWORK SIMULATION</p>
+            <h2>Coordination network</h2>
           </div>
           <span className="source-badge">SIMULATED</span>
         </div>
-        <p className="v2x-empty-state">V2X simulation paused.</p>
+        <p className="v2x-empty-state">Coordination network paused.</p>
       </article>
     );
   }
@@ -135,8 +142,8 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
     <article className="operations-card v2x-card" aria-label="Simulated V2X monitor">
       <div className="panel-heading">
         <div>
-          <p className="eyebrow">SIMULATED V2X</p>
-          <h2>V2X simulation</h2>
+          <p className="eyebrow">NETWORK SIMULATION</p>
+          <h2>Coordination network</h2>
         </div>
         <div className="v2x-header-badges">
           <span className="source-badge">SIMULATED</span>
@@ -149,16 +156,16 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
       <div className="v2x-tabs" role="tablist" aria-label="V2X sections">
         <button
           type="button"
-          id="v2x-tab-peers"
-          className={`v2x-tab-btn ${activeTab === "peers" ? "active" : ""}`}
+          id="v2x-tab-links"
+          className={`v2x-tab-btn ${activeTab === "links" ? "active" : ""}`}
           role="tab"
-          aria-selected={activeTab === "peers"}
-          aria-controls="v2x-tabpanel-peers"
-          tabIndex={activeTab === "peers" ? 0 : -1}
-          onClick={() => setActiveTab("peers")}
-          onKeyDown={(event) => selectTabFromKeyboard(event, "peers")}
+          aria-selected={activeTab === "links"}
+          aria-controls="v2x-tabpanel-links"
+          tabIndex={activeTab === "links" ? 0 : -1}
+          onClick={() => setActiveTab("links")}
+          onKeyDown={(event) => selectTabFromKeyboard(event, "links")}
         >
-          Peers ({activePeers.length})
+          Links ({activePeers.length})
         </button>
         <button
           type="button"
@@ -189,15 +196,15 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
       </div>
 
       <div className="v2x-content-body">
-        {activeTab === "peers" && (
+        {activeTab === "links" && (
           <div
-            id="v2x-tabpanel-peers"
+            id="v2x-tabpanel-links"
             role="tabpanel"
-            aria-labelledby="v2x-tab-peers"
+            aria-labelledby="v2x-tab-links"
             className="v2x-peers-grid"
           >
             {activePeers.length === 0 ? (
-              <p className="v2x-empty-state">No simulated peers.</p>
+              <p className="v2x-empty-state">No simulated coordination links.</p>
             ) : (
               activePeers.map((peer) => (
                 <div
@@ -205,31 +212,26 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
                   className={`v2x-peer-card link-${peer.link_status.toLowerCase()}`}
                 >
                   <div className="v2x-peer-header">
-                    <strong>{peer.vehicle_id}</strong>
+                    <div>
+                      <span className="v2x-peer-kicker">Peer vehicle</span>
+                      <strong>{peer.vehicle_id}</strong>
+                    </div>
                     <span className={`link-badge link-${peer.link_status.toLowerCase()}`}>
-                      SIMULATED · {peer.link_status}
+                      {peer.link_status}
                     </span>
                   </div>
-                  <div className="v2x-peer-stats">
+                  <div className="v2x-link-details">
                     <div>
-                      <span>Distance</span>
+                      <span>Last report</span>
+                      <strong>{formatPeerAge(peer.last_seen_ms, v2x.timestamp_ms)}</strong>
+                    </div>
+                    <div>
+                      <span>Distance to primary</span>
                       <strong>{formatNumber(peer.distance_m, 1)} m</strong>
                     </div>
                     <div>
-                      <span>Speed</span>
-                      <strong>{formatNumber(peer.speed_mps * 3.6, 1)} km/h</strong>
-                    </div>
-                    <div>
-                      <span>Heading</span>
-                      <strong>{Math.round(peer.heading_deg)}°</strong>
-                    </div>
-                    <div>
-                      <span>State</span>
-                      <strong
-                        className={`status-${peer.emergency_state.toLowerCase().replaceAll("_", "-")}`}
-                      >
-                        {peer.emergency_state.replaceAll("_", " ")}
-                      </strong>
+                      <span>Source</span>
+                      <strong>Simulation</strong>
                     </div>
                   </div>
                 </div>

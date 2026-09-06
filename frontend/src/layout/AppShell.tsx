@@ -4,7 +4,7 @@ import { ThemeToggle } from "../components/ThemeToggle";
 import type { ConnectionState } from "../state/useTelemetry";
 import type { DataMode } from "../types";
 import type { Theme } from "../theme";
-import { dashboardViews, type DashboardView } from "./dashboardViews";
+import { dashboardViews, type DashboardView, type DashboardWorkspace } from "./dashboardViews";
 
 interface AppShellProps {
   view: DashboardView;
@@ -53,6 +53,41 @@ function DashboardViewIcon({ view }: { view: DashboardView }) {
   );
 }
 
+function WorkspaceLinks({
+  workspace,
+  view,
+  onViewChange,
+}: {
+  workspace: DashboardWorkspace;
+  view: DashboardView;
+  onViewChange: (view: DashboardView) => void;
+}) {
+  const workspaceViews = dashboardViews.filter((candidate) => candidate.workspace === workspace);
+  return (
+    <div className={`workspace-nav-group workspace-nav-${workspace.toLowerCase()}`}>
+      <span className="workspace-nav-label">{workspace === "DRIVER" ? "Driver workspace" : "Supervisor workspace"}</span>
+      <div className="workspace-nav-links">
+        {workspaceViews.map((dashboardView) => (
+          <a
+            key={dashboardView.value}
+            href={dashboardView.hash}
+            className={view === dashboardView.value ? "active" : ""}
+            aria-current={view === dashboardView.value ? "page" : undefined}
+            title={dashboardView.description}
+            onClick={(event) => {
+              event.preventDefault();
+              onViewChange(dashboardView.value);
+            }}
+          >
+            <DashboardViewIcon view={dashboardView.value} />
+            <span>{dashboardView.label}</span>
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export function AppShell({
   view,
   onViewChange,
@@ -62,8 +97,11 @@ export function AppShell({
   mode,
   children,
 }: AppShellProps) {
+  const supervisorWorkspace = view === "SUPERVISOR";
+  const homeView: DashboardView = supervisorWorkspace ? "SUPERVISOR" : "DRIVER";
+
   return (
-    <main className="app-shell">
+    <main className={`app-shell app-shell-${supervisorWorkspace ? "supervisor" : "driver"}`}>
       <a
         className="skip-link"
         href="#dashboard-content"
@@ -77,36 +115,24 @@ export function AppShell({
       <header className="topbar">
         <a
           className="brand-lockup"
-          href="#driver"
-          aria-label="FogSen driver dashboard"
+          href={supervisorWorkspace ? "#fleet" : "#driver"}
+          aria-label={`FogSen ${supervisorWorkspace ? "supervisor" : "driver"} workspace home`}
           onClick={(event) => {
             event.preventDefault();
-            onViewChange("DRIVER");
+            onViewChange(homeView);
           }}
         >
-          <span className="brand-mark" aria-hidden="true">FS</span>
+          <span className="brand-mark" aria-hidden="true"><span>FS</span></span>
           <div>
-            <p className="eyebrow">Operator console</p>
+            <p className="eyebrow">{supervisorWorkspace ? "Supervisor console" : "Driver console"}</p>
             <h1>FogSen</h1>
           </div>
         </a>
 
         <nav className="view-switcher" aria-label="Primary navigation">
-          {dashboardViews.map((dashboardView) => (
-            <a
-              key={dashboardView.value}
-              href={dashboardView.hash}
-              className={view === dashboardView.value ? "active" : ""}
-              aria-current={view === dashboardView.value ? "page" : undefined}
-              onClick={(event) => {
-                event.preventDefault();
-                onViewChange(dashboardView.value);
-              }}
-            >
-              <DashboardViewIcon view={dashboardView.value} />
-              <span>{dashboardView.label}</span>
-            </a>
-          ))}
+          <WorkspaceLinks workspace="DRIVER" view={view} onViewChange={onViewChange} />
+          <span className="workspace-divider" aria-hidden="true" />
+          <WorkspaceLinks workspace="SUPERVISOR" view={view} onViewChange={onViewChange} />
         </nav>
 
         <div className="status-row" aria-label="System status">

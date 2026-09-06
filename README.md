@@ -23,6 +23,11 @@ FogSen currently includes:
 - configuration for the vehicle, five ToFs, calibration, safety, and the demo;
 - provider interfaces for simulated, wired live, replay, and future hardware;
 - a React and TypeScript dashboard connected to backend telemetry;
+- separate Driver workspace navigation for Awareness, Spatial, and Calibration,
+  and a Supervisor workspace for Fleet command;
+- supervisor Overview, Fleet, Alerts, and Network sections with active exceptions
+  separated from event history and primary telemetry separated from V2X peers;
+- the spatial dumper mesh documented in [docs/spatial-truck-model.md](docs/spatial-truck-model.md);
 - a road-aligned Chennai campus route with a moving dumper;
 - a camera-first driver dashboard with Auto, Camera, and calibrated ToF spatial views;
 - a Raspberry Pi RGB feed over Wi-Fi with raw and GPU-dehazed driver views;

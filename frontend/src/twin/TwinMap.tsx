@@ -1,25 +1,48 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import L from "leaflet";
-import type { MapFeature, Point2D, WorldState } from "../types";
 import { DEFAULT_CAMPUS_CONFIG, EMPTY_MAP_TILE } from "../maps/campusConfig";
 import { cartesianToGeodetic } from "../maps/locationProvider";
-import { primaryVehicleOrNull } from "../state/selectors";
+import type { SupervisorVehicle } from "../supervisor/supervisorViewModel";
+import type { MapFeature, Point2D } from "../types";
 
-const SCALE = 10;
-const PADDING = 16;
-const HEIGHT = 420;
-const WIDTH = 340;
+const WIDTH = 960;
+const HEIGHT = 520;
+const PADDING = 42;
 
-function point(pointValue: Point2D): string {
-  return `${PADDING + pointValue.x_m * SCALE},${HEIGHT - PADDING - pointValue.y_m * SCALE}`;
+interface Projection {
+  point: (value: Point2D) => [number, number];
+  scale: number;
 }
 
-function points(feature: MapFeature): string {
-  return feature.points.map(point).join(" ");
+function createProjection(features: MapFeature[], vehicles: SupervisorVehicle[]): Projection {
+  const points = [
+    ...features.flatMap((feature) => feature.points),
+    ...vehicles.map((vehicle) => ({ x_m: vehicle.xM, y_m: vehicle.yM })),
+  ];
+  const safePoints = points.length > 0 ? points : [{ x_m: 0, y_m: 0 }];
+  const minX = Math.min(...safePoints.map((point) => point.x_m));
+  const maxX = Math.max(...safePoints.map((point) => point.x_m));
+  const minY = Math.min(...safePoints.map((point) => point.y_m));
+  const maxY = Math.max(...safePoints.map((point) => point.y_m));
+  const spanX = Math.max(maxX - minX, 20);
+  const spanY = Math.max(maxY - minY, 20);
+  const scale = Math.min((WIDTH - PADDING * 2) / spanX, (HEIGHT - PADDING * 2) / spanY);
+  const renderedWidth = spanX * scale;
+  const renderedHeight = spanY * scale;
+  const offsetX = (WIDTH - renderedWidth) / 2;
+  const offsetY = (HEIGHT - renderedHeight) / 2;
+
+  return {
+    scale,
+    point: (value) => [
+      offsetX + (value.x_m - minX) * scale,
+      HEIGHT - offsetY - (value.y_m - minY) * scale,
+    ],
+  };
 }
 
-function className(feature: MapFeature): string {
-  return `map-feature map-${feature.feature_type.toLowerCase().replace("_", "-")}`;
+function featureClassName(feature: MapFeature): string {
+  return `map-feature map-${feature.feature_type.toLowerCase().replaceAll("_", "-")}`;
 }
 
 function escapeHtml(value: string): string {
@@ -32,69 +55,53 @@ function escapeHtml(value: string): string {
   })[character] ?? character);
 }
 
+function vehicleColor(vehicle: SupervisorVehicle): string {
+  return vehicle.isPrimary ? "var(--fleet-primary)" : "var(--fleet-peer)";
+}
+
+function statusColor(vehicle: SupervisorVehicle): string {
+  if (vehicle.tone === "critical" || vehicle.tone === "lost") return "var(--danger)";
+  if (vehicle.tone === "attention" || vehicle.tone === "unknown") return "var(--warning)";
+  return "var(--safe)";
+}
+
 interface TwinMapProps {
-  world: WorldState;
+  vehicles: SupervisorVehicle[];
+  features: MapFeature[];
+  mapName: string;
   selectedTruckId?: string | null;
   onSelectTruck?: (truckId: string | null) => void;
 }
 
-export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps) {
+export function TwinMap({
+  vehicles,
+  features,
+  mapName,
+  selectedTruckId,
+  onSelectTruck,
+}: TwinMapProps) {
   const [viewMode, setViewMode] = useState<"schematic" | "road">("schematic");
   const leafletContainerRef = useRef<HTMLDivElement | null>(null);
   const leafletMapRef = useRef<L.Map | null>(null);
   const markersRef = useRef<Map<string, L.Marker>>(new Map());
+  const featuresRef = useRef(features);
+  const hasFittedRoadMapRef = useRef(false);
+  const lastPannedTruckIdRef = useRef<string | null>(null);
+  featuresRef.current = features;
 
-  const features = world.reference_map?.features ?? [];
-  const primaryVehicle = primaryVehicleOrNull(world);
-  const activePeers = world.v2x?.active_peers ?? [];
+  const projection = useMemo(() => createProjection(features, vehicles), [features, vehicles]);
+  const selectedVehicle = vehicles.find((vehicle) => vehicle.vehicleId === selectedTruckId) ?? null;
 
-  // All trucks in fleet
-  const allTrucks = [
-    ...(primaryVehicle ? [{
-      vehicle_id: primaryVehicle.vehicle_id,
-      is_primary: true,
-      x_m: primaryVehicle.x_m,
-      y_m: primaryVehicle.y_m,
-      heading_deg: primaryVehicle.heading_deg,
-      speed_mps: primaryVehicle.speed_mps,
-      emergency_state: world.emergency.state,
-      color: "#38bdf8",
-      label: `${primaryVehicle.vehicle_id} [PRIMARY]`,
-    }] : []),
-    ...activePeers.map((peer, idx) => ({
-      vehicle_id: peer.vehicle_id,
-      is_primary: false,
-      x_m: peer.x_m,
-      y_m: peer.y_m,
-      heading_deg: peer.heading_deg,
-      speed_mps: peer.speed_mps,
-      emergency_state: peer.emergency_state,
-      distance_m: peer.distance_m,
-      color: idx % 2 === 0 ? "#f59e0b" : "#10b981",
-      label: peer.vehicle_id,
-    })),
-  ];
-
-  // Initialize the road map only while that view is visible.
   useEffect(() => {
     if (viewMode !== "road" || !leafletContainerRef.current || leafletMapRef.current) return;
 
-    const initialVehicle = primaryVehicle ?? allTrucks[0];
-    const primaryGeo = initialVehicle
-      ? cartesianToGeodetic(
-          initialVehicle.x_m,
-          initialVehicle.y_m,
-          DEFAULT_CAMPUS_CONFIG.anchor,
-        )
-      : DEFAULT_CAMPUS_CONFIG.siteCenter;
-
     const map = L.map(leafletContainerRef.current, {
-      center: [primaryGeo.lat, primaryGeo.lng],
+      center: [DEFAULT_CAMPUS_CONFIG.siteCenter.lat, DEFAULT_CAMPUS_CONFIG.siteCenter.lng],
       zoom: DEFAULT_CAMPUS_CONFIG.extendedZoom,
       minZoom: DEFAULT_CAMPUS_CONFIG.minZoom,
       maxZoom: DEFAULT_CAMPUS_CONFIG.maxZoom,
-      zoomControl: false,
-      attributionControl: false,
+      zoomControl: true,
+      attributionControl: true,
       preferCanvas: true,
     });
 
@@ -107,74 +114,94 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
       keepBuffer: 4,
     }).addTo(map);
 
+    featuresRef.current.forEach((feature) => {
+      const geoPoints = feature.points.map((point) => {
+        const geo = cartesianToGeodetic(point.x_m, point.y_m, DEFAULT_CAMPUS_CONFIG.anchor);
+        return [geo.lat, geo.lng] as L.LatLngTuple;
+      });
+      if (geoPoints.length === 0) return;
+
+      if (feature.geometry_type === "POLYGON") {
+        L.polygon(geoPoints, {
+          color: feature.feature_type === "HAZARD_ZONE" ? "#d03b3b" : "#6b7f8f",
+          fillColor: feature.feature_type === "HAZARD_ZONE" ? "#d03b3b" : "#6b7f8f",
+          fillOpacity: feature.feature_type === "HAZARD_ZONE" ? 0.18 : 0.08,
+          weight: 2,
+        }).addTo(map);
+      } else if (feature.geometry_type === "POLYLINE") {
+        L.polyline(geoPoints, {
+          color: feature.feature_type === "ROUTE" ? "#3987e5" : "#7f93a3",
+          opacity: feature.feature_type === "ROUTE" ? 0.95 : 0.55,
+          weight: feature.feature_type === "ROUTE" ? 4 : 2,
+          dashArray: feature.feature_type === "CENTERLINE" ? "8 8" : undefined,
+        }).addTo(map);
+      }
+    });
+
     leafletMapRef.current = map;
+    hasFittedRoadMapRef.current = false;
 
     return () => {
       map.remove();
       leafletMapRef.current = null;
       markersRef.current.clear();
+      hasFittedRoadMapRef.current = false;
+      lastPannedTruckIdRef.current = null;
     };
   }, [viewMode]);
 
-  // Update positions without recreating marker nodes, which avoids label flicker.
   useEffect(() => {
     if (viewMode !== "road" || !leafletMapRef.current) return;
     const map = leafletMapRef.current;
     const currentIds = new Set<string>();
+    const positions: L.LatLngTuple[] = [];
 
-    allTrucks.forEach((truck) => {
-      currentIds.add(truck.vehicle_id);
-      const geo = cartesianToGeodetic(truck.x_m, truck.y_m, DEFAULT_CAMPUS_CONFIG.anchor);
-      const latLng: [number, number] = [geo.lat, geo.lng];
-      const isSelected = selectedTruckId === truck.vehicle_id;
-      const safeHeading = Number.isFinite(truck.heading_deg) ? truck.heading_deg : 0;
-      const safeSpeedKmh = Number.isFinite(truck.speed_mps)
-        ? (truck.speed_mps * 3.6).toFixed(0)
-        : "--";
+    vehicles.forEach((vehicle) => {
+      currentIds.add(vehicle.vehicleId);
+      const geo = cartesianToGeodetic(vehicle.xM, vehicle.yM, DEFAULT_CAMPUS_CONFIG.anchor);
+      const latLng: L.LatLngTuple = [geo.lat, geo.lng];
+      positions.push(latLng);
+      const isSelected = selectedTruckId === vehicle.vehicleId;
+      const safeHeading = Number.isFinite(vehicle.headingDeg) ? vehicle.headingDeg : 0;
+      const color = vehicle.isPrimary ? "var(--fleet-primary)" : "var(--fleet-peer)";
+      const outline = statusColor(vehicle);
 
-      let marker = markersRef.current.get(truck.vehicle_id);
+      let marker = markersRef.current.get(vehicle.vehicleId);
       if (!marker) {
         const icon = L.divIcon({
-          className: "campus-vehicle-icon-wrap",
+          className: "fleet-map-marker-wrap",
           html:
-            '<div class="campus-navigation-pointer ' +
-            (truck.is_primary ? "primary-driver" : "peer-driver") +
+            '<div class="fleet-map-pointer ' +
+            (vehicle.isPrimary ? "fleet-map-pointer-primary" : "fleet-map-pointer-peer") +
             (isSelected ? " marker-selected" : "") +
-            '" style="transform: rotate(' +
-            safeHeading +
-            'deg);"><svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true">' +
-            '<path d="M16 3 L27 28 L16 23 L5 28 Z" fill="' +
-            truck.color +
-            '" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round" /></svg></div>' +
-            '<div class="campus-driver-label ' +
-            (truck.is_primary ? "primary-label" : "peer-label") +
-            '"><strong>' +
-            escapeHtml(truck.label) +
-            '</strong><span class="campus-marker-speed">' +
-            safeSpeedKmh +
-            " km/h</span></div>",
-          iconSize: [92, 54],
-          iconAnchor: [46, 16],
+            '" style="--marker-color:' + color + ";--marker-outline:" + outline +
+            ";transform:rotate(" + safeHeading +
+            'deg)"><svg viewBox="0 0 32 32" width="32" height="32" aria-hidden="true"><path d="M16 3 L27 28 L16 23 L5 28 Z" /></svg></div>' +
+            '<div class="fleet-map-label"><strong>' + escapeHtml(vehicle.vehicleId) +
+            "</strong><span>" + escapeHtml(vehicle.isPrimary ? "PRIMARY" : vehicle.tone.toUpperCase()) +
+            "</span></div>",
+          iconSize: [108, 58],
+          iconAnchor: [54, 18],
         });
         marker = L.marker(latLng, {
           icon,
-          title: truck.label,
-          zIndexOffset: truck.is_primary ? 1000 : 800,
+          title: vehicle.vehicleId,
+          zIndexOffset: vehicle.isPrimary ? 1000 : 800,
         }).addTo(map);
-        marker.on("click", () => onSelectTruck?.(truck.vehicle_id));
-        markersRef.current.set(truck.vehicle_id, marker);
+        marker.on("click", () => onSelectTruck?.(vehicle.vehicleId));
+        markersRef.current.set(vehicle.vehicleId, marker);
       } else {
         marker.setLatLng(latLng);
         const element = marker.getElement();
-        const pointer = element?.querySelector<HTMLElement>(".campus-navigation-pointer");
+        const pointer = element?.querySelector<HTMLElement>(".fleet-map-pointer");
         if (pointer) {
           pointer.style.transform = `rotate(${safeHeading}deg)`;
+          pointer.style.setProperty("--marker-color", color);
+          pointer.style.setProperty("--marker-outline", outline);
           pointer.classList.toggle("marker-selected", isSelected);
         }
-        element?.querySelector<SVGPathElement>(".campus-navigation-pointer path")
-          ?.setAttribute("fill", truck.color);
-        const speed = element?.querySelector<HTMLElement>(".campus-marker-speed");
-        if (speed) speed.textContent = `${safeSpeedKmh} km/h`;
+        const status = element?.querySelector<HTMLElement>(".fleet-map-label span");
+        if (status) status.textContent = vehicle.isPrimary ? "PRIMARY" : vehicle.tone.toUpperCase();
       }
     });
 
@@ -184,269 +211,157 @@ export function TwinMap({ world, selectedTruckId, onSelectTruck }: TwinMapProps)
         markersRef.current.delete(id);
       }
     });
-  }, [viewMode, allTrucks, selectedTruckId, onSelectTruck]);
+
+    if (!selectedVehicle) lastPannedTruckIdRef.current = null;
+
+    if (selectedVehicle && lastPannedTruckIdRef.current !== selectedVehicle.vehicleId) {
+      const selectedGeo = cartesianToGeodetic(
+        selectedVehicle.xM,
+        selectedVehicle.yM,
+        DEFAULT_CAMPUS_CONFIG.anchor,
+      );
+      map.panTo([selectedGeo.lat, selectedGeo.lng], { animate: true });
+      lastPannedTruckIdRef.current = selectedVehicle.vehicleId;
+    } else if (!selectedVehicle && !hasFittedRoadMapRef.current && positions.length > 0) {
+      lastPannedTruckIdRef.current = null;
+      map.fitBounds(L.latLngBounds(positions), { padding: [44, 44], maxZoom: 19 });
+      hasFittedRoadMapRef.current = true;
+    }
+  }, [viewMode, vehicles, selectedTruckId, selectedVehicle, onSelectTruck]);
 
   return (
     <div className="supervisor-fleet-map-container" aria-label="Fleet map">
-      {/* Top Map Control Bar */}
-      <div className="fleet-map-top-bar">
-        {/* Quick Truck Selector Pills */}
-        <div className="fleet-truck-quick-selector" role="group" aria-label="Truck focus selector">
-          <button
-            type="button"
-            className={`truck-pill-btn ${selectedTruckId === null || selectedTruckId === undefined ? "active" : ""}`}
-            onClick={() => onSelectTruck?.(null)}
-            aria-pressed={selectedTruckId === null || selectedTruckId === undefined}
-          >
-            All vehicles ({allTrucks.length})
-          </button>
-          {allTrucks.map((truck) => {
-            const isSelected = selectedTruckId === truck.vehicle_id;
-            return (
-              <button
-                key={truck.vehicle_id}
-                type="button"
-                className={`truck-pill-btn ${isSelected ? "active" : ""}`}
-                style={{ borderColor: isSelected ? truck.color : undefined }}
-                onClick={() => onSelectTruck?.(truck.vehicle_id)}
-                aria-pressed={isSelected}
-                title={`Track ${truck.label}`}
-              >
-                <span className="truck-dot" style={{ backgroundColor: truck.color }} />
-                <strong>{truck.vehicle_id}</strong>
-                <small>{(truck.speed_mps * 3.6).toFixed(0)} km/h</small>
-              </button>
-            );
-          })}
+      <div className="fleet-map-toolbar">
+        <div className="fleet-map-context">
+          <span className="fleet-map-live-dot" aria-hidden="true" />
+          <span>{selectedVehicle ? `Focused on ${selectedVehicle.vehicleId}` : `${vehicles.length} known vehicles`}</span>
         </div>
-
-        {/* View mode switcher */}
         <div className="fleet-view-mode-toggle" role="group" aria-label="Map display mode">
           <button
             type="button"
-            className={`fleet-mode-btn ${viewMode === "schematic" ? "active" : ""}`}
+            className={viewMode === "schematic" ? "active" : ""}
             onClick={() => setViewMode("schematic")}
             aria-pressed={viewMode === "schematic"}
-            title="Show schematic map"
           >
-            Twin schematic
+            Site plan
           </button>
           <button
             type="button"
-            className={`fleet-mode-btn ${viewMode === "road" ? "active" : ""}`}
+            className={viewMode === "road" ? "active" : ""}
             onClick={() => setViewMode("road")}
             aria-pressed={viewMode === "road"}
-            title="Show road map"
           >
             Road map
           </button>
         </div>
       </div>
 
-      {/* Main Map Viewport */}
       {viewMode === "schematic" ? (
         <div className="twin-map-schematic-wrap">
           <svg
             className="twin-map"
             viewBox={`0 0 ${WIDTH} ${HEIGHT}`}
             role="img"
-            aria-label="Fixed top-down digital twin schematic with all fleet trucks"
+            aria-label={`${mapName} site plan with ${vehicles.length} fleet vehicles`}
           >
             <defs>
-              <pattern id="twin-grid" width="20" height="20" patternUnits="userSpaceOnUse">
-                <path className="map-grid-line" d="M 20 0 L 0 0 0 20" fill="none" />
+              <pattern id="supervisor-grid" width="28" height="28" patternUnits="userSpaceOnUse">
+                <path className="map-grid-line" d="M 28 0 L 0 0 0 28" fill="none" />
               </pattern>
-              <filter id="lead-glow" x="-100%" y="-100%" width="300%" height="300%">
-                <feGaussianBlur stdDeviation="3.5" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
-              </filter>
-              <filter id="peer-glow" x="-100%" y="-100%" width="300%" height="300%">
-                <feGaussianBlur stdDeviation="2.5" result="blur" />
-                <feMerge>
-                  <feMergeNode in="blur" />
-                  <feMergeNode in="SourceGraphic" />
-                </feMerge>
+              <filter id="vehicle-shadow" x="-80%" y="-80%" width="260%" height="260%">
+                <feDropShadow dx="0" dy="2" stdDeviation="3" floodOpacity="0.45" />
               </filter>
             </defs>
+            <rect width={WIDTH} height={HEIGHT} fill="url(#supervisor-grid)" rx="22" />
 
-            {/* Digital twin grid */}
-            <rect width={WIDTH} height={HEIGHT} fill="url(#twin-grid)" rx="16" />
-
-            {/* Map Reference Features (Road, Berms, Hazard Zones) */}
             {features.map((feature) => {
+              const projected = feature.points.map(projection.point);
+              const points = projected.map(([x, y]) => `${x},${y}`).join(" ");
               if (feature.geometry_type === "POLYGON") {
-                return (
-                  <polygon
-                    key={feature.feature_id}
-                    points={points(feature)}
-                    className={className(feature)}
-                  />
-                );
+                return <polygon key={feature.feature_id} points={points} className={featureClassName(feature)} />;
               }
               if (feature.geometry_type === "POLYLINE") {
-                return (
-                  <polyline
-                    key={feature.feature_id}
-                    points={points(feature)}
-                    className={className(feature)}
-                  />
-                );
+                return <polyline key={feature.feature_id} points={points} className={featureClassName(feature)} />;
               }
-              const location = feature.points[0];
-              const [cx, cy] = point(location).split(",").map(Number);
+              const location = projected[0];
+              if (!location) return null;
               return (
-                <g key={feature.feature_id} className={className(feature)}>
-                  <circle cx={cx} cy={cy} r={feature.feature_type === "STATIC_OBSTACLE" ? 4 : 5} />
+                <g key={feature.feature_id} className={featureClassName(feature)}>
+                  <circle cx={location[0]} cy={location[1]} r={6} />
                   <title>{feature.label}</title>
                 </g>
               );
             })}
 
-            {/* All Fleet Trucks Rendered Prominently */}
-            {allTrucks.map((truck) => {
-              const tx = PADDING + truck.x_m * SCALE;
-              const ty = HEIGHT - PADDING - truck.y_m * SCALE;
-              const isSelected = selectedTruckId === truck.vehicle_id;
-              const isAlert = truck.emergency_state && truck.emergency_state !== "SAFE";
+            {vehicles.map((vehicle) => {
+              const [x, y] = projection.point({ x_m: vehicle.xM, y_m: vehicle.yM });
+              const selected = selectedTruckId === vehicle.vehicleId;
+              const color = vehicleColor(vehicle);
+              const outline = statusColor(vehicle);
+              const markerSize = Math.max(12, Math.min(20, projection.scale * 1.15));
 
               return (
                 <g
-                  key={truck.vehicle_id}
-                  className={`map-truck-group ${isSelected ? "truck-selected" : ""} ${truck.is_primary ? "lead-truck" : "peer-truck"}`}
-                  transform={`translate(${tx} ${ty})`}
-                  onClick={() => onSelectTruck?.(truck.vehicle_id)}
+                  key={vehicle.vehicleId}
+                  className={`map-truck-group map-truck-${vehicle.tone} ${selected ? "truck-selected" : ""}`}
+                  transform={`translate(${x} ${y})`}
+                  onClick={() => onSelectTruck?.(vehicle.vehicleId)}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" || event.key === " ") {
                       event.preventDefault();
-                      onSelectTruck?.(truck.vehicle_id);
+                      onSelectTruck?.(vehicle.vehicleId);
                     }
                   }}
                   role="button"
                   tabIndex={0}
-                  aria-label={`Show ${truck.vehicle_id} on the fleet map`}
-                  style={{ cursor: "pointer" }}
+                  aria-label={`${vehicle.vehicleId}, ${vehicle.tone.replaceAll("_", " ")}. View details`}
                 >
-                  {/* Highlight tracking ring if selected */}
-                  {isSelected && (
-                    <circle
-                      cx="0"
-                      cy="0"
-                      r="18"
-                      fill="none"
-                      stroke={truck.color}
-                      strokeWidth="2"
-                      strokeDasharray="4 3"
-                      className="truck-selection-ring"
-                    />
+                  {selected && (
+                    <circle className="truck-selection-ring" r={markerSize + 12} stroke={color} />
                   )}
-
-                  {/* Directional Truck Body */}
-                  <g
-                    transform={`rotate(${truck.heading_deg})`}
-                    filter={truck.is_primary ? "url(#lead-glow)" : "url(#peer-glow)"}
-                  >
-                    {/* Truck chassis */}
-                    <rect
-                      x="-6"
-                      y="-11"
-                      width="12"
-                      height="20"
-                      rx="2"
-                      fill="#090e17"
-                      stroke={truck.color}
-                      strokeWidth="1.6"
+                  <circle className="truck-status-ring" r={markerSize + 5} stroke={outline} />
+                  <g transform={`rotate(${vehicle.headingDeg})`} filter="url(#vehicle-shadow)">
+                    <path
+                      className="map-vehicle-body"
+                      d={`M 0 ${-markerSize} L ${markerSize * 0.7} ${markerSize * 0.72} L 0 ${markerSize * 0.42} L ${-markerSize * 0.7} ${markerSize * 0.72} Z`}
+                      fill={color}
                     />
-                    {/* Directional pointer arrow */}
-                    <path d="M 0 -13 L 5 -5 L -5 -5 Z" fill={truck.color} />
-                    {/* Cab windshield */}
-                    <rect x="-4.5" y="-9" width="9" height="4" rx="1" fill={truck.color} opacity="0.9" />
-                    {/* Cargo bed */}
-                    <rect
-                      x="-4.5"
-                      y="-3"
-                      width="9"
-                      height="10"
-                      rx="1"
-                      fill={isAlert ? "#ef4444" : truck.color}
-                      opacity="0.35"
+                    <path
+                      className="map-vehicle-cab"
+                      d={`M ${-markerSize * 0.34} ${-markerSize * 0.3} L ${markerSize * 0.34} ${-markerSize * 0.3} L ${markerSize * 0.25} ${markerSize * 0.18} L ${-markerSize * 0.25} ${markerSize * 0.18} Z`}
                     />
                   </g>
-
-                  {/* Callsign & Speed Label Tag */}
-                  <g transform="translate(0, -18)">
-                    <rect
-                      x="-38"
-                      y="-12"
-                      width="76"
-                      height="15"
-                      rx="4"
-                      fill="rgba(3, 7, 18, 0.92)"
-                      stroke={isSelected ? "#ffffff" : truck.color}
-                      strokeWidth={isSelected ? "1.5" : "1"}
-                    />
-                    <text
-                      x="0"
-                      y="-2"
-                      textAnchor="middle"
-                      fontSize="7.5"
-                      fill={isSelected ? "#ffffff" : truck.color}
-                      fontWeight="800"
-                      fontFamily="monospace"
-                    >
-                      {truck.vehicle_id}
-                    </text>
-                  </g>
-
-                  {/* Speed Tag Badge below truck */}
-                  <g transform="translate(0, 16)">
-                    <rect
-                      x="-24"
-                      y="-9"
-                      width="48"
-                      height="12"
-                      rx="3"
-                      fill="rgba(15, 23, 42, 0.88)"
-                      stroke="rgba(255, 255, 255, 0.15)"
-                      strokeWidth="0.8"
-                    />
-                    <text
-                      x="0"
-                      y="-1"
-                      textAnchor="middle"
-                      fontSize="6.5"
-                      fill="#cbd5e1"
-                      fontFamily="monospace"
-                    >
-                      {(truck.speed_mps * 3.6).toFixed(0)} km/h
+                  <g className="map-vehicle-label" transform={`translate(0 ${markerSize + 28})`}>
+                    <rect x="-47" y="-14" width="94" height="28" rx="7" />
+                    <text y="-3" textAnchor="middle" dominantBaseline="middle">{vehicle.vehicleId}</text>
+                    <text className="map-vehicle-label-status" y="7" textAnchor="middle" dominantBaseline="middle">
+                      {vehicle.isPrimary ? "PRIMARY" : vehicle.tone.toUpperCase()}
                     </text>
                   </g>
                 </g>
               );
             })}
-            {allTrucks.length === 0 && (
+
+            {vehicles.length === 0 && (
               <text x={WIDTH / 2} y={HEIGHT / 2} textAnchor="middle" className="map-empty-label">
                 No vehicle telemetry
               </text>
             )}
           </svg>
 
-          {/* Map Legend */}
-          <div className="fleet-map-legend" aria-label="Fleet Map Legend">
-            <span><i className="legend-lead-truck" />Primary vehicle</span>
-            <span><i className="legend-peer-truck" />Simulated peers</span>
-            <span><i className="legend-road" />Haul Road</span>
-            <span><i className="legend-hazard" />Hazard Zone</span>
+          <div className="fleet-map-legend" aria-label="Map legend">
+            <span><i className="legend-vehicle legend-primary" />Primary telemetry</span>
+            <span><i className="legend-vehicle legend-peer" />Peer vehicle</span>
+            <span><i className="legend-line legend-route" />Assigned route</span>
+            <span><i className="legend-area legend-hazard" />Hazard zone</span>
           </div>
         </div>
       ) : (
         <div className="twin-map-road-wrap">
           <div ref={leafletContainerRef} className="fleet-leaflet-container" />
           <div className="fleet-road-hud">
-            <span>{DEFAULT_CAMPUS_CONFIG.locationLabel}</span>
-            <span>{allTrucks.length} vehicles tracked</span>
+            <strong>{mapName}</strong>
+            <span>{selectedVehicle ? selectedVehicle.vehicleId : "All vehicles"}</span>
           </div>
         </div>
       )}

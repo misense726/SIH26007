@@ -21,6 +21,6 @@ describe("dashboard navigation", () => {
   it("falls back to the driver view for empty or unknown links", () => {
     expect(dashboardViewFromHash("")).toBe("DRIVER");
     expect(dashboardViewFromHash("#unknown")).toBe("DRIVER");
-    expect(dashboardViewLabel("DRIVER")).toBe("Driver");
+    expect(dashboardViewLabel("DRIVER")).toBe("Awareness");
   });
 });
