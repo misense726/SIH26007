@@ -69,6 +69,12 @@ class V2XManager:
     def enabled(self) -> bool:
         return self._enabled
 
+    def clear_peers(self) -> None:
+        """Replace seeded traffic when a simulator supplies its own vehicles."""
+        with self._lock:
+            self._peers.clear()
+            self._last_proximity_alert_ms.clear()
+
     @enabled.setter
     def enabled(self, value: bool) -> None:
         with self._lock:

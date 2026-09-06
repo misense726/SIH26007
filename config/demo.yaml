@@ -1,7 +1,7 @@
 demo:
   telemetry_hz: 10
   route_speed_mps: 1.15
-  default_scenario: NORMAL
+  default_scenario: HAUL
   default_speed_scale: 1.0
   mode: SIMULATED
   map_file: maps/test_route.json
@@ -18,6 +18,9 @@ demo:
     baseline_pressure_hpa: 1007.8
     relative_altitude_variation_m: 0.28
   scenarios:
+    HAUL:
+      visibility_score: 0.88
+      obstacle_enabled: false
     NORMAL:
       visibility_score: 0.88
       obstacle_enabled: false
@@ -32,3 +35,14 @@ demo:
       obstacle_enabled: true
       obstacle_ahead_m: 0.9
       obstacle_radius_m: 0.45
+  haul:
+    route_points_m: [[0, 0], [0, 30], [0.6, 33], [2.3, 35.7], [5, 37.4], [8, 38], [30, 38]]
+    road_half_width_m: 4.8
+    peer_start_distance_m: 18
+    peer_speed_mps: 0.8
+    peer_lane_offset_m: 2.8
+    peer_radius_m: 0.85
+    obstacle_appears_s: 12
+    obstacle_distance_m: 24
+    obstacle_radius_m: 0.9
+    obstacle_hold_s: 6

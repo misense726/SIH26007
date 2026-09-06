@@ -8,6 +8,7 @@ import {
 } from "./simulationApi";
 
 const scenarios: Array<{ value: SimulationScenario; label: string }> = [
+  { value: "HAUL", label: "Mine to dump" },
   { value: "NORMAL", label: "Normal" },
   { value: "FOG", label: "Fog" },
   { value: "OBSTACLE", label: "Obstacle" },

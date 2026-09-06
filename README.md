@@ -23,6 +23,8 @@ FogSen currently includes:
 - configuration for the vehicle, five ToFs, calibration, safety, and the demo;
 - provider interfaces for simulated, wired live, replay, and future hardware;
 - a React and TypeScript dashboard connected to backend telemetry;
+- a default mine-to-dump spatial simulation with oncoming traffic, an obstacle
+  encounter, simulated automatic stop and a navigation map;
 - separate Driver workspace navigation for Awareness, Spatial, and Calibration,
   and a Supervisor workspace for Fleet command;
 - supervisor Overview, Fleet, Alerts, and Network sections with active exceptions
@@ -47,6 +49,7 @@ FogSen currently includes:
   either link able to carry the dashboard independently.
 
 See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for the milestone record.
+See [docs/haul-simulation.md](docs/haul-simulation.md) for the haul run and efficiency checks.
 
 ## Requirements
 

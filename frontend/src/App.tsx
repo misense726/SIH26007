@@ -24,6 +24,11 @@ export default function App() {
   });
 
   useEffect(() => applyTheme(theme), [theme]);
+  useEffect(() => {
+    if (connection === "CONNECTED" && world.mode === "SIMULATED" && !window.location.hash) {
+      navigate("SPATIAL");
+    }
+  }, [connection, world.mode, navigate]);
 
   function changeTheme(nextTheme: Theme) {
     setTheme(nextTheme);

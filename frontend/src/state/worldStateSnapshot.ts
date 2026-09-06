@@ -20,7 +20,7 @@ const MAP_FEATURE_TYPES = new Set([
   "DESTINATION",
 ]);
 const GEOMETRY_TYPES = new Set(["POINT", "POLYLINE", "POLYGON"]);
-const SIMULATION_SCENARIOS = new Set(["NORMAL", "FOG", "OBSTACLE", "EMERGENCY"]);
+const SIMULATION_SCENARIOS = new Set(["HAUL", "NORMAL", "FOG", "OBSTACLE", "EMERGENCY"]);
 
 function isRecord(value: unknown): value is UnknownRecord {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -461,6 +461,13 @@ export function isWorldStateSnapshot(value: unknown): value is WorldState {
     value.alerts.every(isAlert) &&
     hasRecordingShape(value.recording) &&
     hasSimulationShape(value.simulation) &&
-    hasV2xShape(value.v2x)
+    hasV2xShape(value.v2x) &&
+    (value.haul_route == null || (
+      isRecord(value.haul_route) &&
+      hasStrings(value.haul_route, ["origin", "destination", "next_instruction"]) &&
+      ["HAULING", "OBSTACLE", "WAITING", "ARRIVED"].includes(String(value.haul_route.phase)) &&
+      hasFiniteNumbers(value.haul_route, ["distance_m", "total_distance_m", "remaining_m", "elapsed_s", "obstacle_radius_m"]) &&
+      (value.haul_route.obstacle === null || isPoint2D(value.haul_route.obstacle))
+    ))
   );
 }

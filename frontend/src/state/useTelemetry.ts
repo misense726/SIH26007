@@ -25,6 +25,8 @@ export function useTelemetry(): {
   useEffect(() => {
     let disposed = false;
     let socket: WebSocket | null = null;
+    let mapKey = "";
+    let referenceMap = defaultWorldState.reference_map;
 
     const clearStaleTimer = () => {
       if (staleTimer.current !== null) {
@@ -55,6 +57,12 @@ export function useTelemetry(): {
           if (!isWorldStateSnapshot(nextWorld)) {
             throw new Error("Invalid world-state snapshot");
           }
+          const nextMapKey = JSON.stringify(nextWorld.reference_map);
+          if (nextMapKey !== mapKey) {
+            referenceMap = nextWorld.reference_map;
+            mapKey = nextMapKey;
+          }
+          nextWorld.reference_map = referenceMap;
           setWorld(nextWorld);
           setConnection("CONNECTED");
           armStaleTimer();

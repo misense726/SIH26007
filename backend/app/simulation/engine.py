@@ -45,6 +45,9 @@ from backend.app.twin.map_store import load_reference_map, save_reference_map
 from backend.app.twin.route import PolylineRoute
 from backend.app.twin.world_store import WorldStore
 from backend.app.v2x import V2XManager
+from backend.app.simulation.haul_route import HaulRun
+from backend.app.mapping.raycasting import CircleTarget
+from backend.app.models.v2x import V2VBasicSafetyMessage
 
 
 class FullSimulator:
@@ -98,6 +101,15 @@ class FullSimulator:
         self._last_emergency_level = EmergencyLevel.SAFE
         self._map_path = Path(demo["map_file"])
         self._reference_map = load_reference_map(self._map_path)
+        self._base_reference_map = self._reference_map
+        self._haul = (
+            HaulRun(demo["haul"])
+            if self._scenario is SimulationScenario.HAUL
+            else None
+        )
+        if self._haul is not None:
+            self._reference_map = self._haul.reference_map
+            self._v2x_manager.clear_peers()
         self._route_speed_mps = float(demo["route_speed_mps"])
         self._max_demo_speed_mps = float(
             config["vehicle"]["vehicle"]["max_demo_speed_mps"]
@@ -191,6 +203,7 @@ class FullSimulator:
             route = self._build_route(reference_map)
             save_reference_map(reference_map, self._map_path)
             self._reference_map = reference_map.model_copy(deep=True)
+            self._base_reference_map = self._reference_map
             self._route = route
             await self._reset_unlocked()
 
@@ -326,6 +339,26 @@ class FullSimulator:
         return self.simulation_state()
 
     async def _apply_scenario(self, scenario: SimulationScenario) -> None:
+        change_map = (scenario is SimulationScenario.HAUL) != (self._haul is not None)
+        if scenario is SimulationScenario.HAUL:
+            self._haul = HaulRun(self._config["demo"]["demo"]["haul"])
+            self._reference_map = self._haul.reference_map
+            self._v2x_manager.clear_peers()
+        else:
+            self._haul = None
+            self._reference_map = self._base_reference_map
+        if change_map or scenario is SimulationScenario.HAUL:
+            self._route = self._build_route(self._reference_map)
+            self._route_distance_m = 0.0
+            self._last_heading_deg = self._route.sample(0).heading_deg
+            self._configure_pipeline()
+            start = self._route.sample(0)
+            self._scene.pose = VehiclePose(
+                timestamp_ms=self._timestamp_ms,
+                x_m=start.x_m,
+                y_m=start.y_m,
+                heading_deg=start.heading_deg,
+            )
         values = self._scenario_values[scenario.value]
         self._visibility_target = float(values["visibility_score"])
         self._obstacle_enabled = bool(values["obstacle_enabled"])
@@ -405,6 +438,21 @@ class FullSimulator:
         self._elapsed_s += self._interval_s
         self._timestamp_ms += round(self._interval_s * 1000.0)
         timestamp = self._timestamp_ms
+        peer = None
+        if self._haul is not None:
+            was_enabled = self._obstacle_enabled
+            self._obstacle_enabled = self._haul.advance(
+                self._interval_s, self._movement_running, self.emergency_output.active
+            )
+            self._obstacle_position = self._haul.obstacle_position()
+            self._active_obstacle_radius_m = self._haul.config["obstacle_radius_m"]
+            if was_enabled and not self._obstacle_enabled:
+                self.occupancy.clear()
+                self.emergency_controller.reset()
+                await self.emergency_output.set_motor_cut(
+                    False, "Simulated road obstruction cleared"
+                )
+            peer = self._haul.peer(timestamp, self._movement_running)
         speed = 0.0
         if self._movement_running and not self.emergency_output.active:
             requested_speed = min(
@@ -444,6 +492,14 @@ class FullSimulator:
             front_scanner_angle_deg=self._front_scanner_angle_deg,
             rear_scanner_angle_deg=self._rear_scanner_angle_deg,
             aruco_visible=self._aruco_visible(),
+            traffic_targets=(
+                (CircleTarget(
+                    peer.vehicle_id,
+                    Point2D(x_m=peer.x_m, y_m=peer.y_m),
+                    self._haul.config["peer_radius_m"],
+                ),)
+                if peer is not None else ()
+            ),
         )
 
         odometry = await self.odometry_provider.read_odometry()
@@ -527,13 +583,25 @@ class FullSimulator:
             corridor,
             emergency.nearest_obstacle_m,
         )
-        current = await self._store.snapshot()
+        if peer is not None:
+            self._v2x_manager.receive_bsm(
+                V2VBasicSafetyMessage(
+                    message_id=f"haul-peer-{timestamp}",
+                    timestamp_ms=timestamp,
+                    vehicle_id=peer.vehicle_id,
+                    x_m=peer.x_m,
+                    y_m=peer.y_m,
+                    heading_deg=peer.heading_deg,
+                    speed_mps=peer.speed_mps,
+                )
+            )
+        sequence = await self._store.sequence()
         return await self._store.replace(
             WorldState(
                 generated_at_ms=timestamp,
-                sequence=current.sequence + 1,
+                sequence=sequence + 1,
                 mode=DataMode.SIMULATED,
-                vehicles=[pose],
+                vehicles=[pose, peer] if peer is not None else [pose],
                 reference_map=self._reference_map,
                 ranges=readings,
                 motion=MotionState(
@@ -565,6 +633,12 @@ class FullSimulator:
                 recording=self._recording_state,
                 simulation=self.simulation_state(),
                 v2x=self._v2x_manager.snapshot(),
+                haul_route=(
+                    self._haul.snapshot(
+                        self._route_distance_m, self._obstacle_enabled, emergency.motor_cut
+                    )
+                    if self._haul is not None else None
+                ),
             )
         )
 
@@ -587,6 +661,10 @@ class FullSimulator:
     async def _run(self) -> None:
         while self._running:
             started = asyncio.get_running_loop().time()
+            # Keep published timestamps current after scheduler delays or system sleep.
+            self._timestamp_ms = max(
+                self._timestamp_ms, now_ms() - round(self._interval_s * 1000)
+            )
             await self.tick()
             elapsed = asyncio.get_running_loop().time() - started
             await asyncio.sleep(max(0.0, self._interval_s - elapsed))

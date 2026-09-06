@@ -15,7 +15,7 @@ export type MapFeatureType =
   | "DESTINATION";
 export type GeometryType = "POINT" | "POLYLINE" | "POLYGON";
 export type CorridorState = "GREEN" | "YELLOW" | "RED" | "GREY";
-export type SimulationScenario = "NORMAL" | "FOG" | "OBSTACLE" | "EMERGENCY";
+export type SimulationScenario = "HAUL" | "NORMAL" | "FOG" | "OBSTACLE" | "EMERGENCY";
 
 export interface Point2D {
   x_m: number;
@@ -295,6 +295,19 @@ export interface V2XState {
   recent_messages: V2XMessage[];
 }
 
+export interface HaulRouteState {
+  origin: string;
+  destination: string;
+  phase: "HAULING" | "OBSTACLE" | "WAITING" | "ARRIVED";
+  distance_m: number;
+  total_distance_m: number;
+  remaining_m: number;
+  elapsed_s: number;
+  obstacle: Point2D | null;
+  obstacle_radius_m: number;
+  next_instruction: string;
+}
+
 export interface WorldState {
   schema_version: "1.0";
   generated_at_ms: number;
@@ -345,4 +358,5 @@ export interface WorldState {
   recording: RecordingState;
   simulation: SimulationState;
   v2x?: V2XState;
+  haul_route?: HaulRouteState | null;
 }

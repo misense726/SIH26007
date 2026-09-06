@@ -53,6 +53,7 @@ class SimulatedScene:
     front_scanner_angle_deg: float
     rear_scanner_angle_deg: float
     aruco_visible: bool = True
+    traffic_targets: tuple[CircleTarget, ...] = ()
 
 
 SceneGetter = Callable[[], SimulatedScene]
@@ -86,7 +87,7 @@ class SimulatedRangeSensorProvider(RangeSensorProvider):
     async def read_ranges(self) -> list[RangeReading]:
         scene = self._scene()
         first_timestamp = scene.timestamp_ms - self._stagger_ms * (len(self._sequence) - 1)
-        dynamic_circles = list(self._static_circles)
+        dynamic_circles = [*self._static_circles, *scene.traffic_targets]
         if scene.obstacle_enabled:
             dynamic_circles.append(
                 CircleTarget("simulated-live-obstacle", scene.obstacle_position, scene.obstacle_radius_m)
@@ -184,11 +185,13 @@ class SimulatedCameraProvider(CameraProvider):
     def __init__(self, scene: SceneGetter) -> None:
         self._scene = scene
         self.last_metrics = visibility_metrics(synthetic_visibility_frame(0.9))
+        self._metrics_target = 0.9
 
     async def read_camera(self) -> CameraSample:
         scene = self._scene()
-        frame = synthetic_visibility_frame(scene.visibility_target)
-        self.last_metrics = visibility_metrics(frame)
+        if scene.visibility_target != self._metrics_target:
+            self.last_metrics = visibility_metrics(synthetic_visibility_frame(scene.visibility_target))
+            self._metrics_target = scene.visibility_target
         frame_id = f"sim-camera-{scene.timestamp_ms}"
         return CameraSample(
             timestamp_ms=scene.timestamp_ms,

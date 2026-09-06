@@ -1,7 +1,17 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type PointerEvent as ReactPointerEvent,
+} from "react";
 import { availableRangeReadings } from "../state/rangeReadings";
 import { availableSpatialPoints } from "../state/spatialPoints";
-import { formatNumber, primaryVehicle, primaryVehicleOrNull } from "../state/selectors";
+import {
+  formatNumber,
+  primaryVehicle,
+  primaryVehicleOrNull,
+} from "../state/selectors";
 import type { ConnectionState } from "../state/useTelemetry";
 import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
 import type { SpatialPoint, WorldState } from "../types";
@@ -27,6 +37,8 @@ import {
   type VehiclePoint3D,
 } from "./spatialProjection";
 import { Vehicle3DTruck } from "./Vehicle3DTruck";
+import { HaulRoad, HaulTraffic } from "./HaulScene";
+import { NavigationMap } from "./NavigationMap";
 
 interface SpatialDashboardProps {
   world: WorldState;
@@ -50,30 +62,41 @@ function displayPoints(
   const settingsById = new Map<string, SensorDisplaySetting>(
     sensors.map((sensor) => [sensor.sensor_id, sensor]),
   );
-  return points.flatMap((spatialPoint) => {
-    const source = settingsById.get(spatialPoint.source_sensor_id);
-    if (!source) return [];
-    const point = worldPointToVehicle(spatialPoint, vehicle);
-    const distanceM = pointDistanceFromSensor(point, source);
-    if (distanceM > source.visual_range_m) return [];
-    return [{ source, point, spatialPoint, distanceM }];
-  }).slice(-220);
+  return points
+    .flatMap((spatialPoint) => {
+      const source = settingsById.get(spatialPoint.source_sensor_id);
+      if (!source) return [];
+      const point = worldPointToVehicle(spatialPoint, vehicle);
+      const distanceM = pointDistanceFromSensor(point, source);
+      if (distanceM > source.visual_range_m) return [];
+      return [{ source, point, spatialPoint, distanceM }];
+    })
+    .slice(-220);
 }
 
-function groundCirclePath(radiusM: number, cameraConfig: CameraViewConfig = {}, segments: number = 36): string {
+function groundCirclePath(
+  radiusM: number,
+  cameraConfig: CameraViewConfig = {},
+  segments: number = 36,
+): string {
   const step = (2 * Math.PI) / segments;
   const points: Array<{ x: number; y: number }> = [];
   for (let i = 0; i <= segments; i++) {
     const angle = i * step;
     const x = Math.sin(angle) * radiusM;
     const y = Math.cos(angle) * radiusM;
-    const pt = projectVehiclePointWithCamera({ x_m: x, y_m: y, z_m: 0 }, cameraConfig);
+    const pt = projectVehiclePointWithCamera(
+      { x_m: x, y_m: y, z_m: 0 },
+      cameraConfig,
+    );
     points.push(pt);
   }
-  return points.reduce((acc, pt, idx) => {
-    if (idx === 0) return `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
-    return `${acc} L ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
-  }, "") + " Z";
+  return (
+    points.reduce((acc, pt, idx) => {
+      if (idx === 0) return `M ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
+      return `${acc} L ${pt.x.toFixed(1)} ${pt.y.toFixed(1)}`;
+    }, "") + " Z"
+  );
 }
 
 function floorGrid(cameraConfig: CameraViewConfig = {}) {
@@ -83,19 +106,41 @@ function floorGrid(cameraConfig: CameraViewConfig = {}) {
 
   return (
     <g className="spatial-floor-grid" aria-hidden="true">
-      {/* 1. Rectangular grid lines */}
+      {/* Rectangular grid lines */}
       {longitudinal.map((x) => {
-        const near = projectVehiclePointWithCamera({ x_m: x, y_m: -4.5, z_m: 0 }, cameraConfig);
-        const far = projectVehiclePointWithCamera({ x_m: x, y_m: 6.5, z_m: 0 }, cameraConfig);
-        return <line key={`x-${x}`} x1={near.x} y1={near.y} x2={far.x} y2={far.y} />;
+        const near = projectVehiclePointWithCamera(
+          { x_m: x, y_m: -4.5, z_m: 0 },
+          cameraConfig,
+        );
+        const far = projectVehiclePointWithCamera(
+          { x_m: x, y_m: 6.5, z_m: 0 },
+          cameraConfig,
+        );
+        return (
+          <line key={`x-${x}`} x1={near.x} y1={near.y} x2={far.x} y2={far.y} />
+        );
       })}
       {lateral.map((y) => {
-        const left = projectVehiclePointWithCamera({ x_m: -5.5, y_m: y, z_m: 0 }, cameraConfig);
-        const right = projectVehiclePointWithCamera({ x_m: 5.5, y_m: y, z_m: 0 }, cameraConfig);
-        return <line key={`y-${y}`} x1={left.x} y1={left.y} x2={right.x} y2={right.y} />;
+        const left = projectVehiclePointWithCamera(
+          { x_m: -5.5, y_m: y, z_m: 0 },
+          cameraConfig,
+        );
+        const right = projectVehiclePointWithCamera(
+          { x_m: 5.5, y_m: y, z_m: 0 },
+          cameraConfig,
+        );
+        return (
+          <line
+            key={`y-${y}`}
+            x1={left.x}
+            y1={left.y}
+            x2={right.x}
+            y2={right.y}
+          />
+        );
       })}
 
-      {/* 2. Concentric Range Circles on Floor */}
+      {/* Concentric Range Circles on Floor */}
       {rangeRings.map((radius) => (
         <path
           key={`range-ring-${radius}`}
@@ -104,25 +149,49 @@ function floorGrid(cameraConfig: CameraViewConfig = {}) {
         />
       ))}
 
-      {/* 3. Distance Labels along Forward & Lateral Axes */}
+      {/* Distance Labels along Forward & Lateral Axes */}
       {rangeRings.map((radius) => {
-        const fwdPos = projectVehiclePointWithCamera({ x_m: 0, y_m: radius, z_m: 0 }, cameraConfig);
-        const rearPos = projectVehiclePointWithCamera({ x_m: 0, y_m: -radius, z_m: 0 }, cameraConfig);
-        const rightPos = projectVehiclePointWithCamera({ x_m: radius, y_m: 0, z_m: 0 }, cameraConfig);
-        const leftPos = projectVehiclePointWithCamera({ x_m: -radius, y_m: 0, z_m: 0 }, cameraConfig);
+        const fwdPos = projectVehiclePointWithCamera(
+          { x_m: 0, y_m: radius, z_m: 0 },
+          cameraConfig,
+        );
+        const rearPos = projectVehiclePointWithCamera(
+          { x_m: 0, y_m: -radius, z_m: 0 },
+          cameraConfig,
+        );
+        const rightPos = projectVehiclePointWithCamera(
+          { x_m: radius, y_m: 0, z_m: 0 },
+          cameraConfig,
+        );
+        const leftPos = projectVehiclePointWithCamera(
+          { x_m: -radius, y_m: 0, z_m: 0 },
+          cameraConfig,
+        );
 
         return (
           <g key={`dist-labels-${radius}`} className="spatial-distance-labels">
             <text x={fwdPos.x + 8} y={fwdPos.y - 4} className="dist-tick-label">
               {radius.toFixed(0)}m
             </text>
-            <text x={rearPos.x + 8} y={rearPos.y + 10} className="dist-tick-label">
+            <text
+              x={rearPos.x + 8}
+              y={rearPos.y + 10}
+              className="dist-tick-label"
+            >
               {radius.toFixed(0)}m
             </text>
-            <text x={rightPos.x + 4} y={rightPos.y - 4} className="dist-tick-label">
+            <text
+              x={rightPos.x + 4}
+              y={rightPos.y - 4}
+              className="dist-tick-label"
+            >
               {radius.toFixed(0)}m
             </text>
-            <text x={leftPos.x - 22} y={leftPos.y - 4} className="dist-tick-label">
+            <text
+              x={leftPos.x - 22}
+              y={leftPos.y - 4}
+              className="dist-tick-label"
+            >
               {radius.toFixed(0)}m
             </text>
           </g>
@@ -135,11 +204,18 @@ function floorGrid(cameraConfig: CameraViewConfig = {}) {
         { label: "Left", x_m: -4.3, y_m: 0 },
         { label: "Right", x_m: 4.3, y_m: 0 },
       ].map(({ label, ...position }) => {
-        const screen = projectVehiclePointWithCamera({ ...position, z_m: 0 }, cameraConfig);
+        const screen = projectVehiclePointWithCamera(
+          { ...position, z_m: 0 },
+          cameraConfig,
+        );
         return (
-          <text key={label} x={Math.max(40, Math.min(960, screen.x))}
+          <text
+            key={label}
+            x={Math.max(40, Math.min(960, screen.x))}
             y={Math.max(30, Math.min(600, screen.y + 20))}
-            textAnchor="middle" className="spatial-axis-marker">
+            textAnchor="middle"
+            className="spatial-axis-marker"
+          >
             {label}
           </text>
         );
@@ -154,7 +230,11 @@ function sensorClass(sensorId: string): string {
 
 const DEFAULT_TRUCK_ORBIT_DEG = 145;
 
-export function SpatialDashboard({ world, connection, sensorSettings }: SpatialDashboardProps) {
+export function SpatialDashboard({
+  world,
+  connection,
+  sensorSettings,
+}: SpatialDashboardProps) {
   const [showFovSectors, setShowFovSectors] = useState(true);
   const [showDistanceRings, setShowDistanceRings] = useState(true);
   const [showPointAuras, setShowPointAuras] = useState(true);
@@ -166,22 +246,36 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
   const [cameraOrbit, setCameraOrbit] = useState(DEFAULT_TRUCK_ORBIT_DEG);
   const [cameraPitch, setCameraPitch] = useState(DEFAULT_CAMERA_PITCH_DEG);
   const [isCameraDragging, setIsCameraDragging] = useState(false);
-  const cameraDrag = useRef<{ pointerId: number; clientX: number; clientY: number } | null>(null);
+  const cameraDrag = useRef<{
+    pointerId: number;
+    clientX: number;
+    clientY: number;
+  } | null>(null);
   const pendingOrbitDelta = useRef({ x: 0, y: 0 });
   const orbitAnimationFrame = useRef<number | null>(null);
 
-  useEffect(() => () => {
-    if (orbitAnimationFrame.current !== null) {
-      window.cancelAnimationFrame(orbitAnimationFrame.current);
-    }
-  }, []);
+  useEffect(
+    () => () => {
+      if (orbitAnimationFrame.current !== null) {
+        window.cancelAnimationFrame(orbitAnimationFrame.current);
+      }
+    },
+    [],
+  );
 
   const transportConnected = connection === "CONNECTED";
   const reportedVehicle = primaryVehicleOrNull(world);
   const connected = transportConnected && reportedVehicle !== null;
   const vehicle = reportedVehicle ?? primaryVehicle(world);
-  const maxVisualRange = Math.max(4, ...sensorSettings.map((sensor) => sensor.visual_range_m));
-  const ranges = availableRangeReadings(world.ranges, world.sensor_health, connected);
+  const maxVisualRange = Math.max(
+    4,
+    ...sensorSettings.map((sensor) => sensor.visual_range_m),
+  );
+  const ranges = availableRangeReadings(
+    world.ranges,
+    world.sensor_health,
+    connected,
+  );
   const points = availableSpatialPoints(
     world.spatial_points,
     world.sensor_health,
@@ -191,25 +285,30 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
     maxVisualRange,
   );
   const plottedPoints = displayPoints(points, world, sensorSettings);
-  const readingById = new Map(ranges.map((reading) => [reading.sensor_id, reading]));
+  const readingById = new Map(
+    ranges.map((reading) => [reading.sensor_id, reading]),
+  );
   const latestReadingById = new Map(
-    (connected ? world.ranges : []).map((reading) => [reading.sensor_id, reading]),
+    (connected ? world.ranges : []).map((reading) => [
+      reading.sensor_id,
+      reading,
+    ]),
   );
   const trustedSensorIds = new Set(ranges.map((reading) => reading.sensor_id));
   const trustedCoverageCount = sensorSettings.filter((sensor) =>
     trustedSensorIds.has(sensor.sensor_id),
   ).length;
 
-  // -------------------------------------------------------------
   // MPU-6050 IMU Live Motion Calculation
-  // -------------------------------------------------------------
   const imuHeading = world.motion.imu_heading_deg;
   const imuYawRate = world.motion.imu_yaw_rate_dps;
   const speed = vehicle.speed_mps;
   const isEmergencyBraking = world.emergency.state === "EMERGENCY_STOP";
 
   // Dynamic physical pitch & roll reaction from MPU-6050 / vehicle physics
-  const autoPitch = isEmergencyBraking ? -5.5 : Math.max(-8, Math.min(6, speed > 0.1 ? -1.2 : 0));
+  const autoPitch = isEmergencyBraking
+    ? -5.5
+    : Math.max(-8, Math.min(6, speed > 0.1 ? -1.2 : 0));
   const autoRoll = Math.max(-15, Math.min(15, -imuYawRate * 0.18));
   const autoSteer = Math.max(-28, Math.min(28, imuYawRate * 0.45));
 
@@ -234,9 +333,14 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
     orbitYawDeg: cameraOrbit,
     cameraPitchDeg: cameraPitch,
   };
-  const cameraPitchLabel = cameraPitch < 0
-    ? `${Math.abs(Math.round(cameraPitch))}° below`
-    : `${Math.round(cameraPitch)}° above`;
+  const grid = useMemo(
+    () => floorGrid({ orbitYawDeg: cameraOrbit, cameraPitchDeg: cameraPitch }),
+    [cameraOrbit, cameraPitch],
+  );
+  const cameraPitchLabel =
+    cameraPitch < 0
+      ? `${Math.abs(Math.round(cameraPitch))}° below`
+      : `${Math.round(cameraPitch)}° above`;
   // Sensor Threat Evaluations
   const sensorThreats = sensorSettings.map((sensor) => {
     const reading = readingById.get(sensor.sensor_id);
@@ -252,10 +356,16 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
   });
 
   const alerts = sensorThreats.filter((st) => st.isAlert && st.rangeM !== null);
-  const closestAlert = alerts.sort((a, b) => (a.rangeM ?? 99) - (b.rangeM ?? 99))[0];
+  const closestAlert = alerts.sort(
+    (a, b) => (a.rangeM ?? 99) - (b.rangeM ?? 99),
+  )[0];
 
-  const cautions = sensorThreats.filter((st) => st.isCaution && st.rangeM !== null);
-  const closestCaution = cautions.sort((a, b) => (a.rangeM ?? 99) - (b.rangeM ?? 99))[0];
+  const cautions = sensorThreats.filter(
+    (st) => st.isCaution && st.rangeM !== null,
+  );
+  const closestCaution = cautions.sort(
+    (a, b) => (a.rangeM ?? 99) - (b.rangeM ?? 99),
+  )[0];
   const hasCompleteCoverage =
     sensorSettings.length > 0 &&
     trustedCoverageCount === sensorSettings.length &&
@@ -290,7 +400,9 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
     const { x: horizontalDelta, y: verticalDelta } = pendingOrbitDelta.current;
     pendingOrbitDelta.current = { x: 0, y: 0 };
     if (horizontalDelta !== 0) {
-      setCameraOrbit((current) => cameraOrbitAfterDrag(current, horizontalDelta));
+      setCameraOrbit((current) =>
+        cameraOrbitAfterDrag(current, horizontalDelta),
+      );
     }
     if (verticalDelta !== 0) {
       setCameraPitch((current) => cameraPitchAfterDrag(current, verticalDelta));
@@ -303,11 +415,16 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
 
     const horizontalDelta = event.clientX - drag.clientX;
     const verticalDelta = event.clientY - drag.clientY;
-    cameraDrag.current = { ...drag, clientX: event.clientX, clientY: event.clientY };
+    cameraDrag.current = {
+      ...drag,
+      clientX: event.clientX,
+      clientY: event.clientY,
+    };
     pendingOrbitDelta.current.x += horizontalDelta;
     pendingOrbitDelta.current.y += verticalDelta;
     if (orbitAnimationFrame.current === null) {
-      orbitAnimationFrame.current = window.requestAnimationFrame(flushCameraOrbit);
+      orbitAnimationFrame.current =
+        window.requestAnimationFrame(flushCameraOrbit);
     }
     event.preventDefault();
   };
@@ -326,7 +443,10 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
   };
 
   return (
-    <section className="dashboard spatial-dashboard" aria-label="Live 2.5D ToF surrounding view">
+    <section
+      className="dashboard spatial-dashboard"
+      aria-label="Live 2.5D ToF surrounding view"
+    >
       <header className="page-heading spatial-page-heading">
         <h2>Spatial view</h2>
       </header>
@@ -336,11 +456,15 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
         <div className="spatial-alert spatial-alert-danger" role="alert">
           <div className="alert-badge-group">
             <span className="alert-pulse-dot" />
-            <strong>PROXIMITY HAZARD · {closestAlert.sensor.label.toUpperCase()}</strong>
+            <strong>
+              PROXIMITY HAZARD · {closestAlert.sensor.label.toUpperCase()}
+            </strong>
           </div>
           <span>
-            Obstacle detected at <strong>{closestAlert.rangeM?.toFixed(2)} m</strong> (Threshold:{" "}
-            {closestAlert.sensor.alert_distance_m.toFixed(2)} m). Brake or clear sector.
+            Obstacle detected at{" "}
+            <strong>{closestAlert.rangeM?.toFixed(2)} m</strong> (Threshold:{" "}
+            {closestAlert.sensor.alert_distance_m.toFixed(2)} m). Brake or clear
+            sector.
           </span>
         </div>
       )}
@@ -348,10 +472,13 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
         <div className="spatial-alert spatial-alert-caution" role="status">
           <div className="alert-badge-group">
             <span className="caution-pulse-dot" />
-            <strong>PROXIMITY CAUTION · {closestCaution.sensor.label.toUpperCase()}</strong>
+            <strong>
+              PROXIMITY CAUTION · {closestCaution.sensor.label.toUpperCase()}
+            </strong>
           </div>
           <span>
-            Obstacle at <strong>{closestCaution.rangeM?.toFixed(2)} m</strong> approaching alert zone (
+            Obstacle at <strong>{closestCaution.rangeM?.toFixed(2)} m</strong>{" "}
+            approaching alert zone (
             {closestCaution.sensor.alert_distance_m.toFixed(2)} m).
           </span>
         </div>
@@ -405,22 +532,26 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
               {closestAlert ? (
                 <span className="threat-pill threat-danger">
                   <i className="threat-status-dot" aria-hidden="true" />
-                  Hazard · {closestAlert.sensor.label} · {closestAlert.rangeM?.toFixed(2)} m
+                  Hazard · {closestAlert.sensor.label} ·{" "}
+                  {closestAlert.rangeM?.toFixed(2)} m
                 </span>
               ) : closestCaution ? (
                 <span className="threat-pill threat-caution">
                   <i className="threat-status-dot" aria-hidden="true" />
-                  Caution · {closestCaution.sensor.label} · {closestCaution.rangeM?.toFixed(2)} m
+                  Caution · {closestCaution.sensor.label} ·{" "}
+                  {closestCaution.rangeM?.toFixed(2)} m
                 </span>
               ) : connected && hasCompleteCoverage ? (
                 <span className="threat-pill threat-clear">
                   <i className="threat-status-dot" aria-hidden="true" />
-                  No proximity hazards · {trustedCoverageCount}/{sensorSettings.length} valid
+                  No proximity hazards · {trustedCoverageCount}/
+                  {sensorSettings.length} valid
                 </span>
               ) : connected ? (
                 <span className="threat-pill threat-offline">
                   <i className="threat-status-dot" aria-hidden="true" />
-                  Coverage incomplete · {trustedCoverageCount}/{sensorSettings.length} valid
+                  Coverage incomplete · {trustedCoverageCount}/
+                  {sensorSettings.length} valid
                 </span>
               ) : (
                 <span className="threat-pill threat-offline">
@@ -433,15 +564,22 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
 
           {/* MPU-6050 Live Motion & Attitude Control Panel */}
           {showImuControls && (
-            <div className="imu-motion-panel" aria-label="View and motion controls">
+            <div
+              className="imu-motion-panel"
+              aria-label="View and motion controls"
+            >
               <div className="imu-hud-readout">
                 <div className="imu-hud-badge">
                   <small>MPU-6050 YAW</small>
-                  <strong>{connected ? `${formatNumber(imuHeading, 0)}°` : "--"}</strong>
+                  <strong>
+                    {connected ? `${formatNumber(imuHeading, 0)}°` : "--"}
+                  </strong>
                 </div>
                 <div className="imu-hud-badge">
                   <small>YAW RATE</small>
-                  <strong>{connected ? `${formatNumber(imuYawRate, 1)}°/s` : "--"}</strong>
+                  <strong>
+                    {connected ? `${formatNumber(imuYawRate, 1)}°/s` : "--"}
+                  </strong>
                 </div>
                 <div className="imu-hud-badge">
                   <small>VISUAL PITCH</small>
@@ -532,7 +670,11 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                       onChange={(e) => setCameraPitch(Number(e.target.value))}
                     />
                   </label>
-                  <button type="button" className="imu-reset-btn" onClick={resetAttitude}>
+                  <button
+                    type="button"
+                    className="imu-reset-btn"
+                    onClick={resetAttitude}
+                  >
                     Reset View
                   </button>
                 </div>
@@ -569,31 +711,64 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                 <stop offset="100%" stopColor="var(--page-bg, #030712)" />
               </radialGradient>
 
-              <radialGradient id="fov-danger-gradient" cx="50%" cy="0%" r="100%">
+              <radialGradient
+                id="fov-danger-gradient"
+                cx="50%"
+                cy="0%"
+                r="100%"
+              >
                 <stop offset="0%" stopColor="#ef4444" stopOpacity="0.65" />
                 <stop offset="70%" stopColor="#ef4444" stopOpacity="0.22" />
                 <stop offset="100%" stopColor="#ef4444" stopOpacity="0.04" />
               </radialGradient>
 
-              <radialGradient id="fov-caution-gradient" cx="50%" cy="0%" r="100%">
+              <radialGradient
+                id="fov-caution-gradient"
+                cx="50%"
+                cy="0%"
+                r="100%"
+              >
                 <stop offset="0%" stopColor="#f59e0b" stopOpacity="0.5" />
                 <stop offset="70%" stopColor="#f59e0b" stopOpacity="0.16" />
                 <stop offset="100%" stopColor="#f59e0b" stopOpacity="0.03" />
               </radialGradient>
 
               <radialGradient id="fov-clear-gradient" cx="50%" cy="0%" r="100%">
-                <stop offset="0%" stopColor="var(--accent, #38bdf8)" stopOpacity="0.32" />
-                <stop offset="70%" stopColor="var(--accent, #38bdf8)" stopOpacity="0.08" />
-                <stop offset="100%" stopColor="var(--accent, #38bdf8)" stopOpacity="0.01" />
+                <stop
+                  offset="0%"
+                  stopColor="var(--accent, #38bdf8)"
+                  stopOpacity="0.32"
+                />
+                <stop
+                  offset="70%"
+                  stopColor="var(--accent, #38bdf8)"
+                  stopOpacity="0.08"
+                />
+                <stop
+                  offset="100%"
+                  stopColor="var(--accent, #38bdf8)"
+                  stopOpacity="0.01"
+                />
               </radialGradient>
 
-              <radialGradient id="fov-unknown-gradient" cx="50%" cy="0%" r="100%">
+              <radialGradient
+                id="fov-unknown-gradient"
+                cx="50%"
+                cy="0%"
+                r="100%"
+              >
                 <stop offset="0%" stopColor="#94a3b8" stopOpacity="0.18" />
                 <stop offset="70%" stopColor="#94a3b8" stopOpacity="0.06" />
                 <stop offset="100%" stopColor="#94a3b8" stopOpacity="0.01" />
               </radialGradient>
 
-              <filter id="point-glow" x="-150%" y="-150%" width="400%" height="400%">
+              <filter
+                id="point-glow"
+                x="-150%"
+                y="-150%"
+                width="400%"
+                height="400%"
+              >
                 <feGaussianBlur stdDeviation="3.2" result="blur" />
                 <feMerge>
                   <feMergeNode in="blur" />
@@ -601,7 +776,28 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                 </feMerge>
               </filter>
 
-              <filter id="alert-hit-glow" x="-200%" y="-200%" width="500%" height="500%">
+              <filter
+                id="cloud-glow"
+                filterUnits="userSpaceOnUse"
+                x="-20"
+                y="-20"
+                width="1040"
+                height="660"
+              >
+                <feGaussianBlur stdDeviation="3.2" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+
+              <filter
+                id="alert-hit-glow"
+                x="-200%"
+                y="-200%"
+                width="500%"
+                height="500%"
+              >
                 <feGaussianBlur stdDeviation="6" result="blur" />
                 <feMerge>
                   <feMergeNode in="blur" />
@@ -613,99 +809,146 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
             {/* Viewport Backdrop */}
             <rect width="1000" height="620" rx="18" fill="url(#spatial-sky)" />
             <path d="M0 190H1000V620H0Z" fill="url(#spatial-floor)" />
-            <line className="spatial-horizon" x1="0" y1="190" x2="1000" y2="190" />
+            <line
+              className="spatial-horizon"
+              x1="0"
+              y1="190"
+              x2="1000"
+              y2="190"
+            />
 
             {/* 3D Floor Grid & Range Rings */}
-            {showDistanceRings && floorGrid(cameraConfig)}
+            {connected && (
+              <HaulRoad world={world} vehicle={vehicle} camera={cameraConfig} />
+            )}
+            {showDistanceRings && grid}
 
-            {/* ----------------------------------------------------------- */}
-            {/* 1. Sensor Coverage FOV Cones / Sectors (Dynamic Danger Red) */}
-            {/* ----------------------------------------------------------- */}
+            {/* Sensor Coverage FOV Cones / Sectors (Dynamic Danger Red) */}
             {showFovSectors && (
-              <g className="spatial-fov-sectors" aria-label="Sensor FOV coverage zones">
-                {sensorThreats.map(({ sensor, reading, threat, isAlert, isCaution }) => {
-                  const latestReading = latestReadingById.get(sensor.sensor_id);
-                  const activeReading = sensor.scanner && latestReading
-                    ? reading
-                      ? { ...reading, angle_deg: latestReading.angle_deg }
-                      : { ...latestReading, range_m: 0, quality: 0, is_valid: false }
-                    : reading;
-                  const yaw =
-                    sensor.display_pose.yaw_deg +
-                    (sensor.scanner ? activeReading?.angle_deg ?? 0 : 0);
-                  const fov = sensor.scanner ? 32 : 45;
-                  const range = activeReading?.is_valid
-                    ? Math.max(0.4, Math.min(activeReading.range_m, sensor.visual_range_m))
-                    : Math.min(1.2, sensor.visual_range_m);
+              <g
+                className="spatial-fov-sectors"
+                aria-label="Sensor FOV coverage zones"
+              >
+                {sensorThreats.map(
+                  ({ sensor, reading, threat, isAlert, isCaution }) => {
+                    const latestReading = latestReadingById.get(
+                      sensor.sensor_id,
+                    );
+                    const activeReading =
+                      sensor.scanner && latestReading
+                        ? reading
+                          ? { ...reading, angle_deg: latestReading.angle_deg }
+                          : {
+                              ...latestReading,
+                              range_m: 0,
+                              quality: 0,
+                              is_valid: false,
+                            }
+                        : reading;
+                    const yaw =
+                      sensor.display_pose.yaw_deg +
+                      (sensor.scanner ? (activeReading?.angle_deg ?? 0) : 0);
+                    const fov = sensor.scanner ? 32 : 45;
+                    const range = activeReading?.is_valid
+                      ? Math.max(
+                          0.4,
+                          Math.min(
+                            activeReading.range_m,
+                            sensor.visual_range_m,
+                          ),
+                        )
+                      : Math.min(1.2, sensor.visual_range_m);
 
-                  // Apply IMU orientation to sensor pose
-                  const transformedPose = applyImuTransform(sensor.display_pose, imuOrientation);
+                    // Apply IMU orientation to sensor pose
+                    const transformedPose = applyImuTransform(
+                      sensor.display_pose,
+                      imuOrientation,
+                    );
 
-                  const path = generateFovSectorPath(
-                    transformedPose,
-                    yaw + imuOrientation.yaw_deg,
-                    fov,
-                    range,
-                    10,
-                    cameraConfig,
-                  );
+                    const path = generateFovSectorPath(
+                      transformedPose,
+                      yaw + imuOrientation.yaw_deg,
+                      fov,
+                      range,
+                      10,
+                      cameraConfig,
+                    );
 
-                  const fillGrad = isAlert
-                    ? "url(#fov-danger-gradient)"
-                    : isCaution
-                      ? "url(#fov-caution-gradient)"
-                      : threat === "UNKNOWN"
-                        ? "url(#fov-unknown-gradient)"
-                        : "url(#fov-clear-gradient)";
+                    const fillGrad = isAlert
+                      ? "url(#fov-danger-gradient)"
+                      : isCaution
+                        ? "url(#fov-caution-gradient)"
+                        : threat === "UNKNOWN"
+                          ? "url(#fov-unknown-gradient)"
+                          : "url(#fov-clear-gradient)";
 
-                  const strokeColor = isAlert
-                    ? "#ef4444"
-                    : isCaution
-                      ? "#f59e0b"
-                      : threat === "UNKNOWN"
-                        ? "#94a3b8"
-                        : `var(--${sensorClass(sensor.sensor_id)}, #38bdf8)`;
+                    const strokeColor = isAlert
+                      ? "#ef4444"
+                      : isCaution
+                        ? "#f59e0b"
+                        : threat === "UNKNOWN"
+                          ? "#94a3b8"
+                          : `var(--${sensorClass(sensor.sensor_id)}, #38bdf8)`;
 
-                  return (
-                    <g
-                      key={`fov-${sensor.sensor_id}`}
-                      className={`fov-sector-group ${isAlert ? "fov-alert-active" : ""}`}
-                    >
-                      <path
-                        d={path}
-                        fill={fillGrad}
-                        stroke={strokeColor}
-                        strokeWidth={isAlert ? "2.2" : "1.2"}
-                        strokeDasharray={isAlert ? "6 4" : "none"}
-                        className={isAlert ? "fov-cone-pulse" : "fov-cone-normal"}
-                      />
-                    </g>
-                  );
-                })}
+                    return (
+                      <g
+                        key={`fov-${sensor.sensor_id}`}
+                        className={`fov-sector-group ${isAlert ? "fov-alert-active" : ""}`}
+                      >
+                        <path
+                          d={path}
+                          fill={fillGrad}
+                          stroke={strokeColor}
+                          strokeWidth={isAlert ? "2.2" : "1.2"}
+                          strokeDasharray={isAlert ? "6 4" : "none"}
+                          className={
+                            isAlert ? "fov-cone-pulse" : "fov-cone-normal"
+                          }
+                        />
+                      </g>
+                    );
+                  },
+                )}
               </g>
             )}
 
-            {/* ----------------------------------------------------------- */}
-            {/* 2. Sensor Beams & Active Raycasts                           */}
-            {/* ----------------------------------------------------------- */}
+            {/* Sensor Beams & Active Raycasts                           */}
             <g className="spatial-beams">
               {sensorSettings.map((sensor) => {
                 const reading = readingById.get(sensor.sensor_id);
                 const latestReading = latestReadingById.get(sensor.sensor_id);
-                const displayReading = sensor.scanner && latestReading
-                  ? reading
-                    ? { ...reading, angle_deg: latestReading.angle_deg }
-                    : { ...latestReading, range_m: 0, quality: 0, is_valid: false }
-                  : reading;
+                const displayReading =
+                  sensor.scanner && latestReading
+                    ? reading
+                      ? { ...reading, angle_deg: latestReading.angle_deg }
+                      : {
+                          ...latestReading,
+                          range_m: 0,
+                          quality: 0,
+                          is_valid: false,
+                        }
+                    : reading;
                 const rawOrigin = sensor.display_pose;
                 const rawEndpoint = rangeEndpoint(sensor, displayReading);
 
                 // Transform with MPU-6050 orientation
-                const transformedOrigin = applyImuTransform(rawOrigin, imuOrientation);
-                const transformedEndpoint = applyImuTransform(rawEndpoint, imuOrientation);
+                const transformedOrigin = applyImuTransform(
+                  rawOrigin,
+                  imuOrientation,
+                );
+                const transformedEndpoint = applyImuTransform(
+                  rawEndpoint,
+                  imuOrientation,
+                );
 
-                const origin = projectVehiclePointWithCamera(transformedOrigin, cameraConfig);
-                const endpoint = projectVehiclePointWithCamera(transformedEndpoint, cameraConfig);
+                const origin = projectVehiclePointWithCamera(
+                  transformedOrigin,
+                  cameraConfig,
+                );
+                const endpoint = projectVehiclePointWithCamera(
+                  transformedEndpoint,
+                  cameraConfig,
+                );
 
                 const threat = getSensorThreatLevel(reading, sensor);
                 const isAlert = threat === "ALERT";
@@ -715,7 +958,7 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                 const hitRadius = obstacleVisualRadius(dist, endpoint.scale);
                 const angle =
                   sensor.display_pose.yaw_deg +
-                  (sensor.scanner ? latestReading?.angle_deg ?? 0 : 0);
+                  (sensor.scanner ? (latestReading?.angle_deg ?? 0) : 0);
 
                 return (
                   <g
@@ -739,7 +982,11 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                         cy={endpoint.y}
                         rx={hitRadius * 1.3}
                         ry={hitRadius * 0.7}
-                        fill={isAlert ? "rgba(239, 68, 68, 0.45)" : "rgba(56, 189, 248, 0.25)"}
+                        fill={
+                          isAlert
+                            ? "rgba(239, 68, 68, 0.45)"
+                            : "rgba(56, 189, 248, 0.25)"
+                        }
                         stroke={isAlert ? "#ef4444" : "var(--accent, #38bdf8)"}
                         strokeWidth="1.2"
                         className={isAlert ? "hit-ground-disc-alert" : ""}
@@ -748,7 +995,12 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
 
                     {/* Sensor Hit Core Marker with Realistic Proximity Sizing */}
                     {reading?.is_valid && (
-                      <g className="sensor-hit-target" filter={isAlert ? "url(#alert-hit-glow)" : "url(#point-glow)"}>
+                      <g
+                        className="sensor-hit-target"
+                        filter={
+                          isAlert ? "url(#alert-hit-glow)" : "url(#point-glow)"
+                        }
+                      >
                         {isAlert && (
                           <circle
                             className="beam-hit-ripple"
@@ -788,7 +1040,13 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                           height="18"
                           rx="5"
                           fill="rgba(3, 7, 18, 0.94)"
-                          stroke={isAlert ? "#ef4444" : isCaution ? "#f59e0b" : "var(--accent, #38bdf8)"}
+                          stroke={
+                            isAlert
+                              ? "#ef4444"
+                              : isCaution
+                                ? "#f59e0b"
+                                : "var(--accent, #38bdf8)"
+                          }
                           strokeWidth="1.5"
                         />
                         <text
@@ -798,9 +1056,17 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                           fontSize="9"
                           fontWeight="800"
                           fontFamily="var(--mono, monospace)"
-                          fill={isAlert ? "#ef4444" : isCaution ? "#f59e0b" : "#f8fafc"}
+                          fill={
+                            isAlert
+                              ? "#ef4444"
+                              : isCaution
+                                ? "#f59e0b"
+                                : "#f8fafc"
+                          }
                         >
-                          {isAlert ? `⚠ ${dist.toFixed(2)}m` : `${dist.toFixed(2)}m`}
+                          {isAlert
+                            ? `⚠ ${dist.toFixed(2)}m`
+                            : `${dist.toFixed(2)}m`}
                         </text>
                       </g>
                     )}
@@ -809,71 +1075,95 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
               })}
             </g>
 
-            {/* ----------------------------------------------------------- */}
-            {/* 3. Mapped 3D Point Cloud with Optical Perspective Scaling   */}
-            {/* ----------------------------------------------------------- */}
-            <g className="spatial-point-cloud" filter="url(#point-glow)">
-              {plottedPoints.flatMap(({ source, point, spatialPoint, distanceM }, index) => {
-                const height = Math.max(0.12, Math.min(1.2, point.z_m));
-                const heights = [0.05, height * 0.5, height];
-                const alert = distanceM <= source.alert_distance_m;
-                const caution = distanceM <= source.alert_distance_m * 1.5;
+            {/* Mapped 3D Point Cloud with Optical Perspective Scaling   */}
+            <g className="spatial-point-cloud" filter="url(#cloud-glow)">
+              {plottedPoints.flatMap(
+                ({ source, point, spatialPoint, distanceM }, index) => {
+                  const height = Math.max(0.12, Math.min(1.2, point.z_m));
+                  const heights = [0.05, height * 0.5, height];
+                  const alert = distanceM <= source.alert_distance_m;
+                  const caution = distanceM <= source.alert_distance_m * 1.5;
 
-                return heights.map((z, layer) => {
-                  const transformedPt = applyImuTransform({ ...point, z_m: z }, imuOrientation);
-                  const screen = projectVehiclePointWithCamera(transformedPt, cameraConfig);
-                  // OPTICAL PERSPECTIVE SCALING: Nearer points are realistically larger
-                  const radius = obstacleVisualRadius(distanceM, screen.scale);
-                  const layerRadius = layer === 2 ? radius : radius * 0.72;
+                  return heights.map((z, layer) => {
+                    const transformedPt = applyImuTransform(
+                      { ...point, z_m: z },
+                      imuOrientation,
+                    );
+                    const screen = projectVehiclePointWithCamera(
+                      transformedPt,
+                      cameraConfig,
+                    );
+                    // OPTICAL PERSPECTIVE SCALING: Nearer points are realistically larger
+                    const radius = obstacleVisualRadius(
+                      distanceM,
+                      screen.scale,
+                    );
+                    const layerRadius = layer === 2 ? radius : radius * 0.72;
 
-                  return (
-                    <g key={`${spatialPoint.source_sensor_id}-${spatialPoint.timestamp_ms}-${index}-${layer}`}>
-                      {showPointAuras && layer === 0 && (alert || caution) && (
-                        <ellipse
+                    return (
+                      <g key={`${index}-${layer}`}>
+                        {showPointAuras &&
+                          layer === 0 &&
+                          (alert || caution) && (
+                            <ellipse
+                              cx={screen.x}
+                              cy={screen.y}
+                              rx={radius * 1.6}
+                              ry={radius * 0.9}
+                              fill={
+                                alert
+                                  ? "rgba(239, 68, 68, 0.35)"
+                                  : "rgba(245, 158, 11, 0.22)"
+                              }
+                              className="point-cloud-aura"
+                            />
+                          )}
+                        <circle
+                          className={`spatial-dot ${sensorClass(source.sensor_id)} ${
+                            alert
+                              ? "spatial-dot-alert"
+                              : caution
+                                ? "spatial-dot-caution"
+                                : ""
+                          } ${spatialPoint.quality < 0.65 ? "spatial-dot-low" : ""}`}
                           cx={screen.x}
                           cy={screen.y}
-                          rx={radius * 1.6}
-                          ry={radius * 0.9}
-                          fill={alert ? "rgba(239, 68, 68, 0.35)" : "rgba(245, 158, 11, 0.22)"}
-                          className="point-cloud-aura"
-                        />
-                      )}
-                      <circle
-                        className={`spatial-dot ${sensorClass(source.sensor_id)} ${
-                          alert ? "spatial-dot-alert" : caution ? "spatial-dot-caution" : ""
-                        } ${spatialPoint.quality < 0.65 ? "spatial-dot-low" : ""}`}
-                        cx={screen.x}
-                        cy={screen.y}
-                        r={layerRadius}
-                      >
-                        <title>{`${source.label}: ${distanceM.toFixed(2)} m (Quality: ${Math.round(spatialPoint.quality * 100)}%)`}</title>
-                      </circle>
-                    </g>
-                  );
-                });
-              })}
+                          r={layerRadius}
+                        >
+                          {layer === 2 && (
+                            <title>{`${source.label}: ${distanceM.toFixed(2)} m (Quality: ${Math.round(spatialPoint.quality * 100)}%)`}</title>
+                          )}
+                        </circle>
+                      </g>
+                    );
+                  });
+                },
+              )}
             </g>
 
-            {/* ----------------------------------------------------------- */}
-            {/* 4. Complete Moveable 3D Truck Model in Scene                */}
-            {/* ----------------------------------------------------------- */}
+            {/* Complete Moveable 3D Truck Model in Scene                */}
             {connected && (
-              <Vehicle3DTruck
-                sensors={sensorSettings}
-                readings={ranges}
-                emergencyState={world.emergency.state}
-                isPrimary={true}
-                callsign={vehicle.vehicle_id}
-                showSensorMounts={true}
-                showHeadlightBeams={true}
-                showPerimeterShield={true}
-                activeAlertSensorId={closestAlert?.sensor.sensor_id ?? null}
-                imuOrientation={imuOrientation}
-                steerAngleDeg={effectiveSteer}
-                cameraConfig={cameraConfig}
-              />
+              <HaulTraffic
+                world={world}
+                vehicle={vehicle}
+                camera={cameraConfig}
+              >
+                <Vehicle3DTruck
+                  sensors={sensorSettings}
+                  readings={ranges}
+                  emergencyState={world.emergency.state}
+                  isPrimary={true}
+                  callsign={vehicle.vehicle_id}
+                  showSensorMounts={true}
+                  showHeadlightBeams={true}
+                  showPerimeterShield={true}
+                  activeAlertSensorId={closestAlert?.sensor.sensor_id ?? null}
+                  imuOrientation={imuOrientation}
+                  steerAngleDeg={effectiveSteer}
+                  cameraConfig={cameraConfig}
+                />
+              </HaulTraffic>
             )}
-
           </svg>
 
           {!connected && (
@@ -890,51 +1180,77 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
 
           {/* Interactive Legend Bar */}
           <div className="spatial-legend">
-            <span><i className="legend-dot-live" />Mapped return</span>
-            <span><i className="legend-line-beam" />Active beam</span>
-            <span><i className="legend-dot-alert" />Hazard</span>
-            <span><i className="legend-dot-caution" />Caution</span>
+            <span>
+              <i className="legend-dot-live" />
+              Mapped return
+            </span>
+            <span>
+              <i className="legend-line-beam" />
+              Active beam
+            </span>
+            <span>
+              <i className="legend-dot-alert" />
+              Hazard
+            </span>
+            <span>
+              <i className="legend-dot-caution" />
+              Caution
+            </span>
           </div>
         </article>
 
-        {/* ----------------------------------------------------------- */}
         {/* Sensor Heads & Real-Time Proximity Gauge Panel              */}
-        {/* ----------------------------------------------------------- */}
         <aside className="spatial-sensor-panel">
           <div className="panel-heading">
             <div>
               <p className="eyebrow">Perimeter Coverage</p>
               <h3>Sensor heads</h3>
             </div>
-            <span className="source-badge">{trustedCoverageCount}/{sensorSettings.length} valid</span>
+            <span className="source-badge">
+              {trustedCoverageCount}/{sensorSettings.length} valid
+            </span>
           </div>
 
           <div className="spatial-sensor-list">
             {sensorSettings.map((sensor) => {
               const reading = readingById.get(sensor.sensor_id);
               const latestReading = latestReadingById.get(sensor.sensor_id);
-              const health = world.sensor_health.find((item) => item.sensor_id === sensor.sensor_id);
+              const health = world.sensor_health.find(
+                (item) => item.sensor_id === sensor.sensor_id,
+              );
               const threat = getSensorThreatLevel(reading, sensor);
               const isAlert = threat === "ALERT";
               const isCaution = threat === "CAUTION";
               const rangeM = reading?.range_m ?? null;
 
-              const gaugePct = rangeM !== null
-                ? Math.max(5, Math.min(100, (rangeM / sensor.visual_range_m) * 100))
-                : 0;
+              const gaugePct =
+                rangeM !== null
+                  ? Math.max(
+                      5,
+                      Math.min(100, (rangeM / sensor.visual_range_m) * 100),
+                    )
+                  : 0;
 
               return (
                 <article
                   key={sensor.sensor_id}
                   className={`spatial-sensor-row ${
-                    isAlert ? "spatial-sensor-row-alert" : isCaution ? "spatial-sensor-row-caution" : ""
+                    isAlert
+                      ? "spatial-sensor-row-alert"
+                      : isCaution
+                        ? "spatial-sensor-row-caution"
+                        : ""
                   }`}
                 >
-                  <span className={`sensor-swatch ${sensorClass(sensor.sensor_id)}`} />
+                  <span
+                    className={`sensor-swatch ${sensorClass(sensor.sensor_id)}`}
+                  />
                   <div className="spatial-sensor-info">
                     <div className="sensor-title-line">
                       <strong>{sensor.label}</strong>
-                      <span className={`sensor-threat-badge badge-${threat.toLowerCase()}`}>
+                      <span
+                        className={`sensor-threat-badge badge-${threat.toLowerCase()}`}
+                      >
                         {threat}
                       </span>
                     </div>
@@ -942,7 +1258,10 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
 
                     {/* Proximity Distance Gauge Bar */}
                     {reading?.is_valid && (
-                      <div className="sensor-proximity-gauge" title={`Distance: ${rangeM?.toFixed(2)} m`}>
+                      <div
+                        className="sensor-proximity-gauge"
+                        title={`Distance: ${rangeM?.toFixed(2)} m`}
+                      >
                         <div
                           className={`gauge-fill ${isAlert ? "gauge-alert" : isCaution ? "gauge-caution" : "gauge-clear"}`}
                           style={{ width: `${gaugePct}%` }}
@@ -959,8 +1278,18 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
                   </div>
 
                   <div className="spatial-range-value">
-                    <strong className={isAlert ? "range-text-alert" : isCaution ? "range-text-caution" : ""}>
-                      {reading?.is_valid ? `${formatNumber(reading.range_m, 2)} m` : "Unknown"}
+                    <strong
+                      className={
+                        isAlert
+                          ? "range-text-alert"
+                          : isCaution
+                            ? "range-text-caution"
+                            : ""
+                      }
+                    >
+                      {reading?.is_valid
+                        ? `${formatNumber(reading.range_m, 2)} m`
+                        : "Unknown"}
                     </strong>
                     <small>
                       {sensor.scanner
@@ -981,7 +1310,8 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
             <div>
               <dt>Nearest obstacle</dt>
               <dd className={closestAlert ? "text-danger" : ""}>
-                {nearestAnyReading?.rangeM !== null && nearestAnyReading?.rangeM !== undefined
+                {nearestAnyReading?.rangeM !== null &&
+                nearestAnyReading?.rangeM !== undefined
                   ? `${nearestAnyReading.rangeM.toFixed(2)} m`
                   : "--"}
               </dd>
@@ -996,11 +1326,16 @@ export function SpatialDashboard({ world, connection, sensorSettings }: SpatialD
             </div>
             <div>
               <dt>Vehicle Speed</dt>
-              <dd>{connected ? `${formatNumber(vehicle.speed_mps * 3.6, 1)} km/h` : "--"}</dd>
+              <dd>
+                {connected
+                  ? `${formatNumber(vehicle.speed_mps * 3.6, 1)} km/h`
+                  : "--"}
+              </dd>
             </div>
           </dl>
         </aside>
       </div>
+      <NavigationMap world={world} vehicle={vehicle} connected={connected} />
     </section>
   );
 }

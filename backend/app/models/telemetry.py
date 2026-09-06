@@ -80,6 +80,7 @@ class ObjectSource(StrEnum):
 
 
 class SimulationScenario(StrEnum):
+    HAUL = "HAUL"
     NORMAL = "NORMAL"
     FOG = "FOG"
     OBSTACLE = "OBSTACLE"
@@ -322,6 +323,19 @@ class SimulationControlRequest(TelemetryModel):
     reset: bool = False
 
 
+class HaulRouteState(TelemetryModel):
+    origin: str = "Mine loading bay"
+    destination: str = "Dump point"
+    phase: Literal["HAULING", "OBSTACLE", "WAITING", "ARRIVED"] = "HAULING"
+    distance_m: float = Field(default=0.0, ge=0)
+    total_distance_m: float = Field(ge=0)
+    remaining_m: float = Field(ge=0)
+    elapsed_s: float = Field(default=0.0, ge=0)
+    obstacle: Point2D | None = None
+    obstacle_radius_m: float = Field(default=0.9, gt=0)
+    next_instruction: str = "Continue along the haul road"
+
+
 class WorldState(TelemetryModel):
     schema_version: Literal["1.0"] = "1.0"
     generated_at_ms: int = Field(default_factory=now_ms, ge=0)
@@ -345,6 +359,7 @@ class WorldState(TelemetryModel):
     recording: RecordingState = Field(default_factory=RecordingState)
     simulation: SimulationState = Field(default_factory=SimulationState)
     v2x: V2XState = Field(default_factory=V2XState)
+    haul_route: HaulRouteState | None = None
 
     def primary_vehicle(self) -> VehiclePose:
         for vehicle in self.vehicles:

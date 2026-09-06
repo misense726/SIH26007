@@ -24,7 +24,9 @@ from backend.app.twin.world_store import WorldStore
 
 
 def simulator_config() -> dict:
-    return deepcopy(project_config())
+    config = deepcopy(project_config())
+    config["demo"]["demo"]["default_scenario"] = "NORMAL"
+    return config
 
 
 def observable_values(state) -> tuple:
@@ -65,7 +67,7 @@ def test_simulation_control_api_is_typed_and_updates_the_shared_world() -> None:
     with TestClient(app) as client:
         initial = client.get("/api/simulation")
         assert initial.status_code == 200
-        assert initial.json()["scenario"] == "NORMAL"
+        assert initial.json()["scenario"] == "HAUL"
 
         controlled = client.post(
             "/api/simulation/control",

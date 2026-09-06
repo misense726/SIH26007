@@ -261,10 +261,10 @@ async def telemetry_socket(websocket: WebSocket) -> None:
     last_sequence = -1
     try:
         while True:
-            snapshot = await websocket.app.state.world_store.snapshot()
-            if snapshot.sequence != last_sequence:
-                await websocket.send_text(snapshot.model_dump_json())
-                last_sequence = snapshot.sequence
+            snapshot = await websocket.app.state.world_store.stream_snapshot(last_sequence)
+            if snapshot is not None:
+                last_sequence, payload = snapshot
+                await websocket.send_text(payload)
             await asyncio.sleep(0.04)
     except WebSocketDisconnect:
         return

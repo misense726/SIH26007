@@ -86,4 +86,5 @@ def test_health_status_world_and_websocket() -> None:
             assert telemetry["schema_version"] == "1.0"
             assert telemetry["mode"] == "SIMULATED"
             assert len(telemetry["ranges"]) == 5
-            assert telemetry["reference_map"]["map_id"] == "FOGSEN_TEST_ROUTE_01"
+            assert telemetry["reference_map"]["map_id"] == "FOGSEN_MINE_HAUL"
+            assert telemetry["haul_route"]["destination"] == "Dump point"

@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useId, useMemo } from "react";
 import { buildTruckMesh, surfaceNormal } from "./truckMesh";
 import type { RangeReading } from "../types";
 import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
@@ -27,6 +27,7 @@ interface Vehicle3DTruckProps {
   imuOrientation?: ImuOrientation;
   steerAngleDeg?: number;
   cameraConfig?: CameraViewConfig;
+  sceneOffset?: VehiclePoint3D;
 }
 
 function sensorClass(sensorId: string): string {
@@ -46,12 +47,22 @@ export function Vehicle3DTruck({
   imuOrientation = { pitch_deg: 0, roll_deg: 0, yaw_deg: 0, suspension_z_m: 0 },
   steerAngleDeg = 0,
   cameraConfig = {},
+  sceneOffset = { x_m: 0, y_m: 0, z_m: 0 },
 }: Vehicle3DTruckProps) {
+  const id = useId();
+  const offset = (p: VehiclePoint3D) => ({
+    x_m: p.x_m + sceneOffset.x_m,
+    y_m: p.y_m + sceneOffset.y_m,
+    z_m: p.z_m + sceneOffset.z_m,
+  });
   const readingById = new Map(readings.map((r) => [r.sensor_id, r]));
 
   // Threat levels per sensor
   const threatBySensor = new Map<string, ThreatLevel>(
-    sensors.map((s) => [s.sensor_id, getSensorThreatLevel(readingById.get(s.sensor_id), s)]),
+    sensors.map((s) => [
+      s.sensor_id,
+      getSensorThreatLevel(readingById.get(s.sensor_id), s),
+    ]),
   );
 
   const hasAnyAlert =
@@ -64,19 +75,22 @@ export function Vehicle3DTruck({
   const isLeftAlert = threatBySensor.get("left_side") === "ALERT";
   const isRightAlert = threatBySensor.get("right_side") === "ALERT";
 
-  // -------------------------------------------------------------
   // 3D Point Transform Helper:
   // 1. Applies MPU-6050 pitch/roll/yaw/suspension transform
   // 2. Projects with perspective camera configuration
-  // -------------------------------------------------------------
   const transformPoint = (p: VehiclePoint3D): VehiclePoint3D =>
-    applyImuTransform(p, imuOrientation);
+    offset(applyImuTransform(p, imuOrientation));
 
   const proj = (p: VehiclePoint3D) =>
     projectVehiclePointWithCamera(transformPoint(p), cameraConfig);
 
   const projGround = (p: VehiclePoint3D) =>
-    projectVehiclePointWithCamera(p, cameraConfig);
+    projectVehiclePointWithCamera(
+      offset(
+        applyImuTransform(p, { ...imuOrientation, pitch_deg: 0, roll_deg: 0 }),
+      ),
+      cameraConfig,
+    );
 
   const poly = (points: VehiclePoint3D[]): string =>
     points
@@ -95,31 +109,64 @@ export function Vehicle3DTruck({
       .join(" ");
 
   const mesh = useMemo(() => buildTruckMesh(steerAngleDeg), [steerAngleDeg]);
-  const modelFaces = useMemo(() => mesh.flatMap((surface) => {
-    const points = surface.points.map((p) => applyImuTransform(p, imuOrientation));
-    if (cameraDepthForVehiclePoint(surfaceNormal(points), cameraConfig) >= -0.00001) return [];
-    const project = (vertices: VehiclePoint3D[]) => vertices.map((p) => {
-      const screen = projectVehiclePointWithCamera(p, cameraConfig);
-      return `${screen.x.toFixed(2)},${screen.y.toFixed(2)}`;
-    }).join(" ");
-    return [{
-      ...surface,
-      depth: points.reduce((sum, p) => sum + cameraDepthForVehiclePoint(p, cameraConfig), 0) / points.length,
-      polygon: project(points),
-      details: surface.details.map((d) => ({
-        fill: d.fill,
-        polygon: project(d.points.map((p) => applyImuTransform(p, imuOrientation))),
-      })),
-    }];
-  }).sort((a, b) => b.depth - a.depth), [
-    mesh, imuOrientation.pitch_deg, imuOrientation.roll_deg, imuOrientation.yaw_deg,
-    imuOrientation.suspension_z_m, cameraConfig.orbitYawDeg, cameraConfig.cameraPitchDeg,
-    cameraConfig.zoomScale, cameraConfig.panOffsetX, cameraConfig.panOffsetY,
-  ]);
+  const modelFaces = useMemo(
+    () =>
+      mesh
+        .flatMap((surface) => {
+          const points = surface.points.map((p) =>
+            offset(applyImuTransform(p, imuOrientation)),
+          );
+          if (
+            cameraDepthForVehiclePoint(surfaceNormal(points), cameraConfig) >=
+            -0.00001
+          )
+            return [];
+          const project = (vertices: VehiclePoint3D[]) =>
+            vertices
+              .map((p) => {
+                const screen = projectVehiclePointWithCamera(p, cameraConfig);
+                return `${screen.x.toFixed(2)},${screen.y.toFixed(2)}`;
+              })
+              .join(" ");
+          return [
+            {
+              ...surface,
+              depth:
+                points.reduce(
+                  (sum, p) => sum + cameraDepthForVehiclePoint(p, cameraConfig),
+                  0,
+                ) / points.length,
+              polygon: project(points),
+              details: surface.details.map((d) => ({
+                fill: d.fill,
+                polygon: project(
+                  d.points.map((p) =>
+                    offset(applyImuTransform(p, imuOrientation)),
+                  ),
+                ),
+              })),
+            },
+          ];
+        })
+        .sort((a, b) => b.depth - a.depth),
+    [
+      mesh,
+      imuOrientation.pitch_deg,
+      imuOrientation.roll_deg,
+      imuOrientation.yaw_deg,
+      imuOrientation.suspension_z_m,
+      cameraConfig.orbitYawDeg,
+      cameraConfig.cameraPitchDeg,
+      cameraConfig.zoomScale,
+      cameraConfig.panOffsetX,
+      cameraConfig.panOffsetY,
+      sceneOffset.x_m,
+      sceneOffset.y_m,
+      sceneOffset.z_m,
+    ],
+  );
 
-  // -------------------------------------------------------------
   // Ground Contact & Shadow Coordinates (Grounded on z = 0)
-  // -------------------------------------------------------------
   const shadowPoints: VehiclePoint3D[] = [
     { x_m: -0.82, y_m: 1.28, z_m: 0 },
     { x_m: 0.82, y_m: 1.28, z_m: 0 },
@@ -139,9 +186,7 @@ export function Vehicle3DTruck({
     { x_m: 1.15, y_m: 3.4, z_m: 0.02 },
   ];
 
-  // -------------------------------------------------------------
   // Perimeter Hazard Shields on Ground (z = 0)
-  // -------------------------------------------------------------
   const frontShield: VehiclePoint3D[] = [
     { x_m: -0.95, y_m: 1.15, z_m: 0.01 },
     { x_m: -0.75, y_m: 1.75, z_m: 0.01 },
@@ -171,48 +216,64 @@ export function Vehicle3DTruck({
   const callsignScreen = proj(callsignPos);
 
   return (
-    <g className={`vehicle-3d-truck ${hasAnyAlert ? "truck-alert-active" : ""}`} aria-label={`${callsign} 3D model`}>
+    <g
+      className={`vehicle-3d-truck ${hasAnyAlert ? "truck-alert-active" : ""}`}
+      aria-label={`${callsign} 3D model`}
+    >
       <defs>
-        <radialGradient id="headlight-beam-glow" cx="0" cy="0" r="100%" fx="0" fy="0">
+        <radialGradient
+          id={`${id}-headlight`}
+          cx="0"
+          cy="0"
+          r="100%"
+          fx="0"
+          fy="0"
+        >
           <stop offset="0%" stopColor="#ffffff" stopOpacity="0.45" />
           <stop offset="35%" stopColor="#38bdf8" stopOpacity="0.2" />
           <stop offset="100%" stopColor="#38bdf8" stopOpacity="0" />
         </radialGradient>
 
-        <radialGradient id="ground-ao-shadow" cx="50%" cy="50%" r="50%">
+        <radialGradient id={`${id}-shadow`} cx="50%" cy="50%" r="50%">
           <stop offset="0%" stopColor="#000000" stopOpacity="0.75" />
           <stop offset="60%" stopColor="#000000" stopOpacity="0.4" />
           <stop offset="100%" stopColor="#000000" stopOpacity="0" />
         </radialGradient>
 
-        <linearGradient id="hazard-perimeter-red" x1="0" y1="0" x2="0" y2="1">
+        <linearGradient id={`${id}-hazard`} x1="0" y1="0" x2="0" y2="1">
           <stop offset="0%" stopColor="#ef4444" stopOpacity="0.6" />
           <stop offset="100%" stopColor="#ef4444" stopOpacity="0.05" />
         </linearGradient>
       </defs>
 
-      {/* 1. Ground Shadow */}
+      {/* Ground Shadow */}
       <polygon
         points={polyGround(shadowPoints)}
-        fill="url(#ground-ao-shadow)"
+        fill={`url(#${id}-shadow)`}
         className="truck-ground-shadow"
       />
 
-      {/* 2. Headlight Light Cones onto Ground */}
+      {/* Headlight Light Cones onto Ground */}
       {showHeadlightBeams && (
         <g className="headlight-illumination" aria-hidden="true">
-          <polygon points={poly(leftLightCone)} fill="url(#headlight-beam-glow)" />
-          <polygon points={poly(rightLightCone)} fill="url(#headlight-beam-glow)" />
+          <polygon
+            points={poly(leftLightCone)}
+            fill={`url(#${id}-headlight)`}
+          />
+          <polygon
+            points={poly(rightLightCone)}
+            fill={`url(#${id}-headlight)`}
+          />
         </g>
       )}
 
-      {/* 3. Perimeter Warning Shields */}
+      {/* Perimeter Warning Shields */}
       {showPerimeterShield && (
         <g className="perimeter-hazard-shields">
           {isFrontAlert && (
             <polygon
               points={polyGround(frontShield)}
-              fill="url(#hazard-perimeter-red)"
+              fill={`url(#${id}-hazard)`}
               stroke="#ef4444"
               strokeWidth="2.4"
               strokeDasharray="6 4"
@@ -222,7 +283,7 @@ export function Vehicle3DTruck({
           {isRearAlert && (
             <polygon
               points={polyGround(rearShield)}
-              fill="url(#hazard-perimeter-red)"
+              fill={`url(#${id}-hazard)`}
               stroke="#ef4444"
               strokeWidth="2.4"
               strokeDasharray="6 4"
@@ -232,7 +293,7 @@ export function Vehicle3DTruck({
           {isLeftAlert && (
             <polygon
               points={polyGround(leftShield)}
-              fill="url(#hazard-perimeter-red)"
+              fill={`url(#${id}-hazard)`}
               stroke="#ef4444"
               strokeWidth="2.4"
               strokeDasharray="6 4"
@@ -242,7 +303,7 @@ export function Vehicle3DTruck({
           {isRightAlert && (
             <polygon
               points={polyGround(rightShield)}
-              fill="url(#hazard-perimeter-red)"
+              fill={`url(#${id}-hazard)`}
               stroke="#ef4444"
               strokeWidth="2.4"
               strokeDasharray="6 4"
@@ -252,14 +313,40 @@ export function Vehicle3DTruck({
         </g>
       )}
 
-      <g className="truck-model-surfaces" strokeLinejoin="round" aria-label="Mining dumper body">
+      <g
+        className="truck-model-surfaces"
+        strokeLinejoin="round"
+        aria-label="Mining dumper body"
+      >
         {modelFaces.map((surface) => (
-          <g key={surface.key} data-part={surface.part} className={surface.part.startsWith("wheel-") ? "truck-wheels truck-tire-assembly" : surface.part}>
+          <g
+            key={surface.key}
+            data-part={surface.part}
+            className={
+              surface.part.startsWith("wheel-")
+                ? "truck-wheels truck-tire-assembly"
+                : surface.part
+            }
+          >
             <polygon
-              className={surface.part.startsWith("wheel-") ? "truck-tire-face" : surface.part === "truck-beacon-lens" && hasAnyAlert ? "truck-body-face beacon-pulse-alert" : "truck-body-face"}
+              className={
+                surface.part.startsWith("wheel-")
+                  ? "truck-tire-face"
+                  : surface.part === "truck-beacon-lens" && hasAnyAlert
+                    ? "truck-body-face beacon-pulse-alert"
+                    : "truck-body-face"
+              }
               points={surface.polygon}
-              fill={surface.part === "truck-beacon-lens" && hasAnyAlert ? "#ef4444" : surface.fill}
-              stroke={surface.part === "truck-beacon-lens" && hasAnyAlert ? "#ef4444" : surface.fill}
+              fill={
+                surface.part === "truck-beacon-lens" && hasAnyAlert
+                  ? "#ef4444"
+                  : surface.fill
+              }
+              stroke={
+                surface.part === "truck-beacon-lens" && hasAnyAlert
+                  ? "#ef4444"
+                  : surface.fill
+              }
               strokeWidth="0.4"
             />
             {surface.details.map((detail, index) => (
@@ -269,7 +356,7 @@ export function Vehicle3DTruck({
         ))}
       </g>
 
-      {/* 11. Mounted Sensor Pods */}
+      {/* Mounted Sensor Pods */}
       {showSensorMounts && (
         <g className="truck-sensor-mounts">
           {sensors.map((sensor) => {
@@ -280,7 +367,8 @@ export function Vehicle3DTruck({
             const origin = proj(sensor.display_pose);
             const endpoint = proj(rangeEndpoint(sensor, reading));
             const threat = threatBySensor.get(sensor.sensor_id) ?? "UNKNOWN";
-            const isAlert = threat === "ALERT" || activeAlertSensorId === sensor.sensor_id;
+            const isAlert =
+              threat === "ALERT" || activeAlertSensorId === sensor.sensor_id;
             const isCaution = threat === "CAUTION";
             const isUnknown = threat === "UNKNOWN";
 
@@ -339,8 +427,11 @@ export function Vehicle3DTruck({
         </g>
       )}
 
-      {/* 12. Floating Callsign Tag */}
-      <g className="truck-callsign-hud" transform={`translate(${callsignScreen.x}, ${callsignScreen.y})`}>
+      {/* Floating Callsign Tag */}
+      <g
+        className="truck-callsign-hud"
+        transform={`translate(${callsignScreen.x}, ${callsignScreen.y})`}
+      >
         <rect
           x="-48"
           y="-14"
@@ -348,7 +439,13 @@ export function Vehicle3DTruck({
           height="18"
           rx="5"
           fill="rgba(3, 7, 18, 0.94)"
-          stroke={hasAnyAlert ? "#ef4444" : isPrimary ? "var(--accent, #38bdf8)" : "#94a3b8"}
+          stroke={
+            hasAnyAlert
+              ? "#ef4444"
+              : isPrimary
+                ? "var(--accent, #38bdf8)"
+                : "#94a3b8"
+          }
           strokeWidth="1.5"
           filter="drop-shadow(0 2px 8px rgba(0,0,0,0.6))"
         />

@@ -270,7 +270,7 @@ def test_v2x_api_endpoints() -> None:
         assert state["enabled"] is True
         assert state["node_id"] == "DUMPER_01"
         assert len(state["infrastructure_nodes"]) >= 2
-        assert len(state["active_peers"]) >= 2
+        assert [peer["vehicle_id"] for peer in state["active_peers"]] == ["DUMPER_02"]
 
         # POST /api/v2x/messages/bsm
         bsm_payload = {
@@ -338,5 +338,8 @@ def test_v2x_simulation_runtime_integration() -> None:
         v2x = world["v2x"]
         assert v2x["enabled"] is True
         assert v2x["tx_packet_count"] >= 1
-        assert len(v2x["active_peers"]) >= 2
+        assert {peer["vehicle_id"] for peer in v2x["active_peers"]} == {
+            vehicle["vehicle_id"] for vehicle in world["vehicles"]
+            if vehicle["vehicle_id"] != world["primary_vehicle_id"]
+        }
         assert len(v2x["recent_messages"]) >= 1
