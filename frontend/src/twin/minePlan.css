@@ -1,0 +1,185 @@
+.mine-plan-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 210px;
+  background: #e7ece8;
+  color: #243c48;
+}
+.mine-plan-canvas {
+  min-width: 0;
+  height: 560px;
+  position: relative;
+  overflow: hidden;
+}
+.mine-plan-canvas > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  touch-action: none;
+  cursor: grab;
+  font-family: inherit;
+}
+.mine-plan-canvas > svg:active {
+  cursor: grabbing;
+}
+.plan-contour {
+  fill: none;
+  stroke: #c6d0c4;
+  stroke-width: 0.65;
+}
+.plan-area {
+  stroke: #9b8660;
+  stroke-width: 1.2;
+  stroke-linejoin: round;
+}
+.plan-bench {
+  stroke: #e6d7be;
+  stroke-width: 2;
+}
+.plan-pit {
+  stroke: #937a60;
+}
+.plan-route {
+  fill: none;
+  stroke: #2477c9;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.9;
+}
+.plan-label {
+  pointer-events: none;
+}
+.plan-label path {
+  fill: none;
+  stroke: #74878a;
+  stroke-width: 1;
+}
+.plan-label rect {
+  fill: #fafcf9f2;
+  stroke: #bbc9c6;
+  stroke-width: 0.75;
+}
+.plan-label text {
+  fill: #243c48;
+  font-size: 12px;
+  font-weight: 600;
+}
+.plan-truck {
+  cursor: pointer;
+}
+.plan-truck:focus-visible {
+  outline: 2px solid #2477c9;
+  outline-offset: 4px;
+}
+.plan-direction path,
+.plan-scale path {
+  fill: none;
+  stroke: #3e5660;
+  stroke-width: 1.5;
+}
+.plan-direction text,
+.plan-scale text,
+.plan-drag-hint {
+  fill: #526870;
+  font-size: 11px;
+  font-weight: 500;
+}
+.mine-plan-legend {
+  padding: 24px 18px;
+  border-left: 1px solid #cbd5cd;
+  background: #f4f7f3;
+}
+.mine-plan-legend h3 {
+  margin: 0 0 18px;
+  color: #243c48;
+  font-size: 15px;
+  font-weight: 650;
+}
+.mine-plan-legend ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: grid;
+  gap: 8px;
+}
+.mine-plan-legend li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: #3c525b;
+  font-size: 12px;
+  line-height: 1.4;
+}
+.mine-plan-legend svg {
+  width: 29px;
+  height: 29px;
+  flex: none;
+}
+.mine-plan-legend p {
+  margin: 20px 0 0;
+  padding-top: 14px;
+  border-top: 1px solid #d8e0d9;
+  color: #60736e;
+  font-size: 11px;
+  line-height: 1.6;
+}
+.mine-fleet-map[data-view="plan"] .mine-map-tools {
+  background: #f4f7f3;
+  color: #243c48;
+  border-bottom: 1px solid #cbd5cd;
+}
+.mine-fleet-map[data-view="plan"] .mine-map-tools button {
+  background: #fff;
+  color: #344e59;
+  border-color: #bacbc9;
+}
+.mine-fleet-map[data-view="plan"] .mine-map-tools button[aria-pressed="true"] {
+  background: #e0edf7;
+  border-color: #6e9fca;
+  color: #185c9b;
+}
+.mine-fleet-map[data-view="plan"] .mine-map-key {
+  background: #eef3ee;
+  color: #486066;
+  border-top: 1px solid #cbd5cd;
+}
+.supervisor-dashboard:has(.mine-plan-layout) > .supervisor-hero {
+  display: none;
+}
+@media (max-width: 1000px) {
+  .mine-plan-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .mine-plan-legend {
+    border-left: 0;
+    border-top: 1px solid #cbd5cd;
+    padding: 18px;
+  }
+  .mine-plan-legend ul {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 8px 16px;
+  }
+  .mine-plan-legend h3 {
+    margin-bottom: 12px;
+  }
+  .mine-plan-legend p {
+    margin-top: 12px;
+    padding-top: 10px;
+  }
+}
+@media (max-width: 600px) {
+  .mine-plan-canvas {
+    height: 480px;
+  }
+  .mine-plan-legend ul {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .mine-plan-legend {
+    padding: 14px;
+  }
+  .mine-plan-legend li {
+    font-size: 11px;
+    gap: 6px;
+  }
+}

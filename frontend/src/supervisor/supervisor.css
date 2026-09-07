@@ -830,6 +830,34 @@ html[data-theme="light"] .supervisor-dashboard {
   letter-spacing: 0.08em;
 }
 
+.reference-map-legend {
+  padding: 16px 18px;
+  border-top: 1px solid var(--supervisor-line);
+  color: var(--supervisor-muted);
+  background: var(--supervisor-surface-raised);
+}
+.reference-map-legend > strong {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--supervisor-text);
+  font-size: 13px;
+}
+.reference-map-legend ul {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 24px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.reference-map-legend li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+.reference-map-legend svg { width: 25px; height: 25px; flex: none; }
+
 .supervisor-dashboard .fleet-map-legend {
   display: flex;
   flex-direction: row;

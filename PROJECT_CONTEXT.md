@@ -428,6 +428,10 @@ For production:
 
 The data model should support multiple dumpers even if V1 physically demonstrates only one.
 
+For mode-specific presentation, follow **AGENTS.md → Simulation and live map
+separation**. That section records the owner's map-only LIVE versus 3D SIMULATED
+decision and distinguishes hardware MAIN from the Git `main` branch.
+
 ---
 
 # 10. Safe Corridor

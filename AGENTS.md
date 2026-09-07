@@ -535,6 +535,28 @@ Supervisor UI:
 
 Do not copy supervisor telemetry clutter into the driver view.
 
+## Simulation and live map separation
+
+The owner confirmed this distinction on 2026-09-06:
+
+- **SIMULATED:** the haul scenario uses the illustrative 3D mine, moving dumpers,
+  crusher, rock encounter and passing traffic. Emphasize the mine, vehicles and
+  crusher; vegetation is background context.
+- **LIVE:** the supervisor gets the reference map and actual backend telemetry.
+  It does not use the simulated 3D mine, procedural terrain or scripted encounters.
+  Existing sensor-derived driver awareness remains separate from that mine scene.
+- **REPLAY:** render recorded state on the standard map; do not start a haul cycle.
+
+Here, "main data" means LIVE hardware data, not the Git `main` branch. Both modes
+may ship on that branch. MAIN is the ESP32 telemetry aggregator, not a simulation
+mode. Backend `WorldState` owns poses and observations in every mode; the browser
+only renders them. Missing live localization stays unknown, not simulated motion.
+
+When changing maps, mode selection or haul behavior, read `docs/haul-simulation.md`.
+Verify that only SIMULATED snapshots with a haul route mount the 3D mine, that LIVE
+and REPLAY stay on the standard map even with residual haul metadata, and that
+leaving the scene releases its graphics resources. Keep the mode label visible.
+
 ---
 
 # 11. Truthfulness

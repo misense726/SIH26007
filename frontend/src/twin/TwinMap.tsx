@@ -3,8 +3,9 @@ import L from "leaflet";
 import { DEFAULT_CAMPUS_CONFIG, EMPTY_MAP_TILE } from "../maps/campusConfig";
 import { cartesianToGeodetic } from "../maps/locationProvider";
 import type { SupervisorVehicle } from "../supervisor/supervisorViewModel";
-import type { HaulRouteState, MapFeature, Point2D } from "../types";
+import type { DataMode, HaulRouteState, MapFeature, Point2D } from "../types";
 import { MineFleetMap } from "./MineFleetMap";
+import { ReferenceMapLegend } from "./ReferenceMapLegend";
 
 const WIDTH = 960;
 const HEIGHT = 520;
@@ -67,6 +68,7 @@ function statusColor(vehicle: SupervisorVehicle): string {
 }
 
 interface TwinMapProps {
+  mode: DataMode;
   haul?: HaulRouteState | null;
   vehicles: SupervisorVehicle[];
   features: MapFeature[];
@@ -76,7 +78,9 @@ interface TwinMapProps {
 }
 
 export function TwinMap(props: TwinMapProps) {
-  return props.haul ? <MineFleetMap {...props} /> : <StandardTwinMap {...props} />;
+  return props.mode === "SIMULATED" && props.haul
+    ? <MineFleetMap {...props} />
+    : <StandardTwinMap {...props} />;
 }
 
 function StandardTwinMap({
@@ -354,13 +358,6 @@ function StandardTwinMap({
               </text>
             )}
           </svg>
-
-          <div className="fleet-map-legend" aria-label="Map legend">
-            <span><i className="legend-vehicle legend-primary" />Primary telemetry</span>
-            <span><i className="legend-vehicle legend-peer" />Peer vehicle</span>
-            <span><i className="legend-line legend-route" />Assigned route</span>
-            <span><i className="legend-area legend-hazard" />Hazard zone</span>
-          </div>
         </div>
       ) : (
         <div className="twin-map-road-wrap">
@@ -371,6 +368,7 @@ function StandardTwinMap({
           </div>
         </div>
       )}
+      <ReferenceMapLegend features={features} />
     </div>
   );
 }

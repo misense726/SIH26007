@@ -178,7 +178,9 @@ function SelectedVehiclePanel({
 
 export function SupervisorDashboard({ world, connection }: SupervisorDashboardProps) {
   const model = useMemo(() => createSupervisorViewModel(world), [world]);
-  const [activeSection, setActiveSection] = useState<SupervisorSection>(world.haul_route ? "fleet" : "overview");
+  const hasHaulRoute = world.mode === "SIMULATED" && Boolean(world.haul_route);
+  const [activeSection, setActiveSection] = useState<SupervisorSection>(hasHaulRoute ? "fleet" : "overview");
+  useEffect(() => { if (hasHaulRoute) setActiveSection("fleet"); }, [hasHaulRoute]);
   const [selectedTruckId, setSelectedTruckId] = useState<string | null>(world.primary_vehicle_id);
 
   useEffect(() => {
@@ -289,6 +291,7 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
                 <button type="button" className="panel-text-action" onClick={() => setActiveSection("fleet")}>Open fleet view</button>
               </header>
               <TwinMap
+                mode={world.mode}
                 haul={world.haul_route}
                 vehicles={model.vehicles}
                 features={world.reference_map?.features ?? []}
@@ -355,6 +358,7 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
               <span className="panel-context-label">Select a marker or vehicle row</span>
             </header>
             <TwinMap
+              mode={world.mode}
               haul={world.haul_route}
               vehicles={model.vehicles}
               features={world.reference_map?.features ?? []}
