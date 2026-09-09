@@ -7,6 +7,33 @@ from backend.app.config import project_config
 from backend.app.models import SimulationScenario
 from backend.app.simulation.engine import FullSimulator
 from backend.app.twin.world_store import WorldStore
+from backend.app.simulation.haul_route import HaulRun
+
+
+def test_haul_corner_positions_and_headings_are_continuous():
+    haul = HaulRun(project_config()["demo"]["demo"]["haul"])
+    before = haul.route.sample(haul.route.total_length_m - 0.001)
+    after = haul.route.sample(0.001)
+    assert abs((after.heading_deg - before.heading_deg + 180) % 360 - 180) < 0.1
+    assert math.hypot(after.x_m - before.x_m, after.y_m - before.y_m) < 0.00201
+    for route in (haul.route, haul.lead_route):
+        distance = 0.0
+        for i, length in enumerate(route.segment_lengths[:-1]):
+            distance += length
+            span = min(haul.config["corner_blend_m"], length * 0.45,
+                       route.segment_lengths[i + 1] * 0.45)
+            for join in (distance - span, distance, distance + span):
+                before, after = route.sample(join - 0.001), route.sample(join + 0.001)
+                turn = abs((after.heading_deg - before.heading_deg + 180) % 360 - 180)
+                assert turn < 0.1
+                assert math.hypot(after.x_m - before.x_m, after.y_m - before.y_m) <= 0.00201
+
+
+@pytest.mark.asyncio
+async def test_haul_reaches_faster_cruise_speed():
+    simulator = FullSimulator(WorldStore(), deepcopy(project_config()))
+    speeds = [(await simulator.tick()).primary_vehicle().speed_mps for _ in range(50)]
+    assert max(speeds) == pytest.approx(1.8)
 
 
 @pytest.mark.asyncio

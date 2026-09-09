@@ -244,7 +244,7 @@ function StandardTwinMap({
       <div className="fleet-map-toolbar">
         <div className="fleet-map-context">
           <span className="fleet-map-live-dot" aria-hidden="true" />
-          <span>{selectedVehicle ? `Focused on ${selectedVehicle.vehicleId}` : `${vehicles.length} known vehicles`}</span>
+          <span>{selectedVehicle ? `Focused on ${selectedVehicle.vehicleId}` : `${vehicles.length} positioned ${vehicles.length === 1 ? "vehicle" : "vehicles"}`}</span>
         </div>
         <div className="fleet-view-mode-toggle" role="group" aria-label="Map display mode">
           <button

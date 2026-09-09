@@ -24,6 +24,7 @@ export interface SupervisorVehicle {
   isPrimary: boolean;
   isSimulated: boolean;
   sourceLabel: string;
+  hasPosition: boolean;
   xM: number;
   yM: number;
   headingDeg: number;
@@ -192,6 +193,7 @@ export function createSupervisorViewModel(world: WorldState): SupervisorViewMode
         : peer
           ? "Vehicle + V2X"
           : "Vehicle telemetry",
+      hasPosition: vehicle.position_confidence > 0,
       xM: vehicle.x_m,
       yM: vehicle.y_m,
       headingDeg: vehicle.heading_deg,
@@ -221,6 +223,7 @@ export function createSupervisorViewModel(world: WorldState): SupervisorViewMode
       isPrimary: false,
       isSimulated: true,
       sourceLabel: "V2X simulation",
+      hasPosition: true,
       xM: peer.x_m,
       yM: peer.y_m,
       headingDeg: peer.heading_deg,
@@ -233,6 +236,31 @@ export function createSupervisorViewModel(world: WorldState): SupervisorViewMode
       ageMs: Math.max(0, referenceTimeMs - peer.last_seen_ms),
       tone: vehicleTone(emergencyState, peer.link_status, false, false, false),
     });
+  });
+
+  const knownIds = new Set(vehicles.map((vehicle) => vehicle.vehicleId));
+  (world.vehicle_telemetry ?? []).forEach((sample) => {
+    if (knownIds.has(sample.vehicle_id)) return;
+    const lastUpdateMs = sample.received_at_ms;
+    vehicles.push({
+      vehicleId: sample.vehicle_id,
+      isPrimary: false,
+      isSimulated: false,
+      sourceLabel: "Direct Wi-Fi telemetry",
+      hasPosition: false,
+      xM: 0,
+      yM: 0,
+      headingDeg: 0,
+      speedMps: sample.gps.speed_mps ?? 0,
+      positionConfidence: null,
+      emergencyState: null,
+      linkStatus: null,
+      distanceM: null,
+      lastUpdateMs,
+      ageMs: Math.max(0, referenceTimeMs - lastUpdateMs),
+      tone: sample.online ? "unknown" : "lost",
+    });
+    knownIds.add(sample.vehicle_id);
   });
 
   vehicles.sort((left, right) => {
@@ -268,7 +296,7 @@ export function createSupervisorViewModel(world: WorldState): SupervisorViewMode
     });
   }
 
-  const haul = world.haul_route;
+  const haul = world.mode === "SIMULATED" ? world.haul_route : null;
   if (haul && (haul.obstacle_detected || haul.traffic_slowing || haul.lead_waiting)) {
     issues.push({
       id: "haul-encounter",
@@ -311,7 +339,7 @@ export function createSupervisorViewModel(world: WorldState): SupervisorViewMode
     vehicles,
     counts: {
       total: vehicles.length,
-      online: vehicles.filter((vehicle) => vehicle.tone !== "lost").length,
+      online: vehicles.filter((vehicle) => vehicle.tone !== "lost" && vehicle.lastUpdateMs > 0).length,
       nominal: vehicles.filter((vehicle) => vehicle.tone === "nominal").length,
       attention: vehicles.filter((vehicle) => vehicle.tone === "attention").length,
       critical: vehicles.filter((vehicle) => vehicle.tone === "critical").length,

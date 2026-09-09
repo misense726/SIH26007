@@ -114,4 +114,24 @@ describe("mine route rendering", () => {
       }),
     ).toBe(false);
   });
+
+  it("does not render residual simulation assets in LIVE mode", () => {
+    const liveWorld: WorldState = {
+      ...world,
+      mode: "LIVE",
+      vehicles: world.vehicles.map((item) => ({ ...item, mode: "LIVE" })),
+    };
+    const markup = renderToStaticMarkup(
+      <svg>
+        <HaulRoad world={liveWorld} vehicle={liveWorld.vehicles[0]} camera={{}} />
+        <HaulTraffic world={liveWorld} vehicle={liveWorld.vehicles[0]} camera={{}}>
+          <g aria-label="primary truck" />
+        </HaulTraffic>
+      </svg>,
+    );
+    expect(markup).toContain("primary truck");
+    expect(markup).not.toContain("Road obstruction");
+    expect(markup).not.toContain("DUMPER_02 3D model");
+    expect(markup).not.toContain("Reference haul road");
+  });
 });

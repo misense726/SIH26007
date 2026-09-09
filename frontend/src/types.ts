@@ -316,6 +316,32 @@ export interface HaulRouteState {
 }
 
 export interface WorldState {
+  vehicle_telemetry?: Array<{
+    vehicle_id: "DUMPER_01" | "DUMPER_02";
+    received_at_ms: number;
+    online: boolean;
+    gps: {
+      fix: boolean;
+      lat: number | null;
+      lon: number | null;
+      alt_m: number | null;
+      speed_mps: number | null;
+      sats: number;
+      hdop: number | null;
+      age: number | null;
+      bytes: number;
+    };
+    load: {
+      ready: boolean;
+      tared: boolean;
+      taring: boolean;
+      calibrated: boolean;
+      zero_offset: number;
+      raw: number | null;
+      net_raw: number | null;
+      kg: number | null;
+    } | null;
+  }>;
   schema_version: "1.0";
   generated_at_ms: number;
   sequence: number;

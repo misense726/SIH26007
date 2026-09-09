@@ -77,7 +77,7 @@ def create_app(
             config,
             active_settings.sensor_settings_path,
         )
-        v2x_manager = V2XManager(node_id="DUMPER_01")
+        v2x_manager = V2XManager(node_id="DUMPER_01", seed_demo=active_settings.runtime_mode != "LIVE")
         app.state.v2x_manager = v2x_manager
         if active_settings.runtime_mode == "LIVE":
             app.state.simulator = None

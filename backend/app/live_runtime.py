@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Protocol
 
 from backend.app.camera import CameraFeed
+from backend.app.models.device import VehicleTelemetryPacket, GpsTelemetry
 from backend.app.mapping.occupancy import OccupancyAccumulator
 from backend.app.mapping.transforms import transforms_from_config
 from backend.app.models import (
@@ -289,6 +290,11 @@ class LiveSerialRuntime:
                     if not self._accept_packet(packet):
                         continue
                     received_at_ms = now_ms()
+                    if packet.gps is not None or packet.load is not None:
+                        await self._store.accept_vehicle(VehicleTelemetryPacket(
+                            vehicle_id="DUMPER_01", seq=packet.seq or 0, ms=packet.ms,
+                            gps=packet.gps or GpsTelemetry(), load=packet.load,
+                        ), received_at_ms)
                     sample = translate_main_packet(
                         packet,
                         received_at_ms=received_at_ms,

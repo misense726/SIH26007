@@ -27,7 +27,7 @@ export function HaulRoad({
   vehicle: VehiclePose;
   camera: CameraViewConfig;
 }) {
-  if (!world.haul_route) return null;
+  if (world.mode !== "SIMULATED" || !world.haul_route) return null;
   return (
     <g className="haul-road-layer" aria-label="Reference haul road">
       {world.reference_map?.features
@@ -138,7 +138,7 @@ export function HaulTraffic({
       node: children,
     },
   ];
-  if (world.haul_route) {
+  if (world.mode === "SIMULATED" && world.haul_route) {
     const crusher = world.reference_map?.features.find(
       (f) => f.feature_type === "DESTINATION",
     )?.points[0];
@@ -219,7 +219,8 @@ export function HaulTraffic({
       {entities.map((e) => (
         <Fragment key={e.id}>{e.node}</Fragment>
       ))}
-      {world.haul_route?.phase === "ARRIVED" &&
+      {world.mode === "SIMULATED" &&
+        world.haul_route?.phase === "ARRIVED" &&
         world.haul_route.destination === "Dump point" && (
           <g aria-label="Unloading ore at crusher">
             {Array.from({ length: 6 }, (_, i) => {

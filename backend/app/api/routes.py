@@ -22,9 +22,17 @@ from backend.app.sensor_settings import (
     SensorId,
     SensorSettingsState,
 )
+from backend.app.models.device import VehicleTelemetryPacket
 
 
 api_router = APIRouter(prefix="/api")
+
+@api_router.post("/telemetry/vehicle")
+async def receive_vehicle(packet: VehicleTelemetryPacket, request: Request) -> dict[str, str]:
+    if request.app.state.settings.runtime_mode != "LIVE":
+        raise HTTPException(status_code=409, detail="Vehicle telemetry requires LIVE mode")
+    await request.app.state.world_store.accept_vehicle(packet)
+    return {"status": "accepted", "vehicle_id": packet.vehicle_id}
 
 
 @api_router.get("/health")

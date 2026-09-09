@@ -79,4 +79,27 @@ describe("world state snapshot validation", () => {
 
     expect(isWorldStateSnapshot(snapshot)).toBe(false);
   });
+
+  it("rejects malformed direct vehicle telemetry", () => {
+    const snapshot = snapshotCopy();
+    snapshot.vehicle_telemetry = [{
+      vehicle_id: "DUMPER_02",
+      received_at_ms: 2_000,
+      online: true,
+      gps: {
+        fix: true,
+        lat: "invalid",
+        lon: 77.2,
+        alt_m: null,
+        speed_mps: null,
+        sats: 5,
+        hdop: 1.4,
+        age: 100,
+        bytes: 200,
+      },
+      load: null,
+    }];
+
+    expect(isWorldStateSnapshot(snapshot)).toBe(false);
+  });
 });

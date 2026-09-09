@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from backend.app.models.device import GpsTelemetry, LoadTelemetry
 
 from backend.app.models import (
     DataMode,
@@ -99,6 +100,8 @@ class EmergencyWireState(WireModel):
 
 
 class MainTelemetryPacket(WireModel):
+    gps: GpsTelemetry | None = None
+    load: LoadTelemetry | None = None
     type: Literal["telemetry"] | None = None
     seq: int | None = Field(default=None, ge=0)
     ms: int = Field(ge=0)

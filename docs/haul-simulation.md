@@ -47,6 +47,11 @@ The detour is configured for this track; this does not prove safe real-world pas
 
 Configuration is under `demo.haul` in `config/demo.yaml`. It owns route points,
 road width, traffic position/speed, obstacle position/radius and encounter times.
+Haul cruise speed is 1.8 m/s. Traffic and rock slowdowns retain a 1.15 m/s
+base before their reduction factors. Corners blend over 1.8 m on each side,
+limited by adjacent segment lengths, with continuous positions and headings.
+The backend applies the same rounded route to the primary and opposing truck.
+Waypoint distances and loading/unloading stops retain their route coordinates.
 The previous Normal, Fog, Obstacle and Emergency scenarios retain the campus map.
 Hardware providers and calibration are unchanged.
 

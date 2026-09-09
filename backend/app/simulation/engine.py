@@ -4,8 +4,8 @@ import asyncio
 import math
 from contextlib import suppress
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from backend.app.camera import CameraFeed
 from backend.app.localization.fusion import LocalizationFusion
 from backend.app.mapping.occupancy import OccupancyAccumulator
 from backend.app.mapping.transforms import transforms_from_config
@@ -49,6 +49,9 @@ from backend.app.simulation.haul_route import HaulRun
 from backend.app.mapping.raycasting import CircleTarget
 from backend.app.models.v2x import V2VBasicSafetyMessage
 
+if TYPE_CHECKING:
+    from backend.app.camera import CameraFeed
+
 
 class FullSimulator:
     """Deterministic provider-driven simulator for the complete FogSen V1 chain."""
@@ -76,6 +79,7 @@ class FullSimulator:
         self._route_distance_m = 0.0
         self._tick_index = 0
         self._elapsed_s = 0.0
+        self._loop_dwell_s = 0.0
         self._timestamp_ms = now_ms()
         self._front_scanner_angle_deg = -80.0
         self._front_scanner_direction = 1.0
@@ -230,6 +234,7 @@ class FullSimulator:
         self._route_distance_m = 0.0
         self._tick_index = 0
         self._elapsed_s = 0.0
+        self._loop_dwell_s = 0.0
         self._timestamp_ms = now_ms()
         self._front_scanner_angle_deg = -80.0
         self._front_scanner_direction = 1.0
@@ -462,7 +467,8 @@ class FullSimulator:
         speed = 0.0
         if self._movement_running and not self.emergency_output.active:
             requested_speed = min(
-                self._route_speed_mps * self._speed_scale,
+                (self._haul.config.get("cruise_speed_mps", self._route_speed_mps)
+                 if self._haul else self._route_speed_mps) * self._speed_scale,
                 self._max_demo_speed_mps,
             )
             if self._haul is not None:
@@ -473,6 +479,18 @@ class FullSimulator:
             travelled_m = min(requested_speed * self._interval_s, remaining_m)
             self._route_distance_m += travelled_m
             speed = travelled_m / self._interval_s
+            if self._haul is None and remaining_m < 0.01:
+                self._loop_dwell_s += self._interval_s
+                if self._loop_dwell_s >= 2.0:
+                    self._route_distance_m = 0.0
+                    self._loop_dwell_s = 0.0
+                    self.occupancy.clear()
+                    self._alerts.clear()
+                    self._last_emergency_level = EmergencyLevel.SAFE
+                    self.emergency_controller.reset()
+                    await self.emergency_output.set_motor_cut(
+                        False, "Route cycle complete"
+                    )
         route_sample = self._route.sample(self._route_distance_m)
         offset = self._haul.offset(self._route_distance_m) if self._haul else 0.0
         heading = math.radians(route_sample.heading_deg)

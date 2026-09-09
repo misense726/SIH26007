@@ -152,3 +152,14 @@ With the current hardware profile, `RESET_TICKS` fails with
 `HALL_SENSORS_DISABLED` and `ESTOP_TEST` fails with
 `RELAY_OUTPUT_DISABLED`. Neither command touches its reserved GPIO. The command
 handlers remain in place for a later enabled profile.
+# GPS and load extension, firmware 0.3.0
+
+MAIN now adds `vehicle_id: DUMPER_01`, `gps` and `load` to its existing packet.
+GPS contains `fix`, `lat`, `lon`, `alt_m`, `speed_mps`, `sats`, `hdop`, `age`
+and `bytes`. Coordinates are decimal degrees; fix age is milliseconds. Missing
+or older-than-five-second fixes have null measurements.
+
+Load contains `ready`, `calibrated`, `raw`, `kg` and `age`. Raw is signed HX711
+ADC counts. Kilograms are null until calibration. Missing or older-than-one-second
+load readings are unavailable. The same full telemetry packet is available over
+USB and TCP 8765. USB commands and event replies remain.

@@ -12,7 +12,7 @@ const TONE_LABELS: Record<SupervisorVehicleTone, string> = {
   attention: "Needs attention",
   critical: "Critical",
   lost: "Contact lost",
-  unknown: "Position only",
+  unknown: "Position unknown",
 };
 
 export function formatTelemetryAge(ageMs: number): string {
@@ -58,13 +58,13 @@ export function FleetCard({ truck, isSelected, onSelect }: FleetCardProps) {
         </span>
 
         <span className="fleet-cell fleet-value-cell" data-label="Speed">
-          <strong>{formatNumber(truck.speedMps * 3.6, 1)}</strong>
-          <small>km/h</small>
+          <strong>{truck.hasPosition ? formatNumber(truck.speedMps * 3.6, 1) : "--"}</strong>
+          <small>{truck.hasPosition ? "km/h" : "Awaiting GPS fix"}</small>
         </span>
 
         <span className="fleet-cell fleet-value-cell" data-label="Position">
-          <strong>{formatNumber(truck.xM, 1)}, {formatNumber(truck.yM, 1)}</strong>
-          <small>local metres</small>
+          <strong>{truck.hasPosition ? `${formatNumber(truck.xM, 1)}, ${formatNumber(truck.yM, 1)}` : "--"}</strong>
+          <small>{truck.hasPosition ? "local metres" : "Not available"}</small>
         </span>
 
         <span className="fleet-cell fleet-value-cell" data-label="Connection">

@@ -36,6 +36,9 @@ demo:
       obstacle_ahead_m: 0.9
       obstacle_radius_m: 0.45
   haul:
+    cruise_speed_mps: 1.8
+    encounter_speed_mps: 1.15
+    corner_blend_m: 1.8
     route_points_m: [[0, 0], [0, 22], [2, 26], [6, 28], [20, 30], [28, 34], [32, 40], [32, 44], [29, 48], [25, 50], [10, 52], [-8, 47], [-18, 37], [-22, 24], [-20, 12], [-16, 6], [-10, 2], [0, 0]]
     road_half_width_m: 3.4
     dump_waypoint: 7

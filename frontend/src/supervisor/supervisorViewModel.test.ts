@@ -153,4 +153,43 @@ describe("createSupervisorViewModel", () => {
       sensorSummary: { healthy: 4, total: 5 },
     });
   });
+
+  it("keeps a directly connected truck in the fleet while its position is unknown", () => {
+    const world = worldWithHealthyPrimary();
+    world.vehicle_telemetry = [{
+      vehicle_id: "DUMPER_02",
+      received_at_ms: 1_990,
+      online: true,
+      gps: { fix: false, lat: null, lon: null, alt_m: null, speed_mps: null, sats: 0, hdop: null, age: null, bytes: 0 },
+      load: null,
+    }];
+
+    const model = createSupervisorViewModel(world);
+
+    expect(model.counts).toMatchObject({ total: 2, online: 2, unknown: 1 });
+    expect(model.vehicles.find((vehicle) => vehicle.vehicleId === "DUMPER_02")).toMatchObject({
+      sourceLabel: "Direct Wi-Fi telemetry",
+      hasPosition: false,
+      tone: "unknown",
+    });
+  });
+
+  it("keeps a zero-confidence LIVE pose off the map", () => {
+    const world = worldWithHealthyPrimary();
+    world.mode = "LIVE";
+    world.vehicles = [{
+      ...world.vehicles[0],
+      mode: "LIVE",
+      x_m: 0,
+      y_m: 0,
+      position_confidence: 0,
+    }];
+
+    const model = createSupervisorViewModel(world);
+
+    expect(model.primary?.vehicle).toMatchObject({
+      hasPosition: false,
+      positionConfidence: 0,
+    });
+  });
 });

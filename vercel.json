@@ -1,0 +1,12 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "buildCommand": "npm --prefix frontend ci && npm --prefix frontend run build",
+  "fluid": true,
+  "functions": {
+    "api/index.py": {
+      "maxDuration": 300,
+      "includeFiles": "{config/**,maps/**,frontend/dist/**}",
+      "excludeFiles": "{backend/app/camera/**,backend/app/live_runtime.py}"
+    }
+  }
+}

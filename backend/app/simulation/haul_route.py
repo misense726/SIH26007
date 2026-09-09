@@ -23,7 +23,8 @@ class HaulRun:
     def __init__(self, config: dict) -> None:
         self.config = config
         self.route = PolylineRoute(
-            [Point2D(x_m=x, y_m=y) for x, y in config["route_points_m"]]
+            [Point2D(x_m=x, y_m=y) for x, y in config["route_points_m"]],
+            corner_blend_m=config.get("corner_blend_m", 1.8),
         )
         road = LineString([(p.x_m, p.y_m) for p in self.route.points]).buffer(
             config["road_half_width_m"],
@@ -107,7 +108,8 @@ class HaulRun:
             [
                 Point2D(x_m=lead_start.x_m, y_m=lead_start.y_m),
                 *[Point2D(x_m=x, y_m=y) for x, y in config["lead_branch_points_m"]],
-            ]
+            ],
+            corner_blend_m=config.get("corner_blend_m", 1.8),
         )
         branch = LineString([(p.x_m, p.y_m) for p in self.lead_route.points]).buffer(
             1.5
@@ -153,9 +155,10 @@ class HaulRun:
         self.traffic_slowing = separation < self.config["traffic_slow_distance_m"]
         factor = self.config["traffic_speed_scale"] if self.traffic_slowing else 1.0
         step = self.config["acceleration_mps2"] * dt
-        target = requested * factor
+        encounter_speed = min(requested, self.config.get("encounter_speed_mps", 1.15))
+        target = encounter_speed * factor if self.traffic_slowing else requested
         if self.obstacle_detected:
-            target = min(target, requested * 0.45)
+            target = min(target, encounter_speed * 0.45)
         lead_gap = self.config["lead_distance_m"] - distance
         self.lead_waiting = 0 < lead_gap < 8 and self.lead_progress < 3
         if self.lead_waiting:

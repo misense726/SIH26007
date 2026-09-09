@@ -12,6 +12,9 @@ constexpr int kI2cSda = 21;
 constexpr int kI2cScl = 22;
 constexpr int kRearScannerXshut = 13;
 constexpr int kRearServoPwm = 14;
+constexpr int kGpsRx = 34;
+constexpr int kLoadData = 19;
+constexpr int kLoadClock = 18;
 
 constexpr int kHallLeft = 32;
 constexpr int kHallRight = 33;

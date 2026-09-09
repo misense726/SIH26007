@@ -41,8 +41,10 @@ class V2XManager:
         peer_stale_ms: int = 5_000,
         bsm_interval_ms: int = 500,
         proximity_alert_cooldown_ms: int = 4_000,
+        seed_demo: bool = True,
     ) -> None:
         self.node_id = node_id
+        self._seed_demo = seed_demo
         self._max_log_size = max_log_size
         self._peer_stale_ms = peer_stale_ms
         self._bsm_interval_ms = bsm_interval_ms
@@ -62,8 +64,9 @@ class V2XManager:
         self._advisories: list[V2IAdvisoryMessage] = []
         self._message_log: list[V2XMessage] = []
 
-        self._seed_default_infrastructure()
-        self._seed_default_peers()
+        if self._seed_demo:
+            self._seed_default_infrastructure()
+            self._seed_default_peers()
 
     @property
     def enabled(self) -> bool:
@@ -92,8 +95,9 @@ class V2XManager:
             self._rsus.clear()
             self._advisories.clear()
             self._message_log.clear()
-            self._seed_default_infrastructure()
-            self._seed_default_peers()
+            if self._seed_demo:
+                self._seed_default_infrastructure()
+                self._seed_default_peers()
 
     def _seed_default_infrastructure(self) -> None:
         """Seed default mine Roadside Units (RSUs)."""

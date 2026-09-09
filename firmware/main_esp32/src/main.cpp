@@ -19,6 +19,7 @@
 #include "UsbCommandParser.h"
 #include "WheelOdometry.h"
 #include "WifiTelemetry.h"
+#include "GpsLoadSensors.h"
 
 namespace fogsen {
 namespace {
@@ -35,6 +36,7 @@ WheelOdometry wheelOdometry(config::kWheelCircumferenceM,
                             config::kWheelSpeedHoldMs);
 SerialTxQueue laptopTx;
 WifiTelemetry wifiTelemetry;
+GpsLoadSensors gpsLoadSensors;
 UsbCommandParser commandParser;
 
 SafetyParameters makeSafetyParameters() {
@@ -497,6 +499,9 @@ bool queueTelemetry(uint32_t nowMs) {
   telemetryDocument["mode"] = config::kDataMode;
   telemetryDocument["seq"] = telemetrySequence++;
   telemetryDocument["ms"] = nowMs;
+  telemetryDocument["vehicle_id"] = "DUMPER_01";
+  gpsLoadSensors.addTelemetry(telemetryDocument.createNestedObject("gps"),
+                              telemetryDocument.createNestedObject("load"), nowMs);
 
   addNodeTelemetry(telemetryDocument.createNestedObject("front"), frontNode,
                    nowMs);
@@ -649,6 +654,10 @@ void handleCommand(const char* command) {
     const bool ok = localSensors.zeroAltitude();
     queueCommandReply(command, ok,
                       ok ? "RELATIVE_ALTITUDE_ZEROED" : "BMP280_NOT_READY");
+  } else if (strcmp(command, "TARE_LOAD") == 0) {
+    const bool ok = gpsLoadSensors.startTare();
+    queueCommandReply(command, ok,
+                      ok ? "LOAD_TARE_STARTED" : "HX711_NOT_READY");
   } else if (strcmp(command, "RESET_TICKS") == 0) {
     if (config::kHallSensorsEnabled) {
       resetHallTicks(nowMs);
@@ -778,6 +787,7 @@ void setup() {
   rearScanner.begin(nowMs);
   localSensors.begin(nowMs);
   wifiTelemetry.begin();
+  gpsLoadSensors.begin();
 
   lastWheelMs = nowMs - config::kWheelPeriodMs;
   lastSafetyMs = nowMs - config::kSafetyPeriodMs;
@@ -798,6 +808,7 @@ void loop() {
 
   rearScanner.poll(nowMs);
   localSensors.poll(nowMs);
+  gpsLoadSensors.poll(nowMs);
 
   if (config::kHallSensorsEnabled &&
       intervalElapsed(nowMs, lastWheelMs, config::kWheelPeriodMs)) {

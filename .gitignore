@@ -26,3 +26,5 @@ firmware/main_esp32/wifi_secrets.h
 *.log
 Thumbs.db
 .DS_Store
+
+.vercel

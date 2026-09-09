@@ -7,6 +7,7 @@ from typing import Literal
 from pydantic import BaseModel, ConfigDict, Field
 
 from backend.app.models.v2x import V2XState
+from backend.app.models.device import VehicleTelemetry
 
 
 def now_ms() -> int:
@@ -344,6 +345,7 @@ class HaulRouteState(TelemetryModel):
 
 
 class WorldState(TelemetryModel):
+    vehicle_telemetry: list[VehicleTelemetry] = Field(default_factory=list)
     schema_version: Literal["1.0"] = "1.0"
     generated_at_ms: int = Field(default_factory=now_ms, ge=0)
     sequence: int = Field(default=0, ge=0)

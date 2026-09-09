@@ -18,6 +18,7 @@ from backend.app.providers.serial_protocol import (
 COMMANDS = (
     "STATUS",
     "ZERO_ALT",
+    "TARE_LOAD",
     "RESET_TICKS",
     "ESTOP_TEST",
     "ESTOP_RESET",

@@ -29,7 +29,7 @@ export function NavigationMap({
   const aspect = mapWidth < 680 ? 1.4 : 2.5;
   const features = world.reference_map?.features ?? [];
   const route = features.find((f) => f.feature_type === "ROUTE");
-  const haul = world.haul_route;
+  const haul = world.mode === "SIMULATED" ? world.haul_route : null;
   const bounds = useMemo(() => {
     const points = features.flatMap((f) => f.points);
     const xs = points.map((p) => p.x_m),

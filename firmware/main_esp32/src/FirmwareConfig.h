@@ -6,7 +6,7 @@
 namespace fogsen {
 namespace config {
 
-constexpr char kFirmwareVersion[] = "0.2.0";
+constexpr char kFirmwareVersion[] = "0.3.0";
 constexpr char kTelemetrySchema[] = "fogsen.main.v1";
 constexpr char kDataMode[] = "LIVE";
 
@@ -80,8 +80,8 @@ constexpr uint16_t kImuZeroSampleCount = 100;
 constexpr float kImuZeroMaxGyroDps = 5.0F;
 constexpr float kImuZeroMaxAccelDeltaMps2 = 0.75F;
 
-constexpr size_t kTelemetryJsonCapacity = 3072;
-constexpr size_t kTelemetryLineCapacity = 1500;
+constexpr size_t kTelemetryJsonCapacity = 4096;
+constexpr size_t kTelemetryLineCapacity = 2400;
 constexpr size_t kTransmitQueueDepth = 3;
 constexpr size_t kWifiTransmitQueueDepth = 3;
 

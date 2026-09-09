@@ -102,6 +102,45 @@ function isVehicle(value: unknown): boolean {
   );
 }
 
+function isGpsTelemetry(value: unknown): boolean {
+  if (
+    !isRecord(value) ||
+    typeof value.fix !== "boolean" ||
+    !hasFiniteNumbers(value, ["sats", "bytes"]) ||
+    !hasNullableFiniteNumbers(value, ["lat", "lon", "alt_m", "speed_mps", "hdop", "age"])
+  ) {
+    return false;
+  }
+  if ((value.sats as number) < 0 || (value.bytes as number) < 0) return false;
+  if (value.lat !== null && ((value.lat as number) < -90 || (value.lat as number) > 90)) return false;
+  if (value.lon !== null && ((value.lon as number) < -180 || (value.lon as number) > 180)) return false;
+  return !value.fix || (value.lat !== null && value.lon !== null && value.age !== null);
+}
+
+function isLoadTelemetry(value: unknown): boolean {
+  if (value === null) return true;
+  return (
+    isRecord(value) &&
+    typeof value.ready === "boolean" &&
+    typeof value.tared === "boolean" &&
+    typeof value.taring === "boolean" &&
+    typeof value.calibrated === "boolean" &&
+    isFiniteNumber(value.zero_offset) &&
+    hasNullableFiniteNumbers(value, ["raw", "net_raw", "kg", "age"])
+  );
+}
+
+function isVehicleTelemetry(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    (value.vehicle_id === "DUMPER_01" || value.vehicle_id === "DUMPER_02") &&
+    isFiniteNumber(value.received_at_ms) &&
+    typeof value.online === "boolean" &&
+    isGpsTelemetry(value.gps) &&
+    isLoadTelemetry(value.load)
+  );
+}
+
 function isRange(value: unknown): boolean {
   return (
     isRecord(value) &&
@@ -441,6 +480,9 @@ export function isWorldStateSnapshot(value: unknown): value is WorldState {
     hasFiniteNumbers(value, ["generated_at_ms", "sequence"]) &&
     Array.isArray(value.vehicles) &&
     value.vehicles.every(isVehicle) &&
+    (value.vehicle_telemetry === undefined ||
+      (Array.isArray(value.vehicle_telemetry) &&
+        value.vehicle_telemetry.every(isVehicleTelemetry))) &&
     hasReferenceMapShape(value.reference_map) &&
     Array.isArray(value.ranges) &&
     value.ranges.every(isRange) &&

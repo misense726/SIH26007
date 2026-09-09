@@ -5,19 +5,21 @@ import type { ConnectionState } from "../state/useTelemetry";
 import { TwinMap } from "../twin/TwinMap";
 import type { AlertEvent, WorldState } from "../types";
 import { FleetCard, formatTelemetryAge } from "./FleetCard";
+import { HaulEfficiencyPanel } from "./HaulEfficiencyPanel";
 import {
   createSupervisorViewModel,
   type SupervisorIssue,
   type SupervisorVehicle,
 } from "./supervisorViewModel";
 import { V2XPanel } from "./V2XPanel";
+import { VehicleSensors } from "./VehicleSensors";
 
 interface SupervisorDashboardProps {
   world: WorldState;
   connection: ConnectionState;
 }
 
-type SupervisorSection = "overview" | "fleet" | "alerts" | "network";
+type SupervisorSection = "overview" | "fleet" | "efficiency" | "alerts" | "network";
 
 const SECTION_LABELS: Array<{
   value: SupervisorSection;
@@ -26,6 +28,7 @@ const SECTION_LABELS: Array<{
 }> = [
   { value: "overview", label: "Overview", description: "Operational picture" },
   { value: "fleet", label: "Fleet", description: "Vehicles and telemetry" },
+  { value: "efficiency", label: "Efficiency", description: "Haul estimates" },
   { value: "alerts", label: "Alerts", description: "Issues and history" },
   { value: "network", label: "Network", description: "V2X coordination" },
 ];
@@ -36,6 +39,9 @@ function SectionIcon({ section }: { section: SupervisorSection }) {
   }
   if (section === "fleet") {
     return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16V9l3-3h10l3 3v7" /><path d="M6 13h12M7 18h2M15 18h2M7 6l1-3h8l1 3" /></svg>;
+  }
+  if (section === "efficiency") {
+    return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 19V5M4 19h16" /><path d="m7 15 4-4 3 2 5-6" /><circle cx="7" cy="15" r="1" /><circle cx="11" cy="11" r="1" /><circle cx="14" cy="13" r="1" /><circle cx="19" cy="7" r="1" /></svg>;
   }
   if (section === "alerts") {
     return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3 2.8 20h18.4L12 3Z" /><path d="M12 9v5M12 17.5h.01" /></svg>;
@@ -121,9 +127,9 @@ function SelectedVehiclePanel({
       </header>
 
       <div className="selected-vehicle-metrics">
-        <div><span>Speed</span><strong>{formatNumber(vehicle.speedMps * 3.6, 1)} km/h</strong></div>
-        <div><span>Heading</span><strong>{formatNumber(vehicle.headingDeg, 0)}°</strong></div>
-        <div><span>Position</span><strong>{formatNumber(vehicle.xM, 1)}, {formatNumber(vehicle.yM, 1)} m</strong></div>
+        <div><span>Speed</span><strong>{vehicle.hasPosition ? `${formatNumber(vehicle.speedMps * 3.6, 1)} km/h` : "Unavailable"}</strong></div>
+        <div><span>Heading</span><strong>{vehicle.hasPosition ? `${formatNumber(vehicle.headingDeg, 0)}°` : "Unavailable"}</strong></div>
+        <div><span>Position</span><strong>{vehicle.hasPosition ? `${formatNumber(vehicle.xM, 1)}, ${formatNumber(vehicle.yM, 1)} m` : "Awaiting GPS fix"}</strong></div>
         <div><span>Last update</span><strong>{formatTelemetryAge(Math.max(0, referenceTimeMs - vehicle.lastUpdateMs))}</strong></div>
       </div>
 
@@ -163,7 +169,9 @@ function SelectedVehiclePanel({
         <div className="peer-telemetry-note">
           <strong>{vehicle.sourceLabel}</strong>
           <p>
-            This peer reports position, motion, and coordination status only. Environment and range-sensor data are not available per peer.
+            {vehicle.hasPosition
+              ? "This peer reports position, motion, and coordination status. Environment and range-sensor data are unavailable for this vehicle."
+              : "The vehicle is connected. Position and movement will appear after its GPS reports a valid fix."}
           </p>
           <dl>
             <div><dt>Link</dt><dd>{vehicle.linkStatus?.toLowerCase() ?? "Not reported"}</dd></div>
@@ -218,6 +226,7 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
   }
 
   const selectedVehicle = model.vehicles.find((vehicle) => vehicle.vehicleId === selectedTruckId) ?? null;
+  const positionedVehicles = model.vehicles.filter((vehicle) => vehicle.hasPosition);
   const criticalIssues = model.issues.filter((issue) => issue.severity === "CRITICAL").length;
   const attentionCount = model.counts.attention + model.counts.critical + model.counts.lost + model.counts.unknown;
 
@@ -259,13 +268,15 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
         })}
       </nav>
 
+      <VehicleSensors world={world} />
+
       {activeSection === "overview" && (
         <div className="supervisor-section supervisor-overview-section">
           <div className="supervisor-kpi-grid" aria-label="Fleet summary">
             <article className="supervisor-kpi kpi-online">
               <span className="kpi-label">Fleet available</span>
               <strong>{model.counts.online}<small> / {model.counts.total}</small></strong>
-              <p><i aria-hidden="true" />{model.counts.lost === 0 ? "All known vehicles reporting" : `${model.counts.lost} contact lost`}</p>
+              <p><i aria-hidden="true" />{model.counts.online === model.counts.total ? "All known vehicles reporting" : `${model.counts.total - model.counts.online} awaiting telemetry`}</p>
             </article>
             <article className={`supervisor-kpi ${attentionCount > 0 ? "kpi-attention" : "kpi-clear"}`}>
               <span className="kpi-label">Needs attention</span>
@@ -293,7 +304,7 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
               <TwinMap
                 mode={world.mode}
                 haul={world.haul_route}
-                vehicles={model.vehicles}
+                vehicles={positionedVehicles}
                 features={world.reference_map?.features ?? []}
                 mapName={model.mapName}
                 selectedTruckId={selectedTruckId}
@@ -360,7 +371,7 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
             <TwinMap
               mode={world.mode}
               haul={world.haul_route}
-              vehicles={model.vehicles}
+              vehicles={positionedVehicles}
               features={world.reference_map?.features ?? []}
               mapName={model.mapName}
               selectedTruckId={selectedTruckId}
@@ -424,6 +435,8 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
           </article>
         </div>
       )}
+
+      {activeSection === "efficiency" && <HaulEfficiencyPanel />}
 
       {activeSection === "network" && (
         <div className="supervisor-section">
