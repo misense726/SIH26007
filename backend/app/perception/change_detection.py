@@ -21,10 +21,15 @@ class ChangeDetector:
     def __init__(self, reference_map: ReferenceMap, known_tolerance_m: float = 0.38) -> None:
         self.reference_map = reference_map
         self.known_tolerance_m = known_tolerance_m
-        road_feature = reference_map.feature(MapFeatureType.ROAD)
-        if road_feature is None:
-            raise ValueError("Reference map requires a ROAD feature")
-        self.road = Polygon([(point.x_m, point.y_m) for point in road_feature.points]).buffer(0)
+        road_features = reference_map.features_of_type(MapFeatureType.ROAD)
+        if not road_features:
+            raise ValueError("Reference map requires at least one ROAD feature")
+        self.road = unary_union(
+            [
+                Polygon([(point.x_m, point.y_m) for point in feature.points]).buffer(0)
+                for feature in road_features
+            ]
+        )
 
         known_geometry = []
         for feature in reference_map.features:

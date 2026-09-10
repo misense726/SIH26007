@@ -15,7 +15,6 @@ interface Projection {
   point: (value: Point2D) => [number, number];
   scale: number;
 }
-
 function createProjection(features: MapFeature[], vehicles: SupervisorVehicle[]): Projection {
   const points = [
     ...features.flatMap((feature) => feature.points),

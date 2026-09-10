@@ -19,6 +19,8 @@ from backend.app.providers.redundant_reader import (
 )
 from backend.app.providers.serial_port import MainControllerSerial
 from backend.app.providers.wifi_listener import WifiTelemetryListener
+from backend.app.analytics import HaulageAnalyticsEngine
+from backend.app.mine_map import MineRoadGraph
 from backend.app.simulation.engine import FullSimulator
 from backend.app.sensor_settings import SensorSettingsStore
 from backend.app.twin.world_store import WorldStore
@@ -148,6 +150,9 @@ def create_app(
                 v2x_manager=v2x_manager,
             )
             app.state.live_runtime = app.state.runtime
+            app.state.mine_graph = MineRoadGraph()
+            app.state.analytics = HaulageAnalyticsEngine(seed_baseline=False)
+            app.state.fleet_manager = None
         else:
             app.state.simulator = FullSimulator(
                 app.state.world_store,
@@ -158,6 +163,9 @@ def create_app(
             )
             app.state.runtime = app.state.simulator
             app.state.live_runtime = None
+            app.state.mine_graph = app.state.simulator.mine_graph
+            app.state.analytics = app.state.simulator.analytics
+            app.state.fleet_manager = app.state.simulator.fleet_manager
         await app.state.runtime.start()
         try:
             yield

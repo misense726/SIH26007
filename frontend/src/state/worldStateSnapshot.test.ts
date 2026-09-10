@@ -1,6 +1,18 @@
 import { describe, expect, it } from "vitest";
+import type { SimulationScenario } from "../types";
 import { defaultWorldState } from "./defaultState";
 import { isWorldStateSnapshot } from "./worldStateSnapshot";
+
+const bailadilaScenarios = [
+  "SCENARIO_1_DENSE_FOG",
+  "SCENARIO_2_VEHICLE_AHEAD",
+  "SCENARIO_3_OPPOSING_VEHICLE",
+  "SCENARIO_4_STATIC_OBSTACLE",
+  "SCENARIO_5_ROAD_CLOSURE_REROUTE",
+  "SCENARIO_6_PAYLOAD_ROUTING",
+  "SCENARIO_7_FLEET_MONITORING",
+  "SCENARIO_8_HAULAGE_ANALYTICS",
+] as const satisfies readonly SimulationScenario[];
 
 function snapshotCopy(): Record<string, unknown> {
   return structuredClone(defaultWorldState) as unknown as Record<string, unknown>;
@@ -10,6 +22,17 @@ describe("world state snapshot validation", () => {
   it("accepts the complete world-state contract", () => {
     expect(isWorldStateSnapshot(snapshotCopy())).toBe(true);
   });
+
+  it.each(bailadilaScenarios)(
+    "accepts the %s simulation scenario",
+    (scenario) => {
+      const snapshot = snapshotCopy();
+      const simulation = snapshot.simulation as Record<string, unknown>;
+      simulation.scenario = scenario;
+
+      expect(isWorldStateSnapshot(snapshot)).toBe(true);
+    },
+  );
 
   it("rejects snapshots with missing render-critical state", () => {
     const snapshot = snapshotCopy();

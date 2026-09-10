@@ -19,7 +19,15 @@ FogSen currently includes:
 
 - FastAPI health, status, and world-state endpoints;
 - a WebSocket telemetry stream;
-- strict Pydantic telemetry contracts;
+- strict Pydantic telemetry contracts with additive operational state;
+- Driver and Supervisor console separation via client-side demo role selection;
+- NMDC Bailadila Deposit 5 / Deposit 14 inspired mine road graph (pickups, dumps, junctions, waypoints, road status, gradients, and speed limits);
+- payload-aware multi-criteria Dijkstra route optimizer (loaded dumpers receive gentle bypasses, empty dumpers take steep shortcuts);
+- dynamic rerouting on edge closures with retained V2I advisories;
+- multi-vehicle haulage cycle state machine and kinematic progression;
+- peer-to-peer V2V BSM mesh exchange and tactical collision threat alerts;
+- haulage efficiency analytics with fleet-wide ranking, production rate, and underperforming truck detection;
+- 8 deterministic operational demonstration scenarios with isolated baselines;
 - configuration for the vehicle, five ToFs, calibration, safety, and the demo;
 - provider interfaces for simulated, wired live, replay, and future hardware;
 - a React and TypeScript dashboard connected to backend telemetry;
@@ -41,7 +49,7 @@ FogSen currently includes:
   multi-truck selection, environment, sensor health, and alerts;
 - an in-memory V2V/V2I simulation with peer state, roadside units, advisories,
   packet history, and API controls;
-- deterministic normal, fog, obstacle, and emergency scenarios with bounded sensor values;
+- deterministic normal, fog, obstacle, emergency, and 8 Bailadila scenarios;
 - backend and frontend tests;
 - wired firmware for one ESP32-WROOM BACK/MAIN, one XIAO ESP32-C6 FRONT, and
   one ESP32-C3 Super Mini MIDDLE controller;

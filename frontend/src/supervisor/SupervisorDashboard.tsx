@@ -18,7 +18,6 @@ interface SupervisorDashboardProps {
   world: WorldState;
   connection: ConnectionState;
 }
-
 type SupervisorSection = "overview" | "fleet" | "efficiency" | "alerts" | "network";
 
 const SECTION_LABELS: Array<{
@@ -299,7 +298,10 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
             <article className="supervisor-panel supervisor-map-panel">
               <header className="supervisor-panel-heading">
                 <div><p className="eyebrow">Operational map</p><h3>{model.mapName}</h3></div>
-                <button type="button" className="panel-text-action" onClick={() => setActiveSection("fleet")}>Open fleet view</button>
+                <div className="supervisor-panel-actions">
+                  {model.primary && <span className="panel-context-label">Focused on {model.primary.vehicle.vehicleId}</span>}
+                  <button type="button" className="panel-text-action" onClick={() => setActiveSection("fleet")}>Open fleet view</button>
+                </div>
               </header>
               <TwinMap
                 mode={world.mode}

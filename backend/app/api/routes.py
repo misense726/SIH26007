@@ -3,19 +3,26 @@ from __future__ import annotations
 import asyncio
 from typing import Literal
 
-from fastapi import APIRouter, HTTPException, Request, Response, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Query, Request, Response, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, ConfigDict, Field
 
+from backend.app.analytics.models import HaulageMetrics, TripHistoryResponse
+from backend.app.fleet.models import FleetVehicleSummary
+from backend.app.mine_map.models import MineEdge, MineNetwork, RoadStatus
 from backend.app.models import (
     ReferenceMap,
     SimulationControlRequest,
     SimulationState,
     SystemStatus,
     V2IAdvisoryMessage,
+    V2IAdvisoryType,
     V2VBasicSafetyMessage,
     V2XState,
     WorldState,
 )
+from backend.app.navigation.models import NavigationRoute, RouteRequest
+from backend.app.navigation.router import RouteOptimizer
 from backend.app.sensor_settings import (
     SensorDisplaySetting,
     SensorDisplayUpdate,
@@ -23,6 +30,34 @@ from backend.app.sensor_settings import (
     SensorSettingsState,
 )
 from backend.app.models.device import VehicleTelemetryPacket
+
+
+class EdgeStatusUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    status: RoadStatus
+    risk_penalty: float | None = None
+    speed_limit_kmh: float | None = None
+    reason: str = "Dispatch road status update"
+
+
+class GuidanceResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    vehicle_id: str
+    callsign: str
+    current_destination: str
+    distance_remaining_m: float
+    next_instruction: str
+    speed_kmh: float
+    target_vehicle_id: str
+    target_callsign: str
+    hazard_distance_m: float
+    hazard_direction: str
+    closing_velocity_mps: float
+    threat_level: str
+    advisory_text: str
+    visibility_score: float
+    visibility_state: str
+    estimated_sight_distance_m: float
 
 
 api_router = APIRouter(prefix="/api")
@@ -262,6 +297,170 @@ async def broadcast_v2i_advisory(request: Request, advisory: V2IAdvisoryMessage)
         raise HTTPException(status_code=503, detail="V2X subsystem is offline")
     v2x_manager.broadcast_advisory(advisory)
     return {"status": "broadcasted", "message_id": advisory.message_id}
+
+
+@api_router.get("/mine/network", response_model=MineNetwork)
+async def mine_network(request: Request) -> MineNetwork:
+    mine_graph = getattr(request.app.state, "mine_graph", None)
+    if mine_graph is None:
+        raise HTTPException(status_code=503, detail="Mine road graph is offline")
+    return mine_graph.network
+
+
+@api_router.post("/mine/edges/{edge_id}/status", response_model=MineEdge)
+async def update_mine_edge_status(
+    request: Request,
+    edge_id: str,
+    update: EdgeStatusUpdateRequest,
+) -> MineEdge:
+    mine_graph = getattr(request.app.state, "mine_graph", None)
+    if mine_graph is None:
+        raise HTTPException(status_code=503, detail="Mine road graph is offline")
+
+    updated = mine_graph.update_edge_status(
+        edge_id,
+        update.status,
+        risk_penalty=update.risk_penalty,
+        speed_limit_kmh=update.speed_limit_kmh,
+    )
+    if updated is None:
+        raise HTTPException(status_code=404, detail=f"Edge '{edge_id}' not found")
+
+    # Broadcast V2I advisory if status changed to RESTRICTED or CLOSED
+    v2x_manager = getattr(request.app.state, "v2x_manager", None)
+    if v2x_manager and update.status != RoadStatus.OPEN:
+        adv = V2IAdvisoryMessage(
+            message_id=f"ADV-ROAD-{edge_id}-{int(asyncio.get_event_loop().time() * 1000)}",
+            rsu_id="RSU_CENTRAL_DISPATCH",
+            rsu_name="NMDC Mine Central Dispatch",
+            advisory_type=V2IAdvisoryType.ROAD_MAINTENANCE,
+            title=f"Road Status Update: {updated.segment_name or edge_id} is {update.status.value}",
+            detail=update.reason,
+            speed_limit_kmh=update.speed_limit_kmh,
+        )
+        v2x_manager.broadcast_advisory(adv)
+
+    # Dynamic rerouting for any active vehicle navigating this edge
+    fleet_manager = getattr(request.app.state, "fleet_manager", None)
+    if fleet_manager:
+        for veh in fleet_manager.vehicles.values():
+            if veh.current_route and update.status in {RoadStatus.CLOSED, RoadStatus.RESTRICTED}:
+                router = RouteOptimizer(mine_graph)
+                advisory = router.check_dynamic_reroute(
+                    veh.current_route,
+                    edge_id,
+                    current_node_id=veh.current_node_id,
+                    reason=update.reason,
+                )
+                if advisory:
+                    veh.assign_route(advisory.new_route)
+                    fleet_manager.add_reroute_advisory(advisory)
+
+    return updated
+
+
+@api_router.post("/navigation/route", response_model=NavigationRoute)
+async def calculate_route(request: Request, body: RouteRequest) -> NavigationRoute:
+    mine_graph = getattr(request.app.state, "mine_graph", None)
+    if mine_graph is None:
+        raise HTTPException(status_code=503, detail="Mine road network is offline")
+
+    router = RouteOptimizer(mine_graph)
+    route = router.find_route(body)
+    if not route:
+        raise HTTPException(
+            status_code=404,
+            detail=f"No viable route found from '{body.start_node_id}' to '{body.end_node_id}' (possible road closures).",
+        )
+    return route
+
+
+@api_router.get("/navigation/guidance", response_model=GuidanceResponse)
+async def navigation_guidance(
+    request: Request,
+    vehicle_id: str = Query(default="DUMPER_01"),
+) -> GuidanceResponse:
+    world_state = await request.app.state.world_store.snapshot()
+    fleet_manager = getattr(request.app.state, "fleet_manager", None)
+
+    if fleet_manager is None:
+        if world_state.mode == DataMode.LIVE:
+            raise HTTPException(
+                status_code=503,
+                detail="Operational vehicle guidance is offline in live hardware mode",
+            )
+        raise HTTPException(
+            status_code=503,
+            detail="Fleet guidance subsystem is offline",
+        )
+
+    veh = fleet_manager.get_vehicle(vehicle_id)
+    if veh is None:
+        raise HTTPException(
+            status_code=404,
+            detail=f"Vehicle '{vehicle_id}' not found in active fleet",
+        )
+
+    callsign = veh.callsign
+    destination = veh.assigned_dump if veh.payload_tonnes > 0 else veh.assigned_pickup
+    dist_rem = veh.distance_to_dest_m
+    instruction = veh.next_instruction
+    speed_kmh = veh.speed_mps * 3.6
+
+    threat = fleet_manager.get_tactical_collision_warning(vehicle_id)
+
+    vis_score = world_state.environment.visibility_score
+    vis_state = world_state.environment.visibility_state.value
+    # Approximate physical sight distance in meters based on atmospheric extinction
+    sight_distance = round(max(8.0, vis_score * 120.0), 1)
+
+    return GuidanceResponse(
+        vehicle_id=vehicle_id,
+        callsign=callsign,
+        current_destination=destination,
+        distance_remaining_m=round(dist_rem, 1),
+        next_instruction=instruction,
+        speed_kmh=round(speed_kmh, 1),
+        target_vehicle_id=threat.target_vehicle_id,
+        target_callsign=threat.target_callsign,
+        hazard_distance_m=threat.distance_m,
+        hazard_direction=threat.direction,
+        closing_velocity_mps=threat.closing_velocity_mps,
+        threat_level=threat.threat_level,
+        advisory_text=threat.advisory_text,
+        visibility_score=round(vis_score, 2),
+        visibility_state=vis_state,
+        estimated_sight_distance_m=sight_distance,
+    )
+
+
+@api_router.get("/fleet/vehicles", response_model=list[FleetVehicleSummary])
+async def fleet_vehicles(request: Request) -> list[FleetVehicleSummary]:
+    fleet_manager = getattr(request.app.state, "fleet_manager", None)
+    if fleet_manager is None:
+        return []
+    return fleet_manager.get_all_summaries()
+
+
+@api_router.get("/analytics/haulage-metrics", response_model=HaulageMetrics)
+async def haulage_metrics(request: Request) -> HaulageMetrics:
+    analytics = getattr(request.app.state, "analytics", None)
+    if analytics is None:
+        raise HTTPException(status_code=503, detail="Analytics subsystem is offline")
+    fleet_manager = getattr(request.app.state, "fleet_manager", None)
+    count = len(fleet_manager.vehicles) if fleet_manager else 0
+    return analytics.get_haulage_metrics(active_fleet_count=count)
+
+
+@api_router.get("/analytics/trip-history", response_model=TripHistoryResponse)
+async def trip_history(
+    request: Request,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> TripHistoryResponse:
+    analytics = getattr(request.app.state, "analytics", None)
+    if analytics is None:
+        raise HTTPException(status_code=503, detail="Analytics subsystem is offline")
+    return analytics.get_trip_history(limit=limit)
 
 
 async def telemetry_socket(websocket: WebSocket) -> None:

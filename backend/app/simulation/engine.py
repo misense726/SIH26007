@@ -6,9 +6,12 @@ from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING
 
+from backend.app.analytics.trip_logger import HaulageAnalyticsEngine
+from backend.app.fleet.fleet_manager import FleetManager
 from backend.app.localization.fusion import LocalizationFusion
 from backend.app.mapping.occupancy import OccupancyAccumulator
 from backend.app.mapping.transforms import transforms_from_config
+from backend.app.mine_map.graph import MineRoadGraph
 from backend.app.models import (
     AlertEvent,
     CameraState,
@@ -25,7 +28,12 @@ from backend.app.models import (
     VehiclePose,
     WorldState,
 )
-from backend.app.models.telemetry import now_ms
+from backend.app.models.common import now_ms
+from backend.app.models.operations import (
+    HaulageMetricsSummary,
+    MineOperationsState,
+    TacticalGuidance,
+)
 from backend.app.perception.change_detection import ChangeDetector
 from backend.app.safety.corridor import CorridorEvaluator
 from backend.app.safety.emergency import EmergencyController, SafetyParameters
@@ -41,6 +49,7 @@ from backend.app.simulation.providers import (
     SimulatedScene,
     radar_models,
 )
+from backend.app.simulation.scenarios import ALL_SCENARIOS
 from backend.app.twin.map_store import load_reference_map, save_reference_map
 from backend.app.twin.route import PolylineRoute
 from backend.app.twin.world_store import WorldStore
@@ -119,6 +128,14 @@ class FullSimulator:
             config["vehicle"]["vehicle"]["max_demo_speed_mps"]
         )
         self._recording_state = RecordingState()
+
+        self.mine_graph = MineRoadGraph()
+        self.analytics = HaulageAnalyticsEngine()
+        self.fleet_manager = FleetManager(
+            self.mine_graph,
+            self._v2x_manager,
+            on_trip_completed=self.analytics.record_trip,
+        )
 
         initial_route = self._build_route(self._reference_map)
         self._route = initial_route
@@ -271,7 +288,9 @@ class FullSimulator:
             rear_scanner_angle_deg=self._rear_scanner_angle_deg,
         )
         self._configure_pipeline()
+        self.mine_graph.reset()
         self._v2x_manager.reset()
+        self.fleet_manager.reset_fleet()
         self._scenario = self._default_scenario
         await self._apply_scenario(self._default_scenario)
 
@@ -344,15 +363,20 @@ class FullSimulator:
         return self.simulation_state()
 
     async def _apply_scenario(self, scenario: SimulationScenario) -> None:
-        change_map = (scenario is SimulationScenario.HAUL) != (self._haul is not None)
-        if scenario is SimulationScenario.HAUL:
+        is_haul = scenario is SimulationScenario.HAUL
+        change_map = is_haul != (self._haul is not None)
+        if is_haul:
             self._haul = HaulRun(self._config["demo"]["demo"]["haul"])
             self._reference_map = self._haul.reference_map
             self._v2x_manager.clear_peers()
+            change_map = True
         else:
+            if self._haul is not None:
+                change_map = True
             self._haul = None
             self._reference_map = self._base_reference_map
-        if change_map or scenario is SimulationScenario.HAUL:
+
+        if change_map:
             self._route = self._build_route(self._reference_map)
             self._route_distance_m = 0.0
             self._last_heading_deg = self._route.sample(0).heading_deg
@@ -364,24 +388,56 @@ class FullSimulator:
                 y_m=start.y_m,
                 heading_deg=start.heading_deg,
             )
-        values = self._scenario_values[scenario.value]
-        self._visibility_target = float(values["visibility_score"])
-        self._obstacle_enabled = bool(values["obstacle_enabled"])
-        self._obstacle_position = self._default_obstacle_position.model_copy()
-        self._active_obstacle_radius_m = float(
-            values.get("obstacle_radius_m", self._obstacle_radius_m)
-        )
-        self.occupancy.clear()
-        self.emergency_controller.reset()
-        await self.emergency_output.set_motor_cut(False, f"{scenario.value} scenario selected")
-        if scenario is SimulationScenario.EMERGENCY:
-            pose = self._scene.pose
-            radians = math.radians(pose.heading_deg)
-            obstacle_ahead_m = float(values["obstacle_ahead_m"])
-            self._obstacle_position = Point2D(
-                x_m=pose.x_m + math.sin(radians) * obstacle_ahead_m,
-                y_m=pose.y_m + math.cos(radians) * obstacle_ahead_m,
+
+        values = self._scenario_values.get(scenario.value)
+        if values is not None:
+            self._visibility_target = float(values["visibility_score"])
+            self._obstacle_enabled = bool(values["obstacle_enabled"])
+            self._obstacle_position = self._default_obstacle_position.model_copy()
+            self._active_obstacle_radius_m = float(
+                values.get("obstacle_radius_m", self._obstacle_radius_m)
             )
+            self.occupancy.clear()
+            self.emergency_controller.reset()
+            await self.emergency_output.set_motor_cut(False, f"{scenario.value} scenario selected")
+            if scenario is SimulationScenario.EMERGENCY:
+                pose = self._scene.pose
+                radians = math.radians(pose.heading_deg)
+                obstacle_ahead_m = float(values["obstacle_ahead_m"])
+                self._obstacle_position = Point2D(
+                    x_m=pose.x_m + math.sin(radians) * obstacle_ahead_m,
+                    y_m=pose.y_m + math.cos(radians) * obstacle_ahead_m,
+                )
+            return
+
+        scen_def = ALL_SCENARIOS.get(scenario)
+        if scen_def is not None:
+            self.mine_graph.reset()
+            self.fleet_manager.reset_fleet()
+            self._v2x_manager.reset()
+            self._haul = None
+            self._reference_map = self.mine_graph.to_reference_map()
+            self._route = self._build_route(self._reference_map)
+            self._route_distance_m = 0.0
+            self._last_heading_deg = self._route.sample(0).heading_deg
+            self._configure_pipeline()
+            start = self._route.sample(0)
+            self._scene.pose = VehiclePose(
+                timestamp_ms=self._timestamp_ms,
+                x_m=start.x_m,
+                y_m=start.y_m,
+                heading_deg=start.heading_deg,
+            )
+            self._visibility_target = scen_def.visibility_score
+            self._obstacle_enabled = scen_def.obstacle_enabled
+            self._obstacle_position = scen_def.obstacle_position.model_copy()
+            self._active_obstacle_radius_m = scen_def.obstacle_radius_m
+            self._speed_scale = scen_def.speed_scale
+            self.occupancy.clear()
+            self.emergency_controller.reset()
+            await self.emergency_output.set_motor_cut(False, f"{scenario.value} scenario selected")
+            if scen_def.setup_fn is not None:
+                scen_def.setup_fn(self)
 
     def simulation_state(self) -> SimulationState:
         return SimulationState(
@@ -635,13 +691,39 @@ class FullSimulator:
                     speed_mps=other.speed_mps,
                 )
             )
-        sequence = await self._store.sequence()
-        return await self._store.replace(
+
+        # Synchronize primary vehicle state into fleet manager before stepping fleet
+        pv = self.fleet_manager.get_vehicle("DUMPER_01")
+        if pv:
+            pv.set_position(pose.x_m, pose.y_m, pv.elevation_m, pose.heading_deg)
+            pv.speed_mps = speed
+            pv.emergency_state = emergency.state.value
+
+        # The NMDC scenarios expose the operational fleet. The original haul
+        # route and legacy scenarios keep their established single-vehicle or
+        # two-encounter presentation and V2X peer set.
+        operational_fleet = self._scenario.value.startswith("SCENARIO_")
+        if operational_fleet:
+            fleet_dt = (self._interval_s * self._speed_scale) if self._movement_running else 0.0
+            self.fleet_manager.step(fleet_dt, timestamp)
+            all_fleet_poses = self.fleet_manager.get_all_poses(timestamp)
+            fleet_vehicles = [pose] + [p for p in all_fleet_poses if p.vehicle_id != "DUMPER_01"]
+        else:
+            fleet_vehicles = [pose]
+
+        # The haul route has its own encounter choreography. Keep those two
+        # visible peers as the dashboard vehicles for that demo, while the
+        # operational fleet remains available through ``operations``.
+        visible_vehicles = (
+            [pose, peer, lead] if self._haul is not None and peer is not None else fleet_vehicles
+        )
+
+        operations = self._build_operations_state(timestamp)
+        return await self._store.publish(
             WorldState(
                 generated_at_ms=timestamp,
-                sequence=sequence + 1,
                 mode=DataMode.SIMULATED,
-                vehicles=[pose, peer, lead] if peer is not None else [pose],
+                vehicles=visible_vehicles,
                 reference_map=self._reference_map,
                 ranges=readings,
                 motion=MotionState(
@@ -679,7 +761,66 @@ class FullSimulator:
                     )
                     if self._haul is not None else None
                 ),
+                operations=operations,
+            ),
+            generated_at_ms=timestamp,
+        )
+
+    def _build_operations_state(self, timestamp: int) -> MineOperationsState:
+        fleet_dict = {}
+        routes_dict = {}
+        guidance_dict = {}
+        for vid, veh in self.fleet_manager.vehicles.items():
+            fleet_dict[vid] = veh.to_operational_metadata()
+            if veh.current_route:
+                routes_dict[vid] = veh.current_route
+            warning = self.fleet_manager.get_tactical_collision_warning(vid)
+            dest = (
+                veh.assigned_dump
+                if veh.payload_tonnes > 0
+                else veh.assigned_pickup
             )
+            guidance_dict[vid] = TacticalGuidance(
+                vehicle_id=vid,
+                callsign=veh.callsign,
+                current_destination=dest,
+                distance_remaining_m=round(veh.distance_to_dest_m, 1),
+                next_instruction=veh.next_instruction,
+                speed_kmh=round(veh.speed_mps * 3.6, 1),
+                target_vehicle_id=warning.target_vehicle_id,
+                target_callsign=warning.target_callsign,
+                hazard_distance_m=warning.distance_m,
+                hazard_direction=warning.direction,
+                closing_velocity_mps=warning.closing_velocity_mps,
+                threat_level=warning.threat_level,
+                advisory_text=warning.advisory_text,
+                visibility_score=round(self._scene.visibility_target, 2),
+                visibility_state=self._visibility_state(self._scene.visibility_target).value,
+                estimated_sight_distance_m=round(max(8.0, self._scene.visibility_target * 120.0), 1),
+            )
+
+        metrics = self.analytics.get_haulage_metrics(active_fleet_count=len(self.fleet_manager.vehicles))
+        analytics_summary = HaulageMetricsSummary(
+            total_completed_cycles=metrics.total_completed_cycles,
+            total_ore_moved_tonnes=metrics.total_ore_moved_tonnes,
+            avg_cycle_time_minutes=metrics.avg_cycle_time_minutes,
+            fleet_utilization_pct=metrics.fleet_utilization_pct,
+            total_distance_km=metrics.total_distance_km,
+            route_compliance_pct=metrics.route_compliance_pct,
+            active_fleet_count=metrics.active_fleet_count,
+            hourly_production_rate_tph=metrics.hourly_production_rate_tph,
+            recent_delay_events=list(metrics.recent_delay_events),
+        )
+
+        return MineOperationsState(
+            network=self.mine_graph.network,
+            fleet=fleet_dict,
+            routes=routes_dict,
+            guidance=guidance_dict,
+            reroute_advisories=list(self.fleet_manager.reroute_advisories),
+            analytics_summary=analytics_summary,
+            provenance="SIMULATED_RUNTIME",
+            network_version=self._reference_map.version if self._reference_map else 1,
         )
 
     @staticmethod

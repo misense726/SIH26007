@@ -4,8 +4,9 @@ import asyncio
 from collections.abc import Callable
 
 from backend.app.models import WorldState
-from backend.app.models.telemetry import now_ms, DataMode
+from backend.app.models.common import now_ms
 from backend.app.models.device import VehicleTelemetry, VehicleTelemetryPacket
+from backend.app.models.telemetry import DataMode
 
 
 StateMutator = Callable[[WorldState], WorldState]
@@ -71,6 +72,22 @@ class WorldStore:
     async def replace(self, state: WorldState) -> WorldState:
         async with self._lock:
             self._state = state.model_copy(deep=True)
+            self._refresh_devices()
+            self._encoded = None
+            return self._state.model_copy(deep=True)
+
+    async def publish(
+        self,
+        candidate: WorldState,
+        generated_at_ms: int | None = None,
+    ) -> WorldState:
+        """Publish one state revision while preserving monotonic sequencing."""
+        async with self._lock:
+            next_sequence = self._state.sequence + 1
+            timestamp = generated_at_ms if generated_at_ms is not None else now_ms()
+            candidate.sequence = next_sequence
+            candidate.generated_at_ms = timestamp
+            self._state = WorldState.model_validate(candidate)
             self._refresh_devices()
             self._encoded = None
             return self._state.model_copy(deep=True)

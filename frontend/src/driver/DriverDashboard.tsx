@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { CameraAwareness } from "./CameraAwareness";
 import { CampusExtendedMapModal } from "./CampusExtendedMapModal";
+import { DriverGuidanceHUD } from "./DriverGuidanceHUD";
 import { ProximityWidget } from "./ProximityWidget";
 import type { AwarenessMode } from "./driverAwareness";
 import { availableRangeReadings } from "../state/rangeReadings";
@@ -120,6 +121,11 @@ export function DriverDashboard({
         />
 
         <aside className="driver-instruments">
+          <DriverGuidanceHUD
+            world={world}
+            vehicleTelemetryAvailable={vehicleTelemetryAvailable}
+          />
+
           <article className={`safe-corridor-top-card corridor-card-${corridorState.toLowerCase()}`}>
             <div className="corridor-card-header">
               <div>
