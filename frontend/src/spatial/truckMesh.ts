@@ -257,5 +257,54 @@ export function buildTruckMesh(steerAngleDeg = 0): TruckSurface[] {
   box("truck-exhaust-cap", [0.46, 0.38, 1.29], [0.55, 0.47, 1.33], FRAME);
   box("truck-beacon-base", [-0.48, 0.96, 1.19], [-0.38, 1.06, 1.25], FRAME);
   box("truck-beacon-lens", [-0.465, 0.975, 1.25], [-0.395, 1.045, 1.32], "#e9a52a");
+
+  // Heaped 3D iron ore payload resting inside the dump bed tub
+  const oreColors = ["#62241a", "#4a1911", "#782e21", "#873527", "#3d130c"];
+  const zSlices = 6;
+  const yBack = -1.32;
+  const yFront = 0.26;
+  const xL = -0.47;
+  const xR = 0.47;
+  const zFloor = 0.66;
+  const zPeak = 1.14;
+
+  for (let s = 0; s < zSlices - 1; s++) {
+    const t0 = s / (zSlices - 1);
+    const t1 = (s + 1) / (zSlices - 1);
+    const y0 = yBack + t0 * (yFront - yBack);
+    const y1 = yBack + t1 * (yFront - yBack);
+    const h0 = zFloor + Math.sin(t0 * Math.PI) * (zPeak - zFloor) * 0.95;
+    const h1 = zFloor + Math.sin(t1 * Math.PI) * (zPeak - zFloor) * 0.95;
+
+    const c1 = oreColors[(s * 2) % oreColors.length];
+    const c2 = oreColors[(s * 2 + 1) % oreColors.length];
+    const c3 = oreColors[(s * 2 + 2) % oreColors.length];
+
+    // Left slope
+    face("truck-ore-cargo", [[xL, y0, zFloor], [-0.18, y0, h0], [-0.18, y1, h1], [xL, y1, zFloor]], c1);
+    // Center ridge
+    face("truck-ore-cargo", [[-0.18, y0, h0], [0.18, y0, h0], [0.18, y1, h1], [-0.18, y1, h1]], c2);
+    // Right slope
+    face("truck-ore-cargo", [[0.18, y0, h0], [xR, y0, zFloor], [xR, y1, zFloor], [0.18, y1, h1]], c3);
+  }
+
+  // Front and rear caps
+  face("truck-ore-cargo", [[xL, yFront, zFloor], [0, yFront, zFloor + 0.3], [xR, yFront, zFloor]], "#4a1911");
+  face("truck-ore-cargo", [[xR, yBack, zFloor], [0, yBack, zFloor + 0.3], [xL, yBack, zFloor]], "#3d130c");
+
   return surfaces;
 }
+
+export const DUMP_BED_PARTS = new Set([
+  "truck-dump-body",
+  "truck-bed-rib",
+  "truck-bed-rail",
+  "truck-tailgate",
+  "truck-tailgate-hinge",
+  "truck-canopy",
+  "truck-canopy-lip",
+  "truck-ore-cargo",
+]);
+
+export const TRUCK_HINGE_Y_M = -1.41;
+export const TRUCK_HINGE_Z_M = 0.675;

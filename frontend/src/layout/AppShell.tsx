@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import type { DashboardRole } from "../auth/roleSession";
 import { ConnectionPill, ModePill } from "../components/StatusPill";
 import { ThemeToggle } from "../components/ThemeToggle";
-import type { ConnectionState } from "../state/useTelemetry";
+import type { ConnectionState, DemoStatus } from "../state/useTelemetry";
+import { STATIC_DEMO } from "../simulation/demoMode";
 import type { Theme } from "../theme";
 import type { DataMode } from "../types";
 import { DashboardViewIcon } from "./DashboardViewIcon";
@@ -23,6 +24,9 @@ interface AppShellProps {
   onThemeChange: (theme: Theme) => void;
   connection: ConnectionState;
   mode: DataMode | null;
+  demoStatus?: DemoStatus;
+  demoPaused?: boolean;
+  onDemoPause?: () => void;
   children: ReactNode;
 }
 export function AppShell({
@@ -34,6 +38,9 @@ export function AppShell({
   onThemeChange,
   connection,
   mode,
+  demoStatus,
+  demoPaused,
+  onDemoPause,
   children,
 }: AppShellProps) {
   const homeView = defaultDashboardView(role);
@@ -41,7 +48,7 @@ export function AppShell({
   const roleLabel = dashboardRoleLabel(role);
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell app-shell-${role.toLowerCase()}`}>
       <a
         className="skip-link"
         href="#dashboard-content"
@@ -91,8 +98,29 @@ export function AppShell({
 
         <div className="status-row" aria-label="System status and session">
           <span className="role-chip">{roleLabel}</span>
-          <ConnectionPill state={connection} />
-          {connection === "CONNECTED" && mode && <ModePill mode={mode} />}
+          {STATIC_DEMO ? (
+            <>
+              <span
+                className="mode-pill mode-simulated"
+                title="Backend-generated simulation recording. No live hardware connection."
+              >
+                SIMULATED · {demoStatus ?? "Loading demo"}
+              </span>
+              <button
+                type="button"
+                className="demo-pause"
+                onClick={onDemoPause}
+                aria-pressed={Boolean(demoPaused)}
+              >
+                {demoPaused ? "Resume demo" : "Pause demo"}
+              </button>
+            </>
+          ) : (
+            <>
+              <ConnectionPill state={connection} />
+              {connection === "CONNECTED" && mode && <ModePill mode={mode} />}
+            </>
+          )}
           <ThemeToggle theme={theme} onChange={onThemeChange} />
           <button
             type="button"

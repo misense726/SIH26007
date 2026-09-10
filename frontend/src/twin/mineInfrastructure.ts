@@ -89,6 +89,12 @@ export function buildInfrastructure(
     opening.rotation.x = -Math.PI / 2;
     opening.position.set(-0.5, 4.45, -1);
     plant.add(opening);
+    const hopperBed = new THREE.Mesh(
+      new THREE.ConeGeometry(1.3, 0.9, 8),
+      new THREE.MeshStandardMaterial({ color: "#542016", roughness: 0.95 }),
+    );
+    hopperBed.position.set(-0.5, 3.8, -1);
+    plant.add(hopperBed);
     for (const px of [-2, 1])
       for (const pz of [-2.5, 0.5])
         box(plant, [0.18, 3.5, 0.18], [px, 1.75, pz], steel);

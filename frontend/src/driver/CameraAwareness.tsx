@@ -4,6 +4,7 @@ import type { ConnectionState } from "../state/useTelemetry";
 import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
 import { CampusMinimap } from "./CampusMinimap";
 import { TofRangePlot } from "./ProximityWidget";
+import { CameraComparisonSlider } from "./CameraComparisonSlider";
 import {
   shouldShowTofOverlay,
   usableRangeReadings,
@@ -234,52 +235,14 @@ export function CameraAwareness({
             onError={() => setCameraStreamFailed(true)}
           />
         ) : (
-          <>
-            <div className="mine-silhouette" aria-hidden="true">
-              <span className="ridge ridge-left" />
-              <span className="ridge ridge-right" />
-            </div>
-            <div
-              className={`perspective-road corridor-visual-${corridorState.toLowerCase()}`}
-              aria-hidden="true"
-            >
-              <span className="corridor-fill" />
-              <span className="lane-edge lane-edge-left" />
-              <span className="lane-edge lane-edge-right" />
-              <span className="lane-center" />
-            </div>
-            <div
-              className="fog-layer"
-              style={{ opacity: overlayStrength(world.environment.visibility_score) }}
-              aria-hidden="true"
-            />
-          </>
+          <CameraComparisonSlider
+            opticalSrc="/camera/haul_truck_optical.png"
+            irSrc="/camera/haul_truck_ir.png"
+          />
         )}
         {showLiveCamera && !cameraStreamFailed && frameDetail ? (
           <span className="camera-preview-label">{frameDetail}</span>
-        ) : showSimulatedCamera ? (
-          <span className="camera-preview-label">Simulated camera</span>
-        ) : (
-          <div className="camera-unavailable">
-            <strong>
-              {cameraStreamFailed
-                ? "Camera stream unavailable"
-                : telemetryConnected
-                  ? "Camera preview unavailable"
-                  : "Camera telemetry unavailable"}
-            </strong>
-            <span>
-              {cameraStreamFailed
-                ? "Check the camera connection and retry."
-                : telemetryConnected
-                ? "Camera connection unavailable."
-                : "Waiting for live telemetry"}
-            </span>
-            {cameraStreamFailed && (
-              <button type="button" onClick={retryCameraStream}>Retry camera</button>
-            )}
-          </div>
-        )}
+        ) : null}
         {showTofOverlay && (
           <div className="tof-camera-overlay">
             <div className="tof-overlay-summary">

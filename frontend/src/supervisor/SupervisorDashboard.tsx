@@ -438,7 +438,9 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
         </div>
       )}
 
-      {activeSection === "efficiency" && <HaulEfficiencyPanel />}
+      {activeSection === "efficiency" && (
+        <HaulEfficiencyPanel vehicles={model.vehicles} world={world} />
+      )}
 
       {activeSection === "network" && (
         <div className="supervisor-section">

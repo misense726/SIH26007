@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { STATIC_DEMO } from "../simulation/demoMode";
 import {
   defaultSensorSettings,
   loadSensorSettings,
@@ -29,7 +30,8 @@ export function useSensorSettings(): {
       .then((loaded) => {
         if (disposed) return;
         setSettings(loaded);
-        setConnection("SAVED");
+        setConnection(STATIC_DEMO ? "LOCAL_ONLY" : "SAVED");
+        if (STATIC_DEMO) setMessage("Demo display settings apply only to this tab. Hardware calibration is unavailable.");
       })
       .catch(() => {
         if (disposed) return;
@@ -53,6 +55,11 @@ export function useSensorSettings(): {
   async function saveSensor(sensorId: SensorId) {
     const setting = settings.sensors.find((sensor) => sensor.sensor_id === sensorId);
     if (!setting) return;
+    if (STATIC_DEMO) {
+      setConnection("LOCAL_ONLY");
+      setMessage(`${setting.label} applied to this tab only. Recorded telemetry is unchanged.`);
+      return;
+    }
     setMessage("Saving display settings...");
     try {
       const saved = await saveSensorSetting(setting);
@@ -71,6 +78,10 @@ export function useSensorSettings(): {
   }
 
   async function zeroImuNow() {
+    if (STATIC_DEMO) {
+      setMessage("IMU zeroing requires connected hardware in the local app.");
+      return;
+    }
     setSettings((current) => ({
       ...current,
       imu_zero: { ...current.imu_zero, status: "ZEROING", detail: "Keep the vehicle still." },

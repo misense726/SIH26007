@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest";
 import { DEFAULT_CAMPUS_CONFIG } from "./campusConfig";
 import { cartesianToGeodetic, geodeticToCartesian } from "./locationProvider";
 
-describe("Chennai road map configuration", () => {
-  it("uses the requested V699+X9 Chennai site", () => {
-    expect(DEFAULT_CAMPUS_CONFIG.locationCode).toBe("V699+X9");
-    expect(DEFAULT_CAMPUS_CONFIG.locationLabel).toBe("V699+X9, Chennai, Tamil Nadu");
-    expect(DEFAULT_CAMPUS_CONFIG.siteCenter.lat).toBeCloseTo(12.86965, 6);
-    expect(DEFAULT_CAMPUS_CONFIG.siteCenter.lng).toBeCloseTo(80.219921875, 6);
+describe("Bailadila iron ore mines map configuration", () => {
+  it("uses the Bailadila mining complex site", () => {
+    expect(DEFAULT_CAMPUS_CONFIG.locationCode).toBe("Bailadila");
+    expect(DEFAULT_CAMPUS_CONFIG.locationLabel).toBe("Bailadila, Dantewada, Chhattisgarh");
+    expect(DEFAULT_CAMPUS_CONFIG.siteCenter.lat).toBeCloseTo(18.6731, 4);
+    expect(DEFAULT_CAMPUS_CONFIG.siteCenter.lng).toBeCloseTo(81.2481, 4);
   });
 
   it("places the route start near the site center and caps close zoom", () => {

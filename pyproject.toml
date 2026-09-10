@@ -35,9 +35,6 @@ fogsen-serial = "backend.app.serial_monitor:main"
 [tool.hatch.build.targets.wheel]
 packages = ["backend"]
 
-[tool.vercel]
-entrypoint = "backend.app.simulation_app:app"
-
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
 pythonpath = ["."]

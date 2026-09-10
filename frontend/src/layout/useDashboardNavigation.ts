@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from "react";
 import type { DashboardRole } from "../auth/roleSession";
+import { STATIC_DEMO } from "../simulation/demoMode";
 import {
   dashboardViewLabel,
   defaultDashboardView,
@@ -8,9 +9,9 @@ import {
 } from "./dashboardViews";
 
 function currentDashboardView(role: DashboardRole): DashboardView {
-  return typeof window === "undefined"
-    ? defaultDashboardView(role)
-    : resolveDashboardRoute(role, window.location.hash).view;
+  if (typeof window === "undefined") return defaultDashboardView(role);
+  if (STATIC_DEMO && role === "DRIVER" && !window.location.hash) return "SPATIAL";
+  return resolveDashboardRoute(role, window.location.hash).view;
 }
 
 function normalizeLocation(role: DashboardRole): DashboardView {

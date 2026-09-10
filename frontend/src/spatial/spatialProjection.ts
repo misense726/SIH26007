@@ -30,7 +30,7 @@ export interface CameraViewConfig {
 
 export const CAMERA_ORBIT_MIN_DEG = 0;
 export const CAMERA_ORBIT_MAX_DEG = 359;
-export const DEFAULT_CAMERA_PITCH_DEG = 35;
+export const DEFAULT_CAMERA_PITCH_DEG = 69;
 export const CAMERA_PITCH_MIN_DEG = -85;
 export const CAMERA_PITCH_MAX_DEG = 85;
 

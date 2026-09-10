@@ -85,8 +85,10 @@ The reference image is not bundled. Material credits are in
 The renderer is loaded only for the 3D supervisor scene. It caps pixel ratio at
 1.5 and its drawing buffer at two million pixels. Vegetation and rubble use
 instanced geometry; textures are limited to two 1K material images plus small
-procedural grain. It renders at up to 30 frames per second and skips rendering
-while hidden or offscreen. Shadow updates follow incoming telemetry. Changing
+procedural grain. It renders at up to 30 frames per second and cancels its frame
+loop while hidden, offscreen or after WebGL context loss. It also sleeps once poses
+and camera controls settle; new telemetry and interactions wake it. Shadow updates
+follow incoming telemetry. Changing
 views cancels animation frames, disconnects observers, removes labels and controls,
 and disposes geometry, materials, textures, shadow maps and the WebGL context.
 If WebGL is unavailable, an explicit message directs the operator to the 2D plan.
@@ -95,6 +97,65 @@ Browser checks after this addition observed one canvas in 3D and none after
 switching to the 2D plan or Spatial. Returning to 3D retained 11 geometry resources
 and four textures, including the shadow map. This checks scene remount behavior;
 it does not establish long-duration memory stability or account for total browser RAM.
+
+## Public Vercel demo
+
+The Vercel deployment is a static, read-only demonstration, not a running Python
+simulation server. During the build, `scripts/export_demo.py` runs the canonical
+backend simulator through one haul cycle at 10 Hz and samples its WorldState at
+5 Hz. The browser displays those samples at 10 Hz, so trucks, encounters and
+loading/unloading play faster. Displayed speed values remain the recorded
+simulation measurements, not doubled hardware readings. No browser route model,
+collision controller or fabricated live telemetry is introduced. The mode stays
+SIMULATED and the header explicitly identifies playback.
+
+The current recording is 771 frames in 31 independently decodable chunks, about
+3.43 MB gzip in total, plus a 26 KB manifest. One loop takes 77.1 seconds plus any
+download delays. The reference map is downloaded once and retains object identity.
+Each chunk starts with a full frame without the map; later frames replace changed
+top-level fields. Integer timestamps are preserved and other numbers are rounded
+to three decimal places. The backend's safety computation runs before rounding.
+The interface shows SIMULATED and Demo, without a playback-speed label.
+
+Chunks load only when reached. The player keeps at most 8 MiB of compressed data
+and one decoded chunk, so repeat loops reuse downloads without retaining a whole
+uncompressed recording. There is no background prefetch. Hiding the tab or using
+Pause demo stops playback, cancels pending downloads and prevents new requests.
+Returning resumes from the next frame, without trying to catch up. Failed downloads
+retry with exponential backoff up to 30 seconds; the last valid scene remains on
+screen with a Buffering demo label. Before the first frame, a loading/retry panel
+appears instead of a misleading hardware-offline dashboard.
+
+Vercel serves `frontend/dist` directly. `.vercelignore` excludes `api`, and the
+Python framework entrypoint is removed, so the hosted demo does not deploy a
+function. Hash-named chunks use immutable caching. Manifest/settings are revalidated.
+There are no hosted telemetry sockets, camera streams or control writes. Display
+calibration is tab-local; sending advisories and zeroing hardware require the local
+backend. The regular `npm --prefix frontend run build` and local backend retain
+LIVE/SIMULATED/REPLAY behavior and hardware controls. Local WebSocket clients also
+disconnect when hidden and use bounded reconnect backoff.
+
+Build and preview the public demo without running a backend:
+
+```bash
+python -m scripts.export_demo
+```
+
+```bash
+npm --prefix frontend run build:demo
+```
+
+```bash
+npm --prefix frontend run preview:demo
+```
+
+The Vercel build commands and output directory are in `vercel.json`. Redeploy this
+revision to replace the previous function-backed deployment. Existing deployments
+are not modified by local code changes. The hosted demo still consumes static
+bandwidth, edge requests, build time and browser CPU/GPU. This reduces ongoing
+usage, but cannot guarantee a monthly quota for an arbitrary number of visitors
+or reset usage already incurred. Check Vercel's deployment output for zero Functions
+and its Network/Usage panels after deployment.
 
 ## Efficiency checks
 
