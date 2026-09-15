@@ -33,6 +33,10 @@ try {
         "firmware/main_esp32"
     )
     Invoke-Checked "C:\Users\niran\.local\bin\arduino-cli.cmd" @(
+        "compile", "--warnings", "all", "--fqbn", "esp32:esp32:esp32",
+        "firmware/base_station"
+    )
+    Invoke-Checked "C:\Users\niran\.local\bin\arduino-cli.cmd" @(
         "compile", "--warnings", "all", "--fqbn", "esp32:esp32:XIAO_ESP32C6",
         "firmware/front_xiao_esp32c6"
     )
@@ -44,10 +48,11 @@ try {
         "-m", "pytest", "-q",
         "firmware/main_esp32/tests",
         "firmware/tests",
-        "backend/tests/test_serial_protocol.py"
+        "backend/tests/test_serial_protocol.py",
+        "firmware/base_station/tests"
     )
 } finally {
     Pop-Location
 }
 
-Write-Host "MAIN, FRONT, and MIDDLE firmware builds and wired protocol checks passed."
+Write-Host "MAIN, BASE STATION, FRONT, and MIDDLE firmware builds and wired protocol checks passed."

@@ -41,6 +41,15 @@ Match the current board and COM port before upload.
 | GPIO32 | Reserved left Hall input, leave unconnected |
 | GPIO33 | Reserved right Hall input, leave unconnected |
 | GPIO25 | Reserved motor-cut relay output, leave unconnected |
+| GPIO18 | LoRa SX1278 SCK (VSPI) |
+| GPIO19 | LoRa SX1278 MISO (VSPI) |
+| GPIO23 | LoRa SX1278 MOSI (VSPI) |
+| GPIO5 | LoRa SX1278 NSS / CS (active low) |
+| GPIO4 | LoRa SX1278 RST (active low) |
+| GPIO34 | LoRa SX1278 DIO0 (interrupt) |
+| GPIO35 | GPS NEO-6M RX (from GPS TX) |
+| GPIO36 | HX711 DOUT (Sensor VP input) |
+| GPIO2 | HX711 SCK (clock output) |
 | USB | Laptop serial fallback and firmware upload |
 | GND | Common ground for every controller and supply |
 
@@ -122,8 +131,12 @@ a clear path.
 - `REAR_SCAN_ON`
 - `REAR_SCAN_OFF`
 - `MIDDLE_STATUS`
+- `TARE_LOADCELL`
+- `SET_CAL <factor>`
 
 FRONT commands travel over UART. Rear commands run locally on MAIN.
+`TARE_LOADCELL` initiates asynchronous zero-taring of the 5kg load cell.
+`SET_CAL` updates the calibration factor without reflashing.
 `MIDDLE_STATUS` requests the C3 health reply. In the current profile,
 `RESET_TICKS` returns `HALL_SENSORS_DISABLED` and `ESTOP_TEST` returns
 `RELAY_OUTPUT_DISABLED` without touching either reserved pin.

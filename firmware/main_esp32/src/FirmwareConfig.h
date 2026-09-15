@@ -15,6 +15,13 @@ constexpr char kDataMode[] = "LIVE";
 constexpr bool kHallSensorsEnabled = false;
 constexpr bool kMotorCutRelayEnabled = false;
 
+// Wireless vehicle profile: MAIN transmits all vehicle telemetry over LoRa SX1278.
+// Periodic USB and Wi-Fi streaming are disabled on MAIN to eliminate JSON serialization
+// overhead, avoid Wi-Fi RF interference/power drain, and maximize sensor & safety loop rate.
+// The Base Station receives the LoRa stream and provides the USB connection to the PC.
+constexpr bool kUsbTelemetryEnabled = false;
+constexpr bool kWifiTelemetryEnabled = false;
+
 constexpr uint32_t kUsbSerialBaud = 115200;
 constexpr uint32_t kNodeUartBaud = 115200;
 constexpr uint16_t kWifiTelemetryPort = 8765;
@@ -84,6 +91,28 @@ constexpr size_t kTelemetryJsonCapacity = 3072;
 constexpr size_t kTelemetryLineCapacity = 1500;
 constexpr size_t kTransmitQueueDepth = 3;
 constexpr size_t kWifiTransmitQueueDepth = 3;
+
+// GPS NEO-6M Configuration
+constexpr uint32_t kGpsBaud = 9600;
+constexpr size_t kGpsMaxBytesPerPoll = 64;
+constexpr uint32_t kGpsStaleTimeoutMs = 3000;
+
+// HX711 5kg Load Cell Configuration
+constexpr float kLoadCellDefaultCalibration = 420.0F;  // Counts per gram
+constexpr uint32_t kLoadCellPeriodMs = 100;
+constexpr uint32_t kLoadCellWatchdogMs = 1500;
+constexpr uint8_t kLoadCellTareSamples = 10;
+
+// LoRa SX1278 High-Throughput Configuration
+constexpr long kLoraFrequency = 433E6;
+constexpr long kLoraBandwidth = 250E3;
+constexpr int kLoraSpreadingFactor = 7;
+constexpr int kLoraCodingRate = 5;       // 4/5 coding rate
+constexpr int kLoraSyncWord = 0x12;
+constexpr int kLoraTxPower = 17;         // 17 dBm (PA_BOOST)
+constexpr uint8_t kLoraNodeId = 1;        // Node 1 (DUMPER_01) or Node 2 (DUMPER_02)
+constexpr uint32_t kLoraTxPeriodMs = 100; // 10 Hz for high data transfer rate every second
+constexpr uint16_t kLoraSlotOffsetMs = 0; // Slot offset for TDMA scheduling
 
 }  // namespace config
 }  // namespace fogsen

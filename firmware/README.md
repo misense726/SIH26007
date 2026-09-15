@@ -19,6 +19,7 @@ motor-cut code remain available but are disabled in the current profile.
 - `front_xiao_esp32c6`: front scanner, fixed-front ToF, and front SG90;
 - `middle_esp32c3_supermini`: fixed left and right ToFs;
 - `main_esp32`: rear scanner, rear SG90, sensor aggregation, safety, Wi-Fi telemetry, and USB diagnostics;
+- `base_station`: ESP32 and ESP8266 dual-target Base Station firmware for LoRa SX1278 multi-node ingestion, GPS, LoadCell, and USB serial wire format;
 - `xiao_shared`: the FRONT scanner and fixed-ToF state machine.
 
 Run the full build from the repository root:
