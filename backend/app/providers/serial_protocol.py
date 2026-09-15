@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from backend.app.models.device import LoadTelemetry
+from backend.app.models.device import GpsTelemetry, LoadTelemetry
 
 from backend.app.models import (
     DataMode,
@@ -148,7 +148,7 @@ class MainTelemetryPacket(WireModel):
     env: EnvironmentWireState
     wheel: WheelWireState
     estop: EmergencyWireState
-    gps: GPSWireState | None = None
+    gps: GpsTelemetry | GPSWireState | None = None
     loadcell: LoadCellWireState | None = None
     lora: LoRaWireState | None = None
 

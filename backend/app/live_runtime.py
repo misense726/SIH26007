@@ -67,6 +67,24 @@ class SerialReader(Protocol):
 SerialFactory = Callable[[str, int], SerialReader]
 
 
+def _normalized_gps(packet: MainTelemetryPacket) -> GpsTelemetry:
+    gps = packet.gps
+    if gps is None:
+        return GpsTelemetry()
+    if isinstance(gps, GpsTelemetry):
+        return gps
+    return GpsTelemetry(
+        fix=bool(gps.fix),
+        lat=gps.lat,
+        lon=gps.lon,
+        alt_m=gps.alt,
+        speed_mps=gps.speed,
+        sats=gps.sats,
+        hdop=gps.hdop,
+        age=gps.age,
+    )
+
+
 class LiveSerialRuntime:
     """Publish wired MAIN telemetry through the canonical FogSen world store."""
 
@@ -291,10 +309,16 @@ class LiveSerialRuntime:
                         continue
                     received_at_ms = now_ms()
                     if packet.gps is not None or packet.load is not None:
-                        await self._store.accept_vehicle(VehicleTelemetryPacket(
-                            vehicle_id="DUMPER_01", seq=packet.seq or 0, ms=packet.ms,
-                            gps=packet.gps or GpsTelemetry(), load=packet.load,
-                        ), received_at_ms)
+                        await self._store.accept_vehicle(
+                            VehicleTelemetryPacket(
+                                vehicle_id=packet.vehicle_id or "DUMPER_01",
+                                seq=packet.seq or 0,
+                                ms=packet.ms,
+                                gps=_normalized_gps(packet),
+                                load=packet.load,
+                            ),
+                            received_at_ms,
+                        )
                     sample = translate_main_packet(
                         packet,
                         received_at_ms=received_at_ms,
