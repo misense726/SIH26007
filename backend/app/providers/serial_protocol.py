@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from backend.app.models.device import GpsTelemetry, LoadTelemetry
+from backend.app.models.device import LoadTelemetry
 
 from backend.app.models import (
     DataMode,
@@ -99,18 +99,58 @@ class EmergencyWireState(WireModel):
     reason: str | None = None
 
 
+class GPSWireState(WireModel):
+    state: str | None = None
+    fix: bool | int = False
+    sats: int = Field(default=0, ge=0)
+    hdop: float | None = None
+    lat: float | None = None
+    lon: float | None = None
+    alt: float | None = None
+    speed: float | None = None
+    course: float | None = None
+    age: int | None = Field(default=None, ge=0)
+
+
+class LoadCellWireState(WireModel):
+    state: str | None = None
+    tare_state: int | None = None
+    weight_g: float | None = None
+    weight_kg: float | None = None
+    raw: int | None = None
+    ok: bool | int = False
+    age: int | None = Field(default=None, ge=0)
+
+
+class LoRaWireState(WireModel):
+    state: str | None = None
+    node_id: int | None = None
+    rssi: int | None = None
+    snr: float | None = None
+    tx_count: int | None = Field(default=None, ge=0)
+    tx_fail: int | None = Field(default=None, ge=0)
+    last_tx_ms: int | None = Field(default=None, ge=0)
+    rx_count: int | None = Field(default=None, ge=0)
+    drop_count: int | None = Field(default=None, ge=0)
+    rate_hz: float | None = None
+
+
 class MainTelemetryPacket(WireModel):
-    gps: GpsTelemetry | None = None
     load: LoadTelemetry | None = None
     type: Literal["telemetry"] | None = None
     seq: int | None = Field(default=None, ge=0)
     ms: int = Field(ge=0)
+    vehicle_id: str | None = None
+    node_id: int | None = None
     front: FrontWireState
     rear: RearWireState
     imu: IMUWireState
     env: EnvironmentWireState
     wheel: WheelWireState
     estop: EmergencyWireState
+    gps: GPSWireState | None = None
+    loadcell: LoadCellWireState | None = None
+    lora: LoRaWireState | None = None
 
 
 class WireProtocolError(ValueError):

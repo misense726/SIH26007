@@ -7,8 +7,14 @@
 #include <math.h>
 #include <string.h>
 
+#include <SoftwareSerial.h>
+
 #include "FirmwareConfig.h"
+#include "GpsDriver.h"
+#include "LoadCellDriver.h"
 #include "LocalSensors.h"
+#include "LoraPacket.h"
+#include "LoraTransmitter.h"
 #include "NodeLink.h"
 #include "Pins.h"
 #include "RearScanner.h"
@@ -19,13 +25,13 @@
 #include "UsbCommandParser.h"
 #include "WheelOdometry.h"
 #include "WifiTelemetry.h"
-#include "GpsLoadSensors.h"
 
 namespace fogsen {
 namespace {
 
 HardwareSerial frontSerial(1);
 HardwareSerial middleSerial(2);
+SoftwareSerial gpsSerial;
 NodeLink frontNode(NodeRole::kFront, "front", nullptr);
 NodeLink middleNode(NodeRole::kMiddle, "left", "right");
 LocalSensors localSensors(Wire);
@@ -36,8 +42,10 @@ WheelOdometry wheelOdometry(config::kWheelCircumferenceM,
                             config::kWheelSpeedHoldMs);
 SerialTxQueue laptopTx;
 WifiTelemetry wifiTelemetry;
-GpsLoadSensors gpsLoadSensors;
 UsbCommandParser commandParser;
+GpsDriver gpsDriver;
+LoadCellDriver loadCell(pins::kLoadCellDout, pins::kLoadCellSck);
+LoraTransmitter loraTransmitter;
 
 SafetyParameters makeSafetyParameters() {
   SafetyParameters parameters;
@@ -74,6 +82,7 @@ bool relayCutApplied = false;
 uint32_t lastWheelMs = 0;
 uint32_t lastSafetyMs = 0;
 uint32_t lastTelemetryMs = 0;
+uint32_t lastLoraTxMs = 0;
 uint32_t telemetrySequence = 0;
 uint32_t telemetryOversizeDrops = 0;
 
@@ -500,8 +509,6 @@ bool queueTelemetry(uint32_t nowMs) {
   telemetryDocument["seq"] = telemetrySequence++;
   telemetryDocument["ms"] = nowMs;
   telemetryDocument["vehicle_id"] = "DUMPER_01";
-  gpsLoadSensors.addTelemetry(telemetryDocument.createNestedObject("gps"),
-                              telemetryDocument.createNestedObject("load"), nowMs);
 
   addNodeTelemetry(telemetryDocument.createNestedObject("front"), frontNode,
                    nowMs);
@@ -594,6 +601,51 @@ bool queueTelemetry(uint32_t nowMs) {
   emergency["latched_ms"] =
       lastSafetyOutput.latched ? lastSafetyOutput.latchedAtMs : 0;
 
+  JsonObject gps = telemetryDocument.createNestedObject("gps");
+  const GpsReading& gpsReading = gpsDriver.reading();
+  gps["state"] = gpsFixStatusName(gpsReading.fixStatus);
+  gps["fix"] = gpsReading.hasFix ? 1 : 0;
+  gps["sats"] = gpsReading.satellites;
+  gps["hdop"] = compactFloat(gpsReading.hdop, 100.0F);
+  if (gpsReading.hasFix) {
+    gps["lat"] = compactFloat(static_cast<float>(gpsReading.latitudeDeg), 1000000.0F);
+    gps["lon"] = compactFloat(static_cast<float>(gpsReading.longitudeDeg), 1000000.0F);
+    gps["alt"] = compactFloat(gpsReading.altitudeM, 100.0F);
+    gps["speed"] = compactFloat(gpsReading.speedMps, 100.0F);
+    gps["course"] = compactFloat(gpsReading.courseDeg, 100.0F);
+    gps["age"] = gpsDriver.sampleAgeMs(nowMs);
+  } else {
+    gps["lat"] = nullptr;
+    gps["lon"] = nullptr;
+    gps["alt"] = nullptr;
+    gps["speed"] = nullptr;
+    gps["course"] = nullptr;
+    gps["age"] = nullptr;
+  }
+
+  JsonObject loadcellObj = telemetryDocument.createNestedObject("loadcell");
+  const LoadCellReading& lcReading = loadCell.reading();
+  loadcellObj["state"] = loadCellStatusName(loadCell.status(nowMs));
+  loadcellObj["tare_state"] = static_cast<uint8_t>(loadCell.tareState());
+  if (lcReading.hasSample && loadCell.status(nowMs) == LoadCellStatus::kHealthy) {
+    loadcellObj["weight_g"] = compactFloat(lcReading.weightGrams, 10.0F);
+    loadcellObj["weight_kg"] = compactFloat(lcReading.weightKg, 100.0F);
+    loadcellObj["raw"] = lcReading.rawValue;
+    loadcellObj["age"] = loadCell.sampleAgeMs(nowMs);
+  } else {
+    loadcellObj["weight_g"] = nullptr;
+    loadcellObj["weight_kg"] = nullptr;
+    loadcellObj["raw"] = nullptr;
+    loadcellObj["age"] = nullptr;
+  }
+
+  JsonObject loraObj = telemetryDocument.createNestedObject("lora");
+  loraObj["state"] = loraStatusName(loraTransmitter.status());
+  loraObj["node_id"] = config::kLoraNodeId;
+  loraObj["tx_count"] = loraTransmitter.txCount();
+  loraObj["tx_fail"] = loraTransmitter.txFailCount();
+  loraObj["last_tx_ms"] = loraTransmitter.lastTxMs();
+
   JsonObject system = telemetryDocument.createNestedObject("system");
   system["tx_drop"] = laptopTx.droppedFrames();
   system["wifi_sta"] = wifiTelemetry.stationConnected() ? 1 : 0;
@@ -654,10 +706,6 @@ void handleCommand(const char* command) {
     const bool ok = localSensors.zeroAltitude();
     queueCommandReply(command, ok,
                       ok ? "RELATIVE_ALTITUDE_ZEROED" : "BMP280_NOT_READY");
-  } else if (strcmp(command, "TARE_LOAD") == 0) {
-    const bool ok = gpsLoadSensors.startTare();
-    queueCommandReply(command, ok,
-                      ok ? "LOAD_TARE_STARTED" : "HX711_NOT_READY");
   } else if (strcmp(command, "RESET_TICKS") == 0) {
     if (config::kHallSensorsEnabled) {
       resetHallTicks(nowMs);
@@ -708,6 +756,13 @@ void handleCommand(const char* command) {
   } else if (strcmp(command, "MIDDLE_STATUS") == 0) {
     const bool ok = sendNodeCommand(middleSerial, "STATUS");
     queueCommandReply(command, ok, ok ? "FORWARDED" : "MIDDLE_UART_BUSY");
+  } else if (strcmp(command, "TARE_LOADCELL") == 0) {
+    const bool ok = loadCell.startTare(config::kLoadCellTareSamples);
+    queueCommandReply(command, ok, ok ? "TARE_STARTED" : "LOADCELL_NOT_READY");
+  } else if (strncmp(command, "SET_CAL ", 8) == 0) {
+    const float factor = atof(command + 8);
+    loadCell.setCalibrationFactor(factor);
+    queueCommandReply(command, true, "CALIBRATION_UPDATED");
   } else {
     queueCommandReply(command, false, "UNKNOWN_COMMAND");
   }
@@ -745,6 +800,68 @@ void initializeHallSensors(uint32_t nowMs) {
     pinMode(pins::kHallRight, INPUT);
   }
   wheelOdometry.begin(nowMs, left, right);
+}
+
+void sendLoraTelemetry(uint32_t nowMs) {
+  LoraTelemetryPacket packet{};
+  packet.magic = kLoraPacketMagic;
+  packet.nodeId = config::kLoraNodeId;
+  packet.sequence = static_cast<uint16_t>(telemetrySequence & 0xFFFF);
+  packet.timestampMs = nowMs;
+
+  packet.rangesMm[0] = frontNode.hasPacket() ? frontNode.packet().scanMm : -1;
+  packet.rangesMm[1] = frontNode.hasPacket() ? frontNode.packet().fixedAMm : -1;
+  packet.rangesMm[2] = rearScanner.reading().hasSample ? rearScanner.reading().rangeMm : -1;
+  packet.rangesMm[3] = middleNode.hasPacket() ? middleNode.packet().fixedAMm : -1;
+  packet.rangesMm[4] = middleNode.hasPacket() ? middleNode.packet().fixedBMm : -1;
+
+  packet.anglesDeg[0] = frontNode.hasPacket() ? static_cast<int8_t>(frontNode.packet().angleDeg) : 0;
+  packet.anglesDeg[1] = rearScanner.reading().hasSample ? static_cast<int8_t>(rearScanner.reading().angleDeg) : 0;
+
+  const ImuReading& imu = localSensors.imu();
+  if (imu.hasSample) {
+    packet.accelMg[0] = static_cast<int16_t>(roundf(imu.accelerationXMps2 * (1000.0F / 9.80665F)));
+    packet.accelMg[1] = static_cast<int16_t>(roundf(imu.accelerationYMps2 * (1000.0F / 9.80665F)));
+    packet.accelMg[2] = static_cast<int16_t>(roundf(imu.accelerationZMps2 * (1000.0F / 9.80665F)));
+    packet.gyroDpsX10[0] = static_cast<int16_t>(roundf(imu.gyroXDps * 10.0F));
+    packet.gyroDpsX10[1] = static_cast<int16_t>(roundf(imu.gyroYDps * 10.0F));
+    packet.gyroDpsX10[2] = static_cast<int16_t>(roundf(imu.gyroZDps * 10.0F));
+  }
+
+  const EnvironmentReading& env = localSensors.environment();
+  if (env.hasSample) {
+    packet.tempCc = static_cast<int16_t>(roundf(env.temperatureC * 100.0F));
+    packet.pressureDpa = static_cast<uint16_t>(roundf(env.pressureHpa * 10.0F));
+    if (env.relativeAltitudeReady) {
+      packet.relAltDm = static_cast<int16_t>(roundf(env.relativeAltitudeM * 10.0F));
+    }
+  }
+
+  const GpsReading& gps = gpsDriver.reading();
+  packet.gpsFix = static_cast<uint8_t>(gps.fixStatus);
+  packet.satellites = static_cast<uint8_t>(gps.satellites);
+  if (gps.hasFix) {
+    packet.lat1e7 = static_cast<int32_t>(round(gps.latitudeDeg * 1e7));
+    packet.lon1e7 = static_cast<int32_t>(round(gps.longitudeDeg * 1e7));
+    packet.altM = static_cast<int16_t>(roundf(gps.altitudeM));
+    packet.speedCms = static_cast<uint16_t>(roundf(gps.speedMps * 100.0F));
+    packet.courseCdeg = static_cast<uint16_t>(roundf(gps.courseDeg * 100.0F));
+  }
+
+  const LoadCellReading& lc = loadCell.reading();
+  packet.weightStatus = static_cast<uint8_t>(loadCell.status(nowMs));
+  if (lc.hasSample && loadCell.status(nowMs) == LoadCellStatus::kHealthy) {
+    packet.weightGrams = static_cast<int32_t>(roundf(lc.weightGrams));
+  }
+
+  packet.estopState = static_cast<uint8_t>(lastSafetyOutput.state);
+  packet.estopCut = relayCutApplied ? 1 : 0;
+  packet.nearestMm = lastSafetyInput.hasValidRange
+                         ? static_cast<int16_t>(roundf(lastSafetyOutput.nearestRangeM * 1000.0F))
+                         : -1;
+
+  stampPacketCrc(packet);
+  loraTransmitter.sendTelemetry(packet, nowMs);
 }
 
 void queueBootEvent() {
@@ -786,12 +903,21 @@ void setup() {
   initializeHallSensors(nowMs);
   rearScanner.begin(nowMs);
   localSensors.begin(nowMs);
-  wifiTelemetry.begin();
-  gpsLoadSensors.begin();
+  if (config::kWifiTelemetryEnabled) {
+    wifiTelemetry.begin();
+  }
+
+  gpsSerial.begin(config::kGpsBaud, SWSERIAL_8N1, pins::kGpsRx, pins::kGpsTx);
+  gpsDriver.begin(nowMs);
+  loadCell.begin(nowMs);
+  if (config::kLoraTelemetryEnabled) {
+    loraTransmitter.begin(nowMs);
+  }
 
   lastWheelMs = nowMs - config::kWheelPeriodMs;
   lastSafetyMs = nowMs - config::kSafetyPeriodMs;
   lastTelemetryMs = nowMs - config::kTelemetryPeriodMs;
+  lastLoraTxMs = nowMs - config::kLoraTxPeriodMs;
   lastSafetyInput = buildSafetyInput(nowMs);
   lastSafetyOutput = safetyController.evaluate(lastSafetyInput);
   queueBootEvent();
@@ -808,7 +934,8 @@ void loop() {
 
   rearScanner.poll(nowMs);
   localSensors.poll(nowMs);
-  gpsLoadSensors.poll(nowMs);
+  gpsDriver.poll(gpsSerial, nowMs);
+  loadCell.poll(nowMs);
 
   if (config::kHallSensorsEnabled &&
       intervalElapsed(nowMs, lastWheelMs, config::kWheelPeriodMs)) {
@@ -826,9 +953,16 @@ void loop() {
     applyRelayCut(lastSafetyOutput.motorCut);
   }
 
-  if (intervalElapsed(nowMs, lastTelemetryMs, config::kTelemetryPeriodMs)) {
+  if (config::kUsbTelemetryEnabled &&
+      intervalElapsed(nowMs, lastTelemetryMs, config::kTelemetryPeriodMs)) {
     lastTelemetryMs = nowMs;
     queueTelemetry(nowMs);
+  }
+
+  if (config::kLoraTelemetryEnabled &&
+      intervalElapsed(nowMs, lastLoraTxMs, config::kLoraTxPeriodMs)) {
+    lastLoraTxMs = nowMs;
+    sendLoraTelemetry(nowMs);
   }
 
   laptopTx.poll(Serial);

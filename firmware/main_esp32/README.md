@@ -3,11 +3,12 @@
 This project targets a normal ESP32-WROOM DevKit. It runs the rear VL53L1X and
 rear SG90 locally, receives FRONT and MIDDLE telemetry over separate UARTs,
 reads MPU6050, BMP280, GPS and HX711, and sends telemetry over a
-Wi-Fi TCP connection. Hall odometry and relay motor-cut code remain compiled
-but are disabled in the current hardware profile.
+direct USB serial connection. It can also mirror compact telemetry over LoRa
+to the optional Base Station. Hall odometry and relay motor-cut code remain
+compiled but are disabled in the current hardware profile.
 
-Wi-Fi carries laptop telemetry only. The FRONT and MIDDLE controller links stay
-on their wired UARTs. GPS uses a receive-only software UART on GPIO34.
+The FRONT and MIDDLE controller links stay on their wired UARTs. GPS uses a
+receive-only software UART on GPIO35.
 
 ## Toolchain
 
@@ -41,6 +42,15 @@ Match the current board and COM port before upload.
 | GPIO32 | Reserved left Hall input, leave unconnected |
 | GPIO33 | Reserved right Hall input, leave unconnected |
 | GPIO25 | Reserved motor-cut relay output, leave unconnected |
+| GPIO18 | LoRa SX1278 SCK (VSPI) |
+| GPIO19 | LoRa SX1278 MISO (VSPI) |
+| GPIO23 | LoRa SX1278 MOSI (VSPI) |
+| GPIO5 | LoRa SX1278 NSS / CS (active low) |
+| GPIO4 | LoRa SX1278 RST (active low) |
+| GPIO34 | LoRa SX1278 DIO0 (interrupt) |
+| GPIO35 | GPS NEO-6M RX (from GPS TX) |
+| GPIO36 | HX711 DOUT (Sensor VP input) |
+| GPIO2 | HX711 SCK (clock output) |
 | USB | Laptop serial fallback and firmware upload |
 | GND | Common ground for every controller and supply |
 
@@ -77,20 +87,14 @@ Healthy FRONT is mask `0x0B`. Healthy MIDDLE is `0x06`. MAIN publishes rear
 mask `0x0F` only when the local rear scanner and servo are healthy and MIDDLE's
 two fixed-sensor bits are fresh.
 
-## Wi-Fi telemetry
+## Laptop and LoRa telemetry
 
-Copy `wifi_secrets.example.h` to the ignored `wifi_secrets.h`, then set the
-private SSID, password, and backend computer IPv4 address. MAIN connects to TCP
-port `8765` and sends newline-delimited `fogsen.main.v1` packets with a 20 Hz
-target. USB at 115200 baud also carries full telemetry, commands and events.
+USB at 115200 baud carries full `fogsen.main.v1` telemetry, commands, and
+events. The SX1278 sends a compact 65-byte binary packet to the optional Base
+Station, which converts it back to the same JSON wire schema for its USB link.
 
-The Wi-Fi sender runs in a bounded FreeRTOS queue on core 0. A slow or missing
-network drops Wi-Fi frames without blocking the core 1 sensor and safety loop.
-USB continues to publish the same packets as a local fallback.
-
-Start the backend with `FOGSEN_MODE=LIVE`,
-`FOGSEN_TELEMETRY_TRANSPORT=WIFI`, `FOGSEN_WIFI_LISTEN_HOST=0.0.0.0`, and
-`FOGSEN_WIFI_LISTEN_PORT=8765`. Do not put the Wi-Fi password in tracked files.
+Wi-Fi telemetry remains compiled as an alternate profile and is disabled by
+default in `FirmwareConfig.h`. Do not put Wi-Fi credentials in tracked files.
 
 ## Safety
 
@@ -121,8 +125,12 @@ a clear path.
 - `REAR_SCAN_ON`
 - `REAR_SCAN_OFF`
 - `MIDDLE_STATUS`
+- `TARE_LOADCELL`
+- `SET_CAL <factor>`
 
 FRONT commands travel over UART. Rear commands run locally on MAIN.
+`TARE_LOADCELL` initiates asynchronous zero-taring of the 5kg load cell.
+`SET_CAL` updates the calibration factor without reflashing.
 `MIDDLE_STATUS` requests the C3 health reply. In the current profile,
 `RESET_TICKS` returns `HALL_SENSORS_DISABLED` and `ESTOP_TEST` returns
 `RELAY_OUTPUT_DISABLED` without touching either reserved pin.
@@ -140,8 +148,3 @@ FRONT commands travel over UART. Rear commands run locally on MAIN.
 6. Confirm telemetry reports Hall and relay output disabled.
 
 Compilation does not prove these physical checks.
-# GPS, load cell and direct Wi-Fi profile
-
-The current profile adds GPS TX on GPIO34 and HX711 DT/SCK on GPIO19/GPIO18.
-Full telemetry now uses Wi-Fi only. The wiring, calibration and current bench
-results are in [the direct Wi-Fi guide](../../docs/truck-wifi-gps-load.md).

@@ -139,6 +139,42 @@ def test_disabled_hall_and_relay_are_not_treated_as_live_hardware() -> None:
     assert format_main_packet(packet, 20_000).endswith("SAFE cut=DISABLED")
 
 
+def test_base_station_and_main_packet_with_gps_loadcell_lora() -> None:
+    raw = (
+        '{"type":"telemetry","schema":"fogsen.main.v1","fw":"0.2.0","mode":"LIVE","seq":19,"ms":18300,'
+        '"vehicle_id":"DUMPER_01","node_id":1,'
+        '"front":{"state":"HEALTHY","age":4,"seq":42,"a":-30,"scan":1260,"scan_age":5,"front":620,"front_age":7,"ok":11},'
+        '"rear":{"state":"HEALTHY","age":8,"seq":43,"a":25,"scan":930,"scan_age":9,"left":440,"left_age":10,"right":510,"right_age":11,"ok":15},'
+        '"imu":{"state":"HEALTHY","age":3,"gz":1.3,"ax":0.02,"ay":-0.01},'
+        '"env":{"state":"HEALTHY","age":90,"temp":31.4,"pressure":1007.2,"rel_alt":1.2},'
+        '"wheel":{"enabled":0,"l":0,"r":0,"ls":0,"rs":0,"speed":0},'
+        '"estop":{"state":"SAFE","reason":"CLEAR","output_enabled":0,"cut_requested":0,"cut":0,"latched":0,"coverage":1,"nearest":1.26,"critical":0.45,"latched_ms":0},'
+        '"gps":{"state":"FIX_3D","fix":1,"sats":8,"hdop":1.2,"lat":12.971598,"lon":77.594562,"alt":920.0,"speed":1.5,"course":45.0,"age":10},'
+        '"loadcell":{"state":"HEALTHY","tare_state":0,"weight_g":1250.0,"weight_kg":1.25,"raw":525000,"ok":1,"age":25},'
+        '"lora":{"state":"HEALTHY","node_id":1,"rssi":-68,"snr":9.2,"rx_count":150,"drop_count":1,"rate_hz":10.0}}'
+    )
+    packet = parse_main_packet(raw)
+    assert packet.vehicle_id == "DUMPER_01"
+    assert packet.node_id == 1
+    assert packet.gps is not None
+    assert packet.gps.state == "FIX_3D"
+    assert packet.gps.fix == 1
+    assert packet.gps.sats == 8
+    assert packet.gps.lat == pytest.approx(12.971598)
+    assert packet.gps.lon == pytest.approx(77.594562)
+    assert packet.loadcell is not None
+    assert packet.loadcell.state == "HEALTHY"
+    assert packet.loadcell.weight_kg == pytest.approx(1.25)
+    assert packet.loadcell.ok == 1
+    assert packet.lora is not None
+    assert packet.lora.rssi == -68
+    assert packet.lora.rate_hz == pytest.approx(10.0)
+
+    translated = translate_main_packet(packet, received_at_ms=20_000)
+    assert len(translated.ranges) == 5
+    assert translated.emergency.state == "SAFE"
+
+
 def test_main_forward_coverage_cache_is_authoritative_off_axis() -> None:
     packet = parse_main_packet(FIRMWARE_PACKET)
     packet.front.a = 70
