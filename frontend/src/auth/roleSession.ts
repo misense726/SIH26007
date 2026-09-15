@@ -1,3 +1,5 @@
+import { dashboardRoleFromHash } from "../layout/dashboardViews";
+
 export type DashboardRole = "DRIVER" | "SUPERVISOR";
 
 export const ROLE_SESSION_KEY = "fogsen-dashboard-role";
@@ -9,6 +11,11 @@ export function parseDashboardRole(value: string | null): DashboardRole | null {
 export function readInitialRole(): DashboardRole | null {
   if (typeof window === "undefined") {
     return null;
+  }
+
+  const linkedRole = dashboardRoleFromHash(window.location?.hash ?? "");
+  if (linkedRole) {
+    return linkedRole;
   }
 
   try {

@@ -28,6 +28,15 @@ describe("demo role session", () => {
     expect(getItem).toHaveBeenCalledWith(ROLE_SESSION_KEY);
   });
 
+  it("uses a direct dashboard link before the stored role", () => {
+    vi.stubGlobal("window", {
+      location: { hash: "#fleet" },
+      sessionStorage: { getItem: () => "DRIVER" },
+    });
+
+    expect(readInitialRole()).toBe("SUPERVISOR");
+  });
+
   it("fails closed for invalid or unavailable storage", () => {
     vi.stubGlobal("window", {
       sessionStorage: { getItem: () => "UNKNOWN" },

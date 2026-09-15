@@ -2,6 +2,12 @@
   "version": "0.0.1",
   "configurations": [
     {
+      "name": "mine-review",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev", "--", "--host", "127.0.0.1", "--port", "5177", "--strictPort"],
+      "port": 5177
+    },
+    {
       "name": "frontend",
       "runtimeExecutable": "npm",
       "runtimeArgs": ["--prefix", "frontend", "run", "dev"],
@@ -9,8 +15,8 @@
     },
     {
       "name": "backend",
-      "runtimeExecutable": "C:/Users/niran/OneDrive/Desktop/nvenv/.venv/Scripts/python.exe",
-      "runtimeArgs": ["-m", "uvicorn", "backend.app.main:app", "--host", "127.0.0.1", "--port", "8000"],
+      "runtimeExecutable": "C:/Users/niran/OneDrive/Desktop/nvenv/Hackathon Projects/FogSen/.venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "uvicorn", "backend.app.main:app", "--host", "127.0.0.1", "--port", "8000", "--reload"],
       "port": 8000
     }
   ]

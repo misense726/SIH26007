@@ -10,6 +10,7 @@ import type {
   SensorHealth,
   V2XPeerNode,
   WorldState,
+  HaulVehicleState,
 } from "../types";
 
 export type SupervisorVehicleTone =
@@ -20,6 +21,7 @@ export type SupervisorVehicleTone =
   | "unknown";
 
 export interface SupervisorVehicle {
+  haul?: HaulVehicleState | null;
   vehicleId: string;
   isPrimary: boolean;
   isSimulated: boolean;
@@ -186,6 +188,7 @@ export function createSupervisorViewModel(world: WorldState): SupervisorViewMode
 
     return {
       vehicleId: vehicle.vehicle_id,
+      haul: vehicle.haul,
       isPrimary,
       isSimulated: vehicle.mode === "SIMULATED",
       sourceLabel: isPrimary

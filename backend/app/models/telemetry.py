@@ -159,7 +159,21 @@ class OccupancyState(TelemetryModel):
     updated_at_ms: int = Field(default_factory=now_ms, ge=0)
 
 
+class HaulVehicleState(TelemetryModel):
+    phase: str
+    payload_fraction: float = Field(default=0, ge=0, le=1)
+    payload_tonnes: float = Field(default=0, ge=0)
+    payload_target_tonnes: float = Field(default=0, ge=0)
+    payload_capacity_tonnes: float = Field(default=0, ge=0)
+    bed_angle_deg: float = Field(default=0, ge=0, le=65)
+    phase_progress: float = Field(default=0, ge=0, le=1)
+    cycle: int = Field(default=1, ge=1)
+    road_elevation_m: float = 0.0
+    road_pitch_deg: float = Field(default=0, ge=-12, le=12)
+
+
 class VehiclePose(TelemetryModel):
+    haul: HaulVehicleState | None = None
     timestamp_ms: int = Field(default_factory=now_ms, ge=0)
     vehicle_id: str = "DUMPER_01"
     x_m: float = 0.0

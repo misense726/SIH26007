@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections import Counter
 import threading
 import time
-from typing import Sequence
+
+from backend.app.analytics.simulated_haul import BASELINE_TRIPS_PER_VEHICLE, baseline_trips
 
 from backend.app.analytics.models import (
     CycleTimeBreakdown,
@@ -19,71 +21,51 @@ def _now_ms() -> int:
 class HaulageAnalyticsEngine:
     """Logs haul cycles and computes fleet production, cycle time breakdown, and utilization."""
 
-    def __init__(self, max_history: int = 200, seed_baseline: bool = True) -> None:
+    def __init__(
+        self, max_history: int = 200, seed_baseline: bool = True,
+        baseline_end_ms: int | None = None, fleet_size: int = 8,
+    ) -> None:
+        if max_history < 1:
+            raise ValueError("max_history must be positive")
         self.max_history = max_history
         self._lock = threading.Lock()
         self._trips: list[TripRecord] = []
         self._delay_events: list[str] = []
-        if seed_baseline:
-            self._seed_shift_baseline_trips()
+        self._seed_baseline = seed_baseline
+        self._baseline_end_ms = baseline_end_ms if baseline_end_ms is not None else _now_ms()
+        self._fleet_size = fleet_size
+        self.reset()
 
-    def _seed_shift_baseline_trips(self) -> None:
-        """Seed realistic completed trips for the current shift at NMDC Bailadila."""
-        base_time = _now_ms() - (3 * 3600 * 1000)  # 3 hours ago
-
-        seed_data = [
-            ("DUMPER_01", "Bailadila Shovel Hauler #01", "PICKUP_NORTH_BENCH", "DUMP_PRIMARY_CRUSHER", 100.0, 18.2, 3.4, 5.8, 2.1, 4.9, 2.0, 1.45),
-            ("DUMPER_02", "Komatsu 930E #02", "PICKUP_NORTH_BENCH", "DUMP_PRIMARY_CRUSHER", 95.0, 17.5, 3.1, 5.5, 1.9, 5.0, 2.0, 1.45),
-            ("DUMPER_03", "CAT 793F #03", "PICKUP_EAST_PIT", "DUMP_WASTE_SOUTH", 105.0, 22.0, 4.2, 7.1, 2.5, 6.2, 2.0, 1.82),
-            ("HAULER_04", "BEML BH205E #04", "PICKUP_NORTH_BENCH", "DUMP_PRIMARY_CRUSHER", 90.0, 16.8, 2.9, 5.3, 1.8, 4.8, 2.0, 1.45),
-            ("DUMPER_01", "Bailadila Shovel Hauler #01", "PICKUP_NORTH_BENCH", "DUMP_PRIMARY_CRUSHER", 100.0, 18.0, 3.2, 5.9, 2.0, 4.9, 2.0, 1.45),
-            ("DUMPER_02", "Komatsu 930E #02", "PICKUP_NORTH_BENCH", "DUMP_PRIMARY_CRUSHER", 95.0, 17.8, 3.0, 5.6, 2.1, 5.1, 2.0, 1.45),
-            ("DUMPER_03", "CAT 793F #03", "PICKUP_EAST_PIT", "DUMP_WASTE_SOUTH", 105.0, 21.5, 3.9, 7.0, 2.4, 6.2, 2.0, 1.82),
-            ("HAULER_04", "BEML BH205E #04", "PICKUP_NORTH_BENCH", "DUMP_PRIMARY_CRUSHER", 90.0, 16.5, 2.8, 5.2, 1.7, 4.8, 2.0, 1.45),
-            ("DUMPER_01", "Bailadila Shovel Hauler #01", "PICKUP_NORTH_BENCH", "DUMP_PRIMARY_CRUSHER", 100.0, 18.5, 3.5, 6.0, 2.1, 4.9, 2.0, 1.45),
-            ("DUMPER_02", "Komatsu 930E #02", "PICKUP_NORTH_BENCH", "DUMP_PRIMARY_CRUSHER", 95.0, 17.2, 3.0, 5.4, 1.9, 4.9, 2.0, 1.45),
-        ]
-
-        for i, (vid, call, pickup, dump, payload, dur_min, load_m, l_trav_m, dump_m, e_ret_m, idle_m, dist_km) in enumerate(seed_data):
-            t_start = base_time + (i * 15 * 60 * 1000)
-            t_end = t_start + int(dur_min * 60 * 1000)
-            rec = TripRecord(
-                trip_id=f"TRIP-BENCH-{1000 + i}",
-                vehicle_id=vid,
-                callsign=call,
-                pickup_node=pickup,
-                dump_node=dump,
-                payload_tonnes=payload,
-                start_time_ms=t_start,
-                end_time_ms=t_end,
-                cycle_duration_s=round(dur_min * 60.0, 1),
-                loading_wait_s=round(load_m * 60.0, 1),
-                loaded_travel_s=round(l_trav_m * 60.0, 1),
-                dumping_wait_s=round(dump_m * 60.0, 1),
-                empty_return_s=round(e_ret_m * 60.0, 1),
-                idle_s=round(idle_m * 60.0, 1),
-                distance_km=dist_km,
-                avg_speed_kmh=round(dist_km / (dur_min / 60.0), 1),
-                route_deviations_count=0,
-                route_compliance_pct=100.0,
-                fuel_litres_est=round(dist_km * 4.1 + (payload * 0.08), 1),
-            )
-            self._trips.append(rec)
+    def reset(self) -> None:
+        """Discard runtime trips and restore the same baseline, or empty LIVE history."""
+        with self._lock:
+            self._trips = (baseline_trips(self._baseline_end_ms, self._fleet_size)
+                           if self._seed_baseline else [])
+            self._trips = self._trips[-self.max_history:]
+            self._delay_events.clear()
 
     def record_trip(self, trip: TripRecord) -> None:
         with self._lock:
+            if any(existing.trip_id == trip.trip_id for existing in self._trips):
+                return
             self._trips.append(trip)
+            self._trips.sort(key=lambda item: (item.end_time_ms, item.trip_id))
             if len(self._trips) > self.max_history:
-                self._trips.pop(0)
+                counts = Counter(item.vehicle_id for item in self._trips)
+                # A busy truck must not evict the last 15 records of a slower one.
+                victim = next((i for i, item in enumerate(self._trips)
+                               if counts[item.vehicle_id] > BASELINE_TRIPS_PER_VEHICLE), 0)
+                self._trips.pop(victim)
 
-    def get_trip_history(self, limit: int = 50) -> TripHistoryResponse:
+    def get_trip_history(self, limit: int = 50, vehicle_id: str | None = None) -> TripHistoryResponse:
+        if not 1 <= limit <= 200:
+            raise ValueError("limit must be between 1 and 200")
         with self._lock:
-            trips_slice = list(reversed(self._trips[-limit:]))
-            total_t = sum(t.payload_tonnes for t in self._trips)
+            matching = [trip for trip in self._trips if vehicle_id is None or trip.vehicle_id == vehicle_id]
             return TripHistoryResponse(
-                trips=trips_slice,
-                total_trips=len(self._trips),
-                total_tonnes=round(total_t, 1),
+                trips=list(reversed(matching[-limit:])),
+                total_trips=len(matching),
+                total_tonnes=round(sum(trip.payload_tonnes for trip in matching), 1),
             )
 
     def get_haulage_metrics(self, active_fleet_count: int = 4) -> HaulageMetrics:
@@ -155,8 +137,9 @@ class HaulageAnalyticsEngine:
         ore_by_veh: dict[str, float] = {}
         cycles_by_veh: dict[str, int] = {}
         for t in trips:
-            ore_by_veh[t.vehicle_id] = round(ore_by_veh.get(t.vehicle_id, 0.0) + t.payload_tonnes, 1)
+            ore_by_veh[t.vehicle_id] = ore_by_veh.get(t.vehicle_id, 0.0) + t.payload_tonnes
             cycles_by_veh[t.vehicle_id] = cycles_by_veh.get(t.vehicle_id, 0) + 1
+        ore_by_veh = {vehicle_id: round(tonnes, 1) for vehicle_id, tonnes in ore_by_veh.items()}
 
         # Production rate: tonnes per hour based on observed span of trips
         min_start = min(t.start_time_ms for t in trips)
@@ -167,11 +150,7 @@ class HaulageAnalyticsEngine:
 
         avg_compliance = sum(t.route_compliance_pct for t in trips) / total_cycles
 
-        delays = list(self._delay_events) if self._delay_events else [
-            "Dense fog speed regulation on North Incline (average 3.2m travel delay)",
-            "Gyratory Crusher bin hopper queuing observed at 08:45 AM",
-            "Shovel #04 repositioning pause (2.5m wait recorded)",
-        ]
+        delays = list(self._delay_events)
 
         return HaulageMetrics(
             total_completed_cycles=total_cycles,

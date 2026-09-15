@@ -120,7 +120,7 @@ export const defaultWorldState: WorldState = {
   simulation: {
     running: true,
     scenario: "NORMAL",
-    speed_scale: 1,
+    speed_scale: 1.5,
     obstacle_enabled: false,
     visibility_score: 0.88,
     front_scanner_angle_deg: 0,

@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from backend.app.analytics.trip_logger import HaulageAnalyticsEngine
+from backend.app.analytics.simulated_haul import BASELINE_TRIPS_PER_VEHICLE
 from backend.app.fleet.fleet_manager import FleetManager
+from backend.app.fleet.models import FleetVehicleSummary
 from backend.app.localization.fusion import LocalizationFusion
 from backend.app.mapping.occupancy import OccupancyAccumulator
 from backend.app.mapping.transforms import transforms_from_config
@@ -130,7 +132,15 @@ class FullSimulator:
         self._recording_state = RecordingState()
 
         self.mine_graph = MineRoadGraph()
-        self.analytics = HaulageAnalyticsEngine()
+        self.analytics = HaulageAnalyticsEngine(
+            baseline_end_ms=self._timestamp_ms, fleet_size=demo["haul"].get("fleet_size", 8),
+        )
+        self._haul_trip_numbers = {
+            f"DUMPER_{index + 1:02d}": BASELINE_TRIPS_PER_VEHICLE + 1
+            for index in range(demo["haul"].get("fleet_size", 8))
+        }
+        if self._haul is not None and self._haul.production is not None:
+            self._haul.production.set_trip_numbers(self._haul_trip_numbers)
         self.fleet_manager = FleetManager(
             self.mine_graph,
             self._v2x_manager,
@@ -291,6 +301,8 @@ class FullSimulator:
         self.mine_graph.reset()
         self._v2x_manager.reset()
         self.fleet_manager.reset_fleet()
+        self.analytics.reset()
+        self._haul_trip_numbers = dict.fromkeys(self._haul_trip_numbers, BASELINE_TRIPS_PER_VEHICLE + 1)
         self._scenario = self._default_scenario
         await self._apply_scenario(self._default_scenario)
 
@@ -367,6 +379,8 @@ class FullSimulator:
         change_map = is_haul != (self._haul is not None)
         if is_haul:
             self._haul = HaulRun(self._config["demo"]["demo"]["haul"])
+            if self._haul.production is not None:
+                self._haul.production.set_trip_numbers(self._haul_trip_numbers)
             self._reference_map = self._haul.reference_map
             self._v2x_manager.clear_peers()
             change_map = True
@@ -521,7 +535,19 @@ class FullSimulator:
                 )
             peer = self._haul.peer(timestamp, self._movement_running)
         speed = 0.0
-        if self._movement_running and not self.emergency_output.active:
+        production = self._haul.production if self._haul else None
+        if production:
+            completed = production.advance(
+                self._interval_s, self._movement_running,
+                min(self._haul.config["cruise_speed_mps"] * self._speed_scale, self._max_demo_speed_mps),
+                timestamp_ms=timestamp, emergency_stopped=self.emergency_output.active,
+            )
+            for trip in completed:
+                self.analytics.record_trip(trip)
+                self._haul_trip_numbers[trip.vehicle_id] += 1
+            self._route_distance_m = production.trucks[0].distance
+            speed = production.trucks[0].speed
+        elif self._movement_running and not self.emergency_output.active:
             requested_speed = min(
                 (self._haul.config.get("cruise_speed_mps", self._route_speed_mps)
                  if self._haul else self._route_speed_mps) * self._speed_scale,
@@ -547,11 +573,12 @@ class FullSimulator:
                     await self.emergency_output.set_motor_cut(
                         False, "Route cycle complete"
                     )
-        route_sample = self._route.sample(self._route_distance_m)
-        offset = self._haul.offset(self._route_distance_m) if self._haul else 0.0
+        primary_pose = production.pose(0, timestamp) if production else None
+        route_sample = primary_pose if primary_pose else self._route.sample(self._route_distance_m)
+        offset = self._haul.offset(self._route_distance_m) if self._haul and not production else 0.0
         heading = math.radians(route_sample.heading_deg)
         vehicle_heading = route_sample.heading_deg
-        if self._haul is not None:
+        if self._haul is not None and not production:
             slope = (self._haul.offset(self._route_distance_m + 0.05)
                      - self._haul.offset(self._route_distance_m - 0.05)) / 0.1
             vehicle_heading = (vehicle_heading + math.degrees(math.atan(slope))) % 360
@@ -572,6 +599,8 @@ class FullSimulator:
         if self._haul is not None:
             peer = self._haul.peer(timestamp, self._movement_running)
             lead = self._haul.lead(timestamp, self._movement_running)
+        haul_peers = ([peer, lead, *self._haul.fleet(self._route_distance_m, speed, timestamp)]
+                      if self._haul is not None and peer is not None else [])
         self._scene = SimulatedScene(
             timestamp_ms=timestamp,
             elapsed_s=self._elapsed_s,
@@ -591,8 +620,8 @@ class FullSimulator:
                     other.vehicle_id,
                     Point2D(x_m=other.x_m, y_m=other.y_m),
                     self._haul.config["peer_radius_m"],
-                ) for other in (peer, lead))
-                if peer is not None else ()
+                ) for other in haul_peers)
+                if peer is not None and not production else ()
             ),
         )
 
@@ -610,6 +639,8 @@ class FullSimulator:
             speed_mps=speed,
             mode=DataMode.SIMULATED,
         )
+        if primary_pose:
+            pose = pose.model_copy(update={"haul": primary_pose.haul})
         readings = await self.range_provider.read_ranges()
         if self._haul is not None:
             self._haul.observe(readings, self.range_provider.last_targets)
@@ -679,7 +710,7 @@ class FullSimulator:
             corridor,
             emergency.nearest_obstacle_m,
         )
-        for other in ([peer, lead] if peer is not None else []):
+        for other in haul_peers:
             self._v2x_manager.receive_bsm(
                 V2VBasicSafetyMessage(
                     message_id=f"haul-{other.vehicle_id}-{timestamp}",
@@ -711,11 +742,9 @@ class FullSimulator:
         else:
             fleet_vehicles = [pose]
 
-        # The haul route has its own encounter choreography. Keep those two
-        # visible peers as the dashboard vehicles for that demo, while the
-        # operational fleet remains available through ``operations``.
+        # Haul traffic shares the route, sensing targets and V2X positions.
         visible_vehicles = (
-            [pose, peer, lead] if self._haul is not None and peer is not None else fleet_vehicles
+            [pose, *haul_peers] if self._haul is not None else fleet_vehicles
         )
 
         operations = self._build_operations_state(timestamp)
@@ -766,11 +795,33 @@ class FullSimulator:
             generated_at_ms=timestamp,
         )
 
+    @property
+    def active_fleet_count(self) -> int:
+        production = self._haul.production if self._haul else None
+        return len(production.trucks) if production else len(self.fleet_manager.vehicles)
+
+    def get_fleet_summaries(self) -> list[FleetVehicleSummary]:
+        production = self._haul.production if self._haul else None
+        if production is None:
+            return self.fleet_manager.get_all_summaries()
+        operations = self._build_operations_state(self._timestamp_ms)
+        summaries = []
+        for index, metadata in enumerate(operations.fleet.values()):
+            pose = production.pose(index, self._timestamp_ms)
+            values = {**metadata.model_dump(), "x_m": pose.x_m, "y_m": pose.y_m,
+                      "heading_deg": pose.heading_deg, "speed_mps": pose.speed_mps,
+                      "speed_kmh": round(pose.speed_mps * 3.6, 1)}
+            summaries.append(FleetVehicleSummary(**{
+                key: values[key] for key in FleetVehicleSummary.model_fields
+            }))
+        return summaries
+
     def _build_operations_state(self, timestamp: int) -> MineOperationsState:
         fleet_dict = {}
         routes_dict = {}
         guidance_dict = {}
-        for vid, veh in self.fleet_manager.vehicles.items():
+        production = self._haul.production if self._haul else None
+        for vid, veh in ({} if production else self.fleet_manager.vehicles).items():
             fleet_dict[vid] = veh.to_operational_metadata()
             if veh.current_route:
                 routes_dict[vid] = veh.current_route
@@ -799,7 +850,26 @@ class FullSimulator:
                 estimated_sight_distance_m=round(max(8.0, self._scene.visibility_target * 120.0), 1),
             )
 
-        metrics = self.analytics.get_haulage_metrics(active_fleet_count=len(self.fleet_manager.vehicles))
+        metrics = self.analytics.get_haulage_metrics(active_fleet_count=self.active_fleet_count)
+        if production:
+            for index, truck in enumerate(production.trucks):
+                metadata = production.operational_metadata(index)
+                vid = metadata.vehicle_id
+                metadata.total_trips_completed = metrics.cycles_by_vehicle.get(vid, 0)
+                metadata.total_tonnes_moved = metrics.ore_moved_by_vehicle.get(vid, 0.0)
+                if index == 0:
+                    metadata.emergency_state = self._last_emergency_level.value
+                fleet_dict[vid] = metadata
+                guidance_dict[vid] = TacticalGuidance(
+                    vehicle_id=vid, callsign=metadata.callsign,
+                    current_destination=metadata.current_destination,
+                    distance_remaining_m=round(metadata.distance_to_destination_m, 1),
+                    next_instruction=metadata.next_instruction,
+                    speed_kmh=round(truck.speed * 3.6, 1),
+                    visibility_score=round(self._scene.visibility_target, 2),
+                    visibility_state=self._visibility_state(self._scene.visibility_target).value,
+                    estimated_sight_distance_m=round(max(8.0, self._scene.visibility_target * 120), 1),
+                )
         analytics_summary = HaulageMetricsSummary(
             total_completed_cycles=metrics.total_completed_cycles,
             total_ore_moved_tonnes=metrics.total_ore_moved_tonnes,

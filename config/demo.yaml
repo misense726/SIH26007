@@ -2,7 +2,7 @@ demo:
   telemetry_hz: 10
   route_speed_mps: 1.15
   default_scenario: HAUL
-  default_speed_scale: 1.0
+  default_speed_scale: 1.5
   mode: SIMULATED
   map_file: maps/test_route.json
   obstacle_position_m: [7.0, 7.4]
@@ -36,10 +36,18 @@ demo:
       obstacle_ahead_m: 0.9
       obstacle_radius_m: 0.45
   haul:
+    fleet_size: 8
+    production_cycle: true
+    queue_spacing_m: 6
+    max_turn_rate_rad_s: 1.2
+    loading_s: 9
+    reversing_s: 6
+    dumping_s: 6
+    lowering_s: 2
     cruise_speed_mps: 1.8
     encounter_speed_mps: 1.15
     corner_blend_m: 1.8
-    route_points_m: [[0, 0], [0, 22], [2, 26], [6, 28], [20, 30], [28, 34], [32, 40], [32, 44], [29, 48], [25, 50], [10, 52], [-8, 47], [-18, 37], [-22, 24], [-20, 12], [-16, 6], [-10, 2], [0, 0]]
+    route_points_m: [[0, 0], [0, 22], [2, 26], [6, 28], [20, 30], [28, 34], [32, 40], [32, 44], [30, 61], [16, 75], [-14, 78], [-40, 68], [-58, 50], [-63, 24], [-58, 0], [-39, -15], [-15, -10], [0, 0]]
     road_half_width_m: 3.4
     dump_waypoint: 7
     site_dwell_s: 4

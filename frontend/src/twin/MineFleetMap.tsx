@@ -27,10 +27,16 @@ export function MineFleetMap({
   return (
     <div className="mine-fleet-map" data-view={tilted ? "terrain" : "plan"}>
       <div className="mine-map-tools">
-        <span>Mine operations</span>
-        <div>
+        <div className="mine-map-title">
+          <strong>Deposit-14</strong>
+          <span>Bailadila · Kirandul</span>
+        </div>
+        <div className="mine-map-actions" role="group" aria-label="Mine view controls">
           {tilted ? (
             <>
+              <button onClick={() => controller.current?.focus("top")}>
+                Top view
+              </button>
               <button onClick={() => controller.current?.focus("pit")}>
                 Mining area
               </button>
@@ -109,7 +115,7 @@ export function MineFleetMap({
       <div className="mine-map-key">
         <span>{haul?.next_instruction ?? "Haul circuit"}</span>
         <span>Trip {haul?.cycle ?? 1}</span>
-        <span>Conceptual site, local metres</span>
+        <span>Illustrative mine · Local metres · Not surveyed</span>
       </div>
     </div>
   );

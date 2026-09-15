@@ -109,4 +109,5 @@ def test_analytics_api_endpoints() -> None:
         res_f = client.get("/api/fleet/vehicles")
         assert res_f.status_code == 200
         f_data = res_f.json()
-        assert len(f_data) == 4
+        assert len(f_data) == 8
+        assert m_data["active_fleet_count"] == 8

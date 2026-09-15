@@ -175,9 +175,9 @@ def create_app(
                 await active_camera_feed.stop()
 
     app = FastAPI(
-        title="FogSen API",
+        title="MI Sense API",
         version=__version__,
-        description="Backend-owned world model for the FogSen V1 proof of concept.",
+        description="Backend-owned world model for the MI Sense V1 proof of concept.",
         lifespan=lifespan,
     )
     app.add_middleware(

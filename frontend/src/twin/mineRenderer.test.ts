@@ -152,6 +152,33 @@ afterEach(() => {
 });
 
 describe("mine renderer scheduling", () => {
+  it("keeps the chassis on its road grade while only the bed tips, and freezes without new telemetry", () => {
+    const truck = { ...vehicle(), xM: 32, yM: 42, speedMps: 0,
+      haul: { phase: "DUMPING", payload_fraction: 0.5, bed_angle_deg: 58,
+        phase_progress: 0.6, cycle: 1, road_elevation_m: 8.5, road_pitch_deg: 4 } };
+    mine.update({ vehicles: [truck] });
+    intersect([{ isIntersecting: true }]);
+    settle();
+    const scene = mocks.render.mock.calls.at(-1)![0] as THREE.Scene;
+    const chassis = scene.getObjectByName("haul-truck-TRUCK")!;
+    const bed = chassis.getObjectByName("dump-bed-pivot")!;
+    const cargo = bed.getObjectByName("ore-cargo")!;
+    expect(cargo.scale.toArray()).toEqual([1, 0.5, 1]);
+    expect(cargo.position.z).toBe(0);
+    expect(chassis.position.toArray()).toEqual([32, 8.56, -42]);
+    expect(chassis.rotation.z).toBe(0);
+    expect(Math.abs(chassis.rotation.x)).toBeLessThanOrEqual(4 * Math.PI / 180);
+    expect(bed.rotation.x).toBeCloseTo(58 * Math.PI / 180);
+    const position = chassis.position.clone();
+    step(10000);
+    expect(chassis.position.equals(position)).toBe(true);
+    expect(bed.rotation.x).toBeCloseTo(58 * Math.PI / 180);
+    mine.update({ vehicles: [{ ...truck, haul: { ...truck.haul, phase: "RETURNING",
+      payload_fraction: 0, bed_angle_deg: 0 } }] });
+    settle();
+    expect(bed.rotation.x).toBe(0);
+    expect(cargo.visible).toBe(false);
+  });
   it("waits for intersection and cancels even RAF id zero while hidden or offscreen", () => {
     expect(pending.size).toBe(0);
     intersect([{ isIntersecting: true }]);

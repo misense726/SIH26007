@@ -69,9 +69,9 @@ def create_simulation_app(settings: RuntimeSettings | None = None) -> FastAPI:
             await simulator.stop()
 
     app = FastAPI(
-        title="FogSen Simulation API",
+        title="MI Sense Simulation API",
         version=__version__,
-        description="Server-side simulated FogSen world state for the hosted demo.",
+        description="Server-side simulated MI Sense world state for the hosted demo.",
         lifespan=lifespan,
     )
     app.add_middleware(

@@ -3,6 +3,7 @@ import type { DashboardRole } from "../auth/roleSession";
 import { STATIC_DEMO } from "../simulation/demoMode";
 import {
   dashboardViewLabel,
+  dashboardRoleFromHash,
   defaultDashboardView,
   resolveDashboardRoute,
   type DashboardView,
@@ -29,7 +30,11 @@ export function useDashboardNavigation(role: DashboardRole): {
   const [view, setView] = useState<DashboardView>(() => currentDashboardView(role));
 
   useEffect(() => {
-    const syncFromLocation = () => setView(normalizeLocation(role));
+    const syncFromLocation = () => {
+      const linkedRole = dashboardRoleFromHash(window.location.hash);
+      if (linkedRole && linkedRole !== role) return;
+      setView(normalizeLocation(role));
+    };
     syncFromLocation();
     window.addEventListener("hashchange", syncFromLocation);
     window.addEventListener("popstate", syncFromLocation);
@@ -40,7 +45,7 @@ export function useDashboardNavigation(role: DashboardRole): {
   }, [role]);
 
   useEffect(() => {
-    document.title = `${dashboardViewLabel(view)} | FogSen`;
+    document.title = `${dashboardViewLabel(view)} | MI Sense`;
   }, [view]);
 
   const navigate = useCallback((requestedView: DashboardView) => {

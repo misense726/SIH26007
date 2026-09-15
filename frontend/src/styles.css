@@ -698,6 +698,7 @@ h3 {
   height: 100%;
   overflow: hidden;
   cursor: ew-resize;
+  touch-action: none;
   user-select: none;
   -webkit-user-select: none;
   outline: none;
@@ -5190,8 +5191,8 @@ footer {
   position: relative;
   display: grid;
   min-height: calc(100dvh - 126px);
-  align-content: center;
-  padding: clamp(34px, 7vw, 86px) 0;
+  align-content: start;
+  padding: clamp(42px, 5vw, 64px) 0;
   overflow: hidden;
 }
 
@@ -5217,32 +5218,14 @@ footer {
   margin-bottom: clamp(28px, 5vw, 52px);
 }
 
-.role-login-intro::after {
-  display: block;
-  width: 84px;
-  height: 3px;
-  margin-top: 24px;
-  border-radius: 999px;
-  background: linear-gradient(90deg, var(--sensor), var(--warning));
-  content: "";
-}
-
 .role-login-intro h1 {
   max-width: 700px;
-  margin-top: 10px;
+  margin-top: 0;
   color: var(--text-strong);
   font-size: clamp(2.35rem, 6vw, 5.5rem);
   font-weight: 690;
   line-height: 0.96;
   letter-spacing: -0.07em;
-}
-
-.role-login-intro > p:last-child {
-  max-width: 620px;
-  margin-top: 22px;
-  color: var(--text-soft);
-  font-size: clamp(0.98rem, 1.8vw, 1.16rem);
-  line-height: 1.65;
 }
 
 .role-login-grid {
@@ -5367,14 +5350,6 @@ footer {
 
 .role-choice-action span {
   font-size: 1.25rem;
-}
-
-.role-login-disclosure {
-  margin-top: 20px;
-  color: var(--muted);
-  font-family: var(--mono);
-  font-size: 0.64rem;
-  line-height: 1.6;
 }
 
 .role-chip {

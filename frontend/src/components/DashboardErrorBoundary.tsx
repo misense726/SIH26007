@@ -20,7 +20,7 @@ export class DashboardErrorBoundary extends Component<
   }
 
   componentDidCatch(error: Error, info: ErrorInfo) {
-    console.error("FogSen dashboard render failed", error, info.componentStack);
+    console.error("MI Sense dashboard render failed", error, info.componentStack);
   }
 
   componentDidUpdate(previousProps: DashboardErrorBoundaryProps) {

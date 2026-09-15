@@ -1,7 +1,8 @@
 .mine-fleet-map {
-  background: #344d3c;
+  background: #22342b;
   overflow: hidden;
-  border-radius: 12px;
+  border: 1px solid #536258;
+  border-radius: 10px;
 }
 .mine-map-tools,
 .mine-map-key {
@@ -10,36 +11,72 @@
   justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
-  padding: 12px 18px;
-  color: #eef1dc;
-  background: #263f32;
+  padding: 13px 18px;
+  color: #edf0e8;
+  background: #263b32;
 }
-.mine-map-tools > div {
+.mine-map-title {
   display: flex;
+  flex-direction: column;
+  gap: 2px;
+  white-space: nowrap;
+}
+.mine-map-title strong {
+  font-size: 17px;
+  font-weight: 650;
+  letter-spacing: -0.025em;
+}
+.mine-map-title span {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.13em;
+  color: #bdc9bb;
+}
+.mine-map-actions {
+  display: flex;
+  flex-wrap: wrap;
   gap: 5px;
 }
 .mine-map-tools button {
-  color: #eff3e5;
-  background: #46634e;
-  border: 1px solid #6f8873;
-  border-radius: 5px;
-  padding: 9px 12px;
+  color: #e5eade;
+  background: #344d40;
+  border: 1px solid #607463;
+  border-radius: 4px;
+  padding: 8px 11px;
+  font-size: 11px;
+  line-height: 1.5;
   cursor: pointer;
+}
+.mine-map-tools button:hover {
+  background: #4c6553;
+}
+.mine-map-tools button[aria-pressed="true"] {
+  background: #d9cbae;
+  border-color: #d9cbae;
+  color: #263b32;
 }
 .mine-map-tools button:focus-visible,
 .mine-fleet-map g[role="button"]:focus-visible {
   outline: 3px solid #8cd1ff;
+  outline-offset: 2px;
 }
 .mine-map-key {
-  font-size: 12px;
+  font-size: 11px;
   justify-content: flex-start;
-  gap: 24px;
+  gap: 20px;
+  padding-block: 10px;
+  color: #d3dccd;
+}
+.mine-map-key span:last-child {
+  margin-left: auto;
+  color: #b3c2b1;
 }
 .mine-terrain-viewport {
-  height: clamp(420px, 61vh, 700px);
+  height: clamp(470px, 68vh, 850px);
   position: relative;
-  background: #b3c0b8;
+  background: #c0d0d4;
   overflow: hidden;
+  isolation: isolate;
 }
 .supervisor-dashboard:has(.mine-terrain-viewport) > .supervisor-hero {
   display: none;
@@ -48,20 +85,17 @@
   position: absolute;
   left: 0;
   top: 0;
-  background: #ede8d9ed;
-  border-left: 3px solid #ad753e;
+  background: #ede8d9eb;
+  border-left: 2px solid #9f703f;
   color: #2e392c;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 600;
-  padding: 6px 9px;
-  border-radius: 3px;
-  box-shadow: 0 2px 5px #0002;
+  padding: 5px 7px;
+  border-radius: 2px;
+  box-shadow: 0 1px 4px #0002;
 }
 .mine-site-label[hidden] {
   display: none;
-}
-.mine-map-tools > div {
-  flex-wrap: wrap;
 }
 .mine-terrain-viewport canvas {
   display: block;
@@ -80,14 +114,14 @@
   left: 0;
   top: 0;
   pointer-events: auto;
-  border: 1px solid #eee6c466;
-  border-radius: 4px;
-  padding: 4px 7px;
+  border: 1px solid #eee6c477;
+  border-radius: 3px;
+  padding: 4px 6px;
   color: #fff5da;
-  background: #283024db;
-  font-size: 10px;
+  background: #283024dc;
+  font-size: 9px;
   cursor: pointer;
-  box-shadow: 0 2px 5px #0004;
+  box-shadow: 0 1px 4px #0003;
 }
 .mine-scene-labels button[data-selected="true"] {
   border-color: #9adaff;
@@ -100,11 +134,12 @@
   position: absolute;
   bottom: 12px;
   left: 14px;
-  color: #fff7e6;
-  background: #253428c9;
+  z-index: 1;
+  color: #edf0e7;
+  background: #253428db;
   padding: 6px 9px;
-  border-radius: 5px;
-  font-size: 11px;
+  border-radius: 3px;
+  font-size: 10px;
   pointer-events: none;
 }
 .mine-terrain-status {
@@ -128,13 +163,32 @@
 }
 @media (max-width: 680px) {
   .mine-terrain-viewport {
-    height: 440px;
+    height: 500px;
   }
   .mine-terrain-help {
     font-size: 9px;
     left: 7px;
   }
   .mine-map-tools {
-    padding: 10px;
+    padding: 12px;
+    gap: 10px;
+  }
+  .mine-map-title {
+    width: 100%;
+    flex-direction: row;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+  .mine-map-tools button {
+    padding: 8px 10px;
+  }
+  .mine-map-key {
+    padding: 10px 12px;
+    gap: 6px 14px;
+  }
+  .mine-map-key span:last-child {
+    width: 100%;
+    margin-left: 0;
+    font-size: 10px;
   }
 }

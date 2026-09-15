@@ -25,6 +25,7 @@ class TripRecord(BaseModel):
     trip_id: str
     vehicle_id: str
     callsign: str
+    source: Literal["SIMULATED", "LIVE", "REPLAY"] | None = None
     pickup_node: str
     dump_node: str
     payload_tonnes: float

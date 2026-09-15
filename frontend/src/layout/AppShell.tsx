@@ -63,16 +63,16 @@ export function AppShell({
         <a
           className="brand-lockup"
           href={dashboardViewHash(homeView)}
-          aria-label={`FogSen ${roleLabel.toLowerCase()} home`}
+          aria-label={`MI Sense ${roleLabel.toLowerCase()} home`}
           onClick={(event) => {
             event.preventDefault();
             onViewChange(homeView);
           }}
         >
-          <span className="brand-mark" aria-hidden="true">FS</span>
+          <span className="brand-mark" aria-hidden="true">MI</span>
           <div>
             <p className="eyebrow">{roleLabel} console</p>
-            <h1>FogSen</h1>
+            <h1>MI Sense</h1>
           </div>
         </a>
 

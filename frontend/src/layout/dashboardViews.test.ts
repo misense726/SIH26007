@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  dashboardRoleFromHash,
   dashboardViewFromHash,
   dashboardViewHash,
   dashboardViewLabel,
@@ -31,6 +32,12 @@ describe("dashboard navigation", () => {
     expect(dashboardViewFromHash("")).toBe("DRIVER");
     expect(dashboardViewFromHash("#unknown")).toBe("DRIVER");
     expect(dashboardViewLabel("DRIVER")).toBe("Awareness");
+  });
+
+  it("identifies the workspace represented by a direct link", () => {
+    expect(dashboardRoleFromHash("#fleet")).toBe("SUPERVISOR");
+    expect(dashboardRoleFromHash("#SPATIAL")).toBe("DRIVER");
+    expect(dashboardRoleFromHash("#unknown")).toBeNull();
   });
 
   it("normalizes allowed, forbidden, and unknown destinations by role", () => {

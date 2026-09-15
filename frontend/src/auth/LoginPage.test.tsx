@@ -10,7 +10,10 @@ describe("LoginPage", () => {
 
     expect(markup).toContain("Continue as Driver");
     expect(markup).toContain("Continue as Supervisor");
-    expect(markup).toContain("Demo role selection only");
+    expect(markup).toContain("Choose where you are operating");
+    expect(markup).not.toContain("Console handoff");
+    expect(markup).not.toContain("Open the in-cab awareness workspace");
+    expect(markup).not.toContain("Demo role selection only");
     expect(markup).not.toContain("<input");
   });
 });

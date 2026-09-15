@@ -71,13 +71,17 @@ export function CameraAwareness({
     ? world.safe_corridor.state
     : "GREY";
   const showLiveCamera =
-    telemetryConnected && world.camera.mode === "LIVE" && world.camera.raw_available;
+    telemetryConnected &&
+    world.mode === "LIVE" &&
+    world.camera.mode === "LIVE" &&
+    world.camera.raw_available;
   const showEnhancedCamera =
     showLiveCamera && cameraView === "ENHANCED" && world.camera.enhancement_available;
   const showIRCamera =
     showLiveCamera && cameraView === "IR" && world.camera.ir_available;
   const showSimulatedCamera =
-    telemetryConnected && world.camera.mode === "SIMULATED" && world.camera.raw_available;
+    world.mode === "SIMULATED" && world.camera.mode === "SIMULATED";
+  const showCameraUnavailable = (!showLiveCamera && !showSimulatedCamera) || (showLiveCamera && cameraStreamFailed);
   const autoWantsTof = shouldShowTofOverlay(mode, cameraVisibilityState);
   const showTofOverlay = mode === "TOF_OVERLAY" || (telemetryConnected && autoWantsTof);
   const usableReadings = usableRangeReadings(readings);
@@ -130,10 +134,10 @@ export function CameraAwareness({
       : "Raw forward camera view";
   const frameDetail = showLiveCamera && world.camera.width_px && world.camera.height_px
     ? showIRCamera
-      ? `${world.camera.ir_model ?? "False color"} · ${world.camera.ir_fps.toFixed(1)} FPS · ${Math.round(world.camera.ir_latency_ms ?? 0)} ms`
+      ? `${world.camera.ir_model ?? "False color"} · ${(world.camera.ir_fps ?? 0).toFixed(1)} FPS · ${Math.round(world.camera.ir_latency_ms ?? 0)} ms`
       : showEnhancedCamera
-        ? `${world.camera.enhancement_model ?? "ML dehazing"} · ${world.camera.enhancement_fps.toFixed(1)} FPS · ${Math.round(world.camera.enhancement_latency_ms ?? 0)} ms`
-        : `${world.camera.width_px}×${world.camera.height_px} · ${world.camera.measured_fps.toFixed(1)} FPS`
+        ? `${world.camera.enhancement_model ?? "ML dehazing"} · ${(world.camera.enhancement_fps ?? 0).toFixed(1)} FPS · ${Math.round(world.camera.enhancement_latency_ms ?? 0)} ms`
+        : `${world.camera.width_px}×${world.camera.height_px} · ${(world.camera.measured_fps ?? 0).toFixed(1)} FPS`
     : null;
 
   useEffect(() => {
@@ -226,7 +230,7 @@ export function CameraAwareness({
         </span>
       </div>
 
-      <div className={`camera-stage ${showLiveCamera ? "camera-stage-live" : ""}`}>
+      <div className={`camera-stage ${world.mode === "LIVE" ? "camera-stage-live" : ""}`}>
         {showLiveCamera && !cameraStreamFailed ? (
           <img
             className="camera-feed"
@@ -234,12 +238,28 @@ export function CameraAwareness({
             alt={cameraAlt}
             onError={() => setCameraStreamFailed(true)}
           />
-        ) : (
+        ) : showSimulatedCamera ? (
           <CameraComparisonSlider
             opticalSrc="/camera/haul_truck_optical.png"
             irSrc="/camera/haul_truck_ir.png"
           />
-        )}
+        ) : showCameraUnavailable ? (
+          <div className="camera-unavailable" role="status" aria-live="polite">
+            <strong>{cameraStreamFailed ? "LIVE CAMERA STREAM ERROR" : "CAMERA UNAVAILABLE"}</strong>
+            <span>
+              {world.mode === "LIVE"
+                ? "No live camera stream is available."
+                : world.mode === "REPLAY"
+                  ? "Replay camera frames are not available."
+                  : "Simulation camera data is unavailable."}
+            </span>
+            {world.mode === "LIVE" && (
+              <button type="button" onClick={retryCameraStream}>
+                Retry live camera
+              </button>
+            )}
+          </div>
+        ) : null}
         {showLiveCamera && !cameraStreamFailed && frameDetail ? (
           <span className="camera-preview-label">{frameDetail}</span>
         ) : null}

@@ -13,11 +13,11 @@ export function LoginPage({ theme, onThemeChange, onSelectRole }: LoginPageProps
   return (
     <main className="role-login-shell">
       <header className="role-login-header">
-        <div className="brand-lockup role-login-brand" aria-label="FogSen">
-          <span className="brand-mark" aria-hidden="true">FS</span>
+        <div className="brand-lockup role-login-brand" aria-label="MI Sense">
+          <span className="brand-mark" aria-hidden="true">MI</span>
           <div>
             <p className="eyebrow">Fog-assisted mine operations</p>
-            <p className="role-login-product">FogSen</p>
+            <p className="role-login-product">MI Sense</p>
           </div>
         </div>
         <ThemeToggle theme={theme} onChange={onThemeChange} />
@@ -25,15 +25,10 @@ export function LoginPage({ theme, onThemeChange, onSelectRole }: LoginPageProps
 
       <section className="role-login-stage" aria-labelledby="role-login-title">
         <div className="role-login-intro">
-          <p className="eyebrow">Console handoff</p>
           <h1 id="role-login-title">Choose where you are operating</h1>
-          <p>
-            Open the in-cab awareness workspace or the fleet-control console.
-            Your choice lasts for this browser tab.
-          </p>
         </div>
 
-        <div className="role-login-grid" aria-label="Choose a FogSen workspace">
+        <div className="role-login-grid" aria-label="Choose your MI Sense workspace">
           <button
             type="button"
             className="role-choice role-choice-driver"
@@ -63,9 +58,6 @@ export function LoginPage({ theme, onThemeChange, onSelectRole }: LoginPageProps
           </button>
         </div>
 
-        <p className="role-login-disclosure">
-          Demo role selection only. This does not authenticate a user or protect backend data.
-        </p>
       </section>
     </main>
   );

@@ -38,6 +38,20 @@ const features: MapFeature[] = [
 ];
 
 describe("modeled mine terrain", () => {
+  it("keeps the loading bay and drivable access road at pit elevation", () => {
+    const field = createTerrainField([...features,
+      { ...features[0], feature_id: "access", properties: { cartography: "graded-access" } },
+      { feature_id: "loading", feature_type: "START", geometry_type: "POINT",
+        points: [{ x_m: 0, y_m: 0 }], label: "Loading",
+        properties: { cartography: "pit-loading" } },
+      { feature_id: "ramp", feature_type: "TERRAIN", geometry_type: "POLYLINE",
+        points: [{ x_m: 0, y_m: 0 }, { x_m: 0, y_m: 4 }], label: "Access",
+        properties: { cartography: "bench-road", elevations_m: "[-16,-12]", width_m: 7.2 } },
+    ]);
+    expect(field(0, 0).elevation).toBeCloseTo(-15.97, 2);
+    expect(field(0, 2).elevation).toBeCloseTo(-13.97, 2);
+    expect(field(0, 2).road).toBe(true);
+  });
   it("keeps the backend road outside the pit and lowers modeled benches", () => {
     const field = createTerrainField(features);
     expect(insidePolygon(0, 0, square(5))).toBe(true);

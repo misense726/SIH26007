@@ -10,11 +10,10 @@ import { DashboardErrorBoundary } from "./components/DashboardErrorBoundary";
 import type { AwarenessMode } from "./driver/driverAwareness";
 import { AppShell } from "./layout/AppShell";
 import { DashboardViewRouter } from "./layout/DashboardViewRouter";
-import { resolveDashboardRoute } from "./layout/dashboardViews";
+import { dashboardRoleFromHash, resolveDashboardRoute } from "./layout/dashboardViews";
 import { useDashboardNavigation } from "./layout/useDashboardNavigation";
 import { useSensorSettings } from "./settings/useSensorSettings";
 import { STATIC_DEMO } from "./simulation/demoMode";
-import { SimulationControls } from "./simulation/SimulationControls";
 import { useTelemetry } from "./state/useTelemetry";
 import { applyTheme, readInitialTheme, saveTheme, type Theme } from "./theme";
 import "./styles.css";
@@ -61,11 +60,7 @@ function AuthenticatedDashboard({
               ? "The download will retry automatically. No live hardware connection is needed."
               : "Loading the first part of the recorded simulation. Playback pauses when this tab is hidden."}</p>
           </section>
-        ) : (
-          !STATIC_DEMO && connection === "CONNECTED" && world.mode === "SIMULATED" && view !== "SETTINGS" && (
-          <SimulationControls simulation={world.simulation} />
-          )
-        )}
+        ) : null}
 
         {!(STATIC_DEMO && world.sequence === 0) && (
           <DashboardViewRouter
@@ -98,8 +93,25 @@ export default function App() {
   useEffect(() => applyTheme(theme), [theme]);
 
   useEffect(() => {
+    const syncRoleFromLocation = () => {
+      const linkedRole = dashboardRoleFromHash(window.location.hash);
+      if (linkedRole && linkedRole !== role) {
+        saveRole(linkedRole);
+        setRole(linkedRole);
+      }
+    };
+
+    window.addEventListener("hashchange", syncRoleFromLocation);
+    window.addEventListener("popstate", syncRoleFromLocation);
+    return () => {
+      window.removeEventListener("hashchange", syncRoleFromLocation);
+      window.removeEventListener("popstate", syncRoleFromLocation);
+    };
+  }, [role]);
+
+  useEffect(() => {
     if (role === null) {
-      document.title = "FogSen | Choose console";
+      document.title = "MI Sense | Choose console";
     }
   }, [role]);
 

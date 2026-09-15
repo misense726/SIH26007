@@ -22,6 +22,7 @@ from typing import Any
 from unittest.mock import patch
 from uuid import UUID
 
+from backend.app.analytics.trip_logger import HaulageAnalyticsEngine
 from backend.app.config import PROJECT_ROOT, RuntimeSettings, load_project_config
 from backend.app.models import DataMode, SimulationScenario
 from backend.app.sensor_settings import SensorSettingsStore
@@ -32,7 +33,7 @@ TICK_HZ = 10
 SAMPLE_EVERY_TICKS = 2
 FRAMES_PER_CHUNK = 25
 FRAME_INTERVAL_MS = 100  # Five simulated Hz played at twice recorded speed.
-DEFAULT_MAX_SECONDS = 600
+DEFAULT_MAX_SECONDS = 1200
 # Fixed epoch and gzip mtime make identical source/config produce identical URLs.
 START_TIMESTAMP_MS = 1_783_036_800_000
 
@@ -42,7 +43,11 @@ def round_floats(value: Any) -> Any:
     if isinstance(value, float):
         return round(value, 3)
     if isinstance(value, dict):
-        return {key: round_floats(item) for key, item in value.items()}
+        rounded = {key: round_floats(item) for key, item in value.items()}
+        # A valid heading just below north can round up to the excluded 360 bound.
+        if rounded.get("heading_deg") == 360.0:
+            rounded["heading_deg"] = 0.0
+        return rounded
     if isinstance(value, list):
         return [round_floats(item) for item in value]
     return value
@@ -64,6 +69,24 @@ def write_chunk(output: Path, frames: list[dict]) -> dict:
     name = f"{hashlib.sha256(compressed).hexdigest()}.json.gz"
     (output / name).write_bytes(compressed)
     return {"url": f"/demo/{name}", "frames": len(frames)}
+
+
+def write_analytics(output: Path, analytics: HaulageAnalyticsEngine, fleet_size: int) -> dict:
+    """Write small API-shaped SIMULATED fixtures independently of world chunks."""
+    history = analytics.get_trip_history(limit=200).model_dump(mode="json")
+    metrics = analytics.get_haulage_metrics(active_fleet_count=fleet_size).model_dump(mode="json")
+    output.mkdir(parents=True, exist_ok=True)
+    for name, value in (("trip-history.json", history), ("haulage-metrics.json", metrics)):
+        (output / name).write_bytes(encode_json(value))
+    return {"trips": history["total_trips"], "vehicles": fleet_size}
+
+
+def export_analytics(output: Path, *, config: dict | None = None) -> dict:
+    """Refresh only analytics; do not regenerate or replace the map/recording."""
+    config = config if config is not None else load_project_config(RuntimeSettings())
+    fleet_size = config["demo"]["demo"]["haul"].get("fleet_size", 8)
+    analytics = HaulageAnalyticsEngine(baseline_end_ms=START_TIMESTAMP_MS, fleet_size=fleet_size)
+    return write_analytics(Path(output), analytics, fleet_size)
 
 
 async def export_demo(
@@ -106,6 +129,7 @@ async def export_demo(
             patch("uuid.uuid4", side_effect=lambda: UUID(int=identifiers.getrandbits(128), version=4)),
         ):
             simulator = FullSimulator(WorldStore(), config, telemetry_hz=TICK_HZ)
+            write_analytics(staging, simulator.analytics, simulator.active_fleet_count)
             for tick in range(1, math.floor(max_seconds * TICK_HZ) + 1):
                 clock_ms = START_TIMESTAMP_MS + tick * 100
                 world = await simulator.tick()
@@ -159,7 +183,8 @@ async def export_demo(
         for chunk in chunks:
             name = Path(chunk["url"]).name
             (staging / name).replace(output / name)
-        (staging / "sensor-settings.json").replace(output / "sensor-settings.json")
+        for name in ("sensor-settings.json", "trip-history.json", "haulage-metrics.json"):
+            (staging / name).replace(output / name)
         (staging / "manifest.json").replace(output / "manifest.json")
         # Keep old hashed chunks for any client still holding the previous manifest.
     return manifest
@@ -169,8 +194,12 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--output", type=Path, default=PROJECT_ROOT / "frontend/public/demo")
     parser.add_argument("--max-seconds", type=float, default=DEFAULT_MAX_SECONDS)
+    parser.add_argument("--analytics-only", action="store_true", help="Refresh trip history and metrics without world chunks")
     args = parser.parse_args()
     started = time.perf_counter()
+    if args.analytics_only:
+        print(json.dumps({"output": str(args.output.resolve()), **export_analytics(args.output)}, indent=2))
+        return
     manifest = asyncio.run(export_demo(args.output, max_seconds=args.max_seconds))
     print(json.dumps({
         "output": str(args.output.resolve()),

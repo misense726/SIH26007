@@ -126,6 +126,7 @@ export interface GuidanceResponse {
 }
 
 export interface TripRecord {
+  source?: DataMode | null;
   trip_id: string;
   vehicle_id: string;
   callsign: string;
@@ -209,7 +210,18 @@ export interface ReferenceMap {
   features: MapFeature[];
 }
 
+export interface HaulVehicleState {
+  phase: string;
+  payload_fraction: number;
+  bed_angle_deg: number;
+  phase_progress: number;
+  cycle: number;
+  road_elevation_m: number;
+  road_pitch_deg: number;
+}
+
 export interface VehiclePose {
+  haul?: HaulVehicleState | null;
   timestamp_ms: number;
   vehicle_id: string;
   x_m: number;

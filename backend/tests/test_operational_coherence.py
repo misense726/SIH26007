@@ -109,13 +109,8 @@ def _trip_record(
 
 
 @pytest.fixture
-def empty_analytics(monkeypatch: pytest.MonkeyPatch) -> HaulageAnalyticsEngine:
-    monkeypatch.setattr(
-        HaulageAnalyticsEngine,
-        "_seed_shift_baseline_trips",
-        lambda self: None,
-    )
-    return HaulageAnalyticsEngine()
+def empty_analytics() -> HaulageAnalyticsEngine:
+    return HaulageAnalyticsEngine(seed_baseline=False)
 
 
 def test_zero_distance_weight_preserves_physical_route_and_instruction_distances() -> None:

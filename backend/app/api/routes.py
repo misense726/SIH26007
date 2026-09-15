@@ -436,6 +436,9 @@ async def navigation_guidance(
 
 @api_router.get("/fleet/vehicles", response_model=list[FleetVehicleSummary])
 async def fleet_vehicles(request: Request) -> list[FleetVehicleSummary]:
+    simulator = getattr(request.app.state, "simulator", None)
+    if simulator is not None:
+        return simulator.get_fleet_summaries()
     fleet_manager = getattr(request.app.state, "fleet_manager", None)
     if fleet_manager is None:
         return []
@@ -448,7 +451,8 @@ async def haulage_metrics(request: Request) -> HaulageMetrics:
     if analytics is None:
         raise HTTPException(status_code=503, detail="Analytics subsystem is offline")
     fleet_manager = getattr(request.app.state, "fleet_manager", None)
-    count = len(fleet_manager.vehicles) if fleet_manager else 0
+    simulator = getattr(request.app.state, "simulator", None)
+    count = simulator.active_fleet_count if simulator is not None else len(fleet_manager.vehicles) if fleet_manager else 0
     return analytics.get_haulage_metrics(active_fleet_count=count)
 
 
@@ -456,11 +460,12 @@ async def haulage_metrics(request: Request) -> HaulageMetrics:
 async def trip_history(
     request: Request,
     limit: int = Query(default=50, ge=1, le=200),
+    vehicle_id: str | None = Query(default=None),
 ) -> TripHistoryResponse:
     analytics = getattr(request.app.state, "analytics", None)
     if analytics is None:
         raise HTTPException(status_code=503, detail="Analytics subsystem is offline")
-    return analytics.get_trip_history(limit=limit)
+    return analytics.get_trip_history(limit=limit, vehicle_id=vehicle_id)
 
 
 async def telemetry_socket(websocket: WebSocket) -> None:

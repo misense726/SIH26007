@@ -11,7 +11,7 @@ import tomllib
 import pytest
 
 from backend.app.config import PROJECT_ROOT, RuntimeSettings, load_project_config
-from backend.app.models import DataMode, WorldState
+from backend.app.models import DataMode, VehiclePose, WorldState
 from backend.app.sensor_settings import SensorSettingsState
 from backend.app.simulation.engine import FullSimulator
 from scripts.export_demo import (
@@ -20,6 +20,7 @@ from scripts.export_demo import (
     delta_frame,
     encode_json,
     export_demo,
+    export_analytics,
     round_floats,
 )
 
@@ -97,7 +98,7 @@ def test_full_cycle_roundtrip_matches_backend_frames(recording):
         assert world.camera.mode is DataMode.SIMULATED
         assert world.environment.mode is DataMode.SIMULATED
         assert world.haul_route.cycle == 1
-        assert len(world.vehicles) == 3
+        assert len(world.vehicles) == 8
         assert len(world.spatial_points) <= 600
         assert len(world.occupancy.occupied_cells) <= 420
         assert len(world.alerts) <= 60
@@ -107,24 +108,23 @@ def test_full_cycle_roundtrip_matches_backend_frames(recording):
         encounters.add(world.haul_route.next_instruction)
         lead_waiting_frames += int(world.haul_route.lead_waiting)
         lead_moving_frames += int(world.vehicles[2].speed_mps > 0)
-    # Existing backend guidance prioritizes oncoming traffic over lead waiting.
-    assert lead_waiting_frames > 0
+    assert lead_waiting_frames == 0
     assert lead_moving_frames > 0
     assert actual == expected
     assert len(actual) == manifest["total_frames"]
     assert timestamps[0] == START_TIMESTAMP_MS + 100 == manifest["first_timestamp_ms"]
     assert timestamps[-1] == manifest["last_timestamp_ms"]
     assert all(second - first == 200 for first, second in zip(timestamps, timestamps[1:]))
-    assert manifest["simulation_duration_ms"] <= 600_000
-    assert {"HAULING", "OBSTACLE", "ARRIVED"} <= phases
+    assert manifest["simulation_duration_ms"] <= 1_200_000
+    assert {"HAULING", "ARRIVED"} <= phases
     assert destinations == {"Dump point", "Mine loading bay"}
     assert {
-        "Rock ahead. Passing left slowly",
-        "Rock passed. Rejoining track",
-        "Oncoming truck. Passing slowly",
-        "Unloading at crusher",
-        "Loading at mine site",
-        "Return to the mine loading bay",
+        "Loading iron ore at pit floor",
+        "Climbing to the crusher",
+        "Reversing into tipping bay",
+        "Tipping iron ore into crusher",
+        "Lowering empty bed",
+        "Returning empty to pit floor",
     } <= encounters
     assert sorted(encounters) == manifest["encounter_stages"]
     settings = json.loads((output / "sensor-settings.json").read_bytes())
@@ -133,12 +133,46 @@ def test_full_cycle_roundtrip_matches_backend_frames(recording):
 
 
 def test_export_is_repeatable_and_does_not_mutate_config(recording, tmp_path):
-    _, manifest, _ = recording
+    original_output, manifest, _ = recording
     config = load_project_config(RuntimeSettings())
     before = deepcopy(config)
     repeated = asyncio.run(export_demo(tmp_path, config=config))
     assert config == before
     assert repeated == manifest
+    for name in ("trip-history.json", "haulage-metrics.json"):
+        assert (tmp_path / name).read_bytes() == (original_output / name).read_bytes()
+
+
+def test_static_analytics_match_initial_recorded_fleet(recording):
+    output, manifest, _ = recording
+    history = json.loads((output / "trip-history.json").read_bytes())
+    metrics = json.loads((output / "haulage-metrics.json").read_bytes())
+    first = next(reconstructed(output, manifest))
+    assert history["total_trips"] == metrics["total_completed_cycles"] == 120
+    assert metrics["active_fleet_count"] == 8
+    assert history["total_tonnes"] == metrics["total_ore_moved_tonnes"]
+    assert first["operations"]["analytics_summary"]["total_completed_cycles"] == 120
+    for index in range(8):
+        vehicle_id = f"DUMPER_{index + 1:02d}"
+        trips = [trip for trip in history["trips"] if trip["vehicle_id"] == vehicle_id]
+        assert len(trips) == 15
+        assert all(trip["source"] == "SIMULATED" for trip in trips)
+        assert len({f'{trip["payload_tonnes"] * trip["distance_km"] / trip["fuel_litres_est"]:.2f}'
+                    for trip in trips}) == 15
+
+
+def test_analytics_only_export_leaves_recording_files_untouched(tmp_path):
+    sentinel = tmp_path / "manifest.json"
+    sentinel.write_bytes(b"existing world recording")
+    result = export_analytics(tmp_path)
+    assert result == {"trips": 120, "vehicles": 8}
+    assert sentinel.read_bytes() == b"existing world recording"
+    assert sorted(path.name for path in tmp_path.iterdir()) == [
+        "haulage-metrics.json", "manifest.json", "trip-history.json",
+    ]
+    original = (tmp_path / "trip-history.json").read_bytes()
+    export_analytics(tmp_path)
+    assert (tmp_path / "trip-history.json").read_bytes() == original
 
 
 @pytest.mark.asyncio
@@ -157,6 +191,14 @@ async def test_invalid_limit_is_rejected(tmp_path, limit):
     with pytest.raises(ValueError, match="max_seconds"):
         await export_demo(tmp_path, max_seconds=limit)
     assert not list(tmp_path.iterdir())
+
+
+def test_quantization_keeps_north_heading_inside_telemetry_bounds():
+    pose = VehiclePose(heading_deg=359.9998)
+    rounded = round_floats({"vehicles": [pose.model_dump(mode="json")]})
+    restored = VehiclePose.model_validate(rounded["vehicles"][0])
+    assert restored.heading_deg == 0.0
+    assert round_floats({"heading_deg": 359.9988})["heading_deg"] == 359.999
 
 
 def test_quantization_and_shallow_delta_preserve_null_empty_and_timestamps():

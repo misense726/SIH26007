@@ -68,6 +68,7 @@ def test_simulation_control_api_is_typed_and_updates_the_shared_world() -> None:
         initial = client.get("/api/simulation")
         assert initial.status_code == 200
         assert initial.json()["scenario"] == "HAUL"
+        assert initial.json()["speed_scale"] == pytest.approx(1.5)
 
         controlled = client.post(
             "/api/simulation/control",
@@ -117,6 +118,12 @@ async def test_normal_simulation_is_bounded_coherent_and_explicitly_simulated() 
     states = [await simulator.tick() for _ in range(12)]
     expected_ids = config["sensors"]["acquisition"]["sequence"]
     sensor_config = config["sensors"]["sensors"]
+    route_speed_mps = float(config["demo"]["demo"]["route_speed_mps"])
+    speed_scale = float(config["demo"]["demo"]["default_speed_scale"])
+    expected_speed_mps = min(
+        route_speed_mps * speed_scale,
+        float(config["vehicle"]["vehicle"]["max_demo_speed_mps"]),
+    )
     previous_ticks = -1
     previous_y = 0.0
 
@@ -151,7 +158,7 @@ async def test_normal_simulation_is_bounded_coherent_and_explicitly_simulated() 
 
         assert 4.95 <= pose.x_m <= 5.05
         assert pose.y_m > previous_y
-        assert pose.speed_mps == pytest.approx(1.15)
+        assert pose.speed_mps == pytest.approx(expected_speed_mps)
         assert pose.speed_mps <= config["vehicle"]["vehicle"]["max_demo_speed_mps"]
         assert pose.position_confidence >= 0.9
         previous_y = pose.y_m
@@ -222,14 +229,21 @@ async def test_open_route_stops_at_destination_without_a_position_jump() -> None
     assert route_feature is not None
     route = PolylineRoute(route_feature.points)
     route_speed_mps = float(config["demo"]["demo"]["route_speed_mps"])
+    speed_scale = float(config["demo"]["demo"]["default_speed_scale"])
+    simulation_speed_mps = min(
+        route_speed_mps * speed_scale,
+        float(config["vehicle"]["vehicle"]["max_demo_speed_mps"]),
+    )
+    wheel_tick_m = float(config["vehicle"]["vehicle"]["wheel_circumference_m"])
+    max_tick_displacement_m = max(simulation_speed_mps * 0.1, wheel_tick_m) + 0.03
     previous = route.sample(0.0)
     states = []
-    ticks_to_destination = math.ceil(route.total_length_m / (route_speed_mps * 0.1))
+    ticks_to_destination = math.ceil(route.total_length_m / (simulation_speed_mps * 0.1))
     for _ in range(ticks_to_destination + 3):
         state = await simulator.tick()
         current = state.primary_vehicle()
         displacement_m = math.hypot(current.x_m - previous.x_m, current.y_m - previous.y_m)
-        assert displacement_m <= route_speed_mps * 0.1 + 0.03
+        assert displacement_m <= max_tick_displacement_m
         previous = current
         states.append(state)
 

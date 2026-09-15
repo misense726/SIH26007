@@ -8,8 +8,8 @@ import type { WorldState } from "../types";
 export type ConnectionState = "CONNECTING" | "CONNECTED" | "DISCONNECTED";
 export type DemoStatus = "Loading demo" | "Demo" | "Paused" | "Buffering demo";
 
-const TELEMETRY_STALE_MS = 750;
-const FIRST_TELEMETRY_TIMEOUT_MS = 3000;
+const TELEMETRY_STALE_MS = 5000;
+const FIRST_TELEMETRY_TIMEOUT_MS = 8000;
 
 function websocketUrl(): string {
   const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
@@ -77,7 +77,7 @@ export function useTelemetry(): {
     };
 
     const connect = () => {
-      if (disposed || document.hidden || socket) return;
+      if (disposed || socket) return;
       setConnection("CONNECTING");
       const current = new WebSocket(websocketUrl());
       socket = current;
@@ -86,7 +86,7 @@ export function useTelemetry(): {
         staleTimer = setTimeout(() => {
           if (socket !== current) return;
           setConnection("DISCONNECTED");
-          current.close();
+          // A quiet stream is stale, but this socket can still deliver the next hardware revision.
         }, delayMs);
       };
       armStaleTimer(FIRST_TELEMETRY_TIMEOUT_MS);
@@ -94,13 +94,15 @@ export function useTelemetry(): {
         if (socket === current) armStaleTimer(FIRST_TELEMETRY_TIMEOUT_MS);
       };
       current.onmessage = (event) => {
-        if (socket !== current || disposed || document.hidden) return;
+        if (socket !== current || disposed) return;
         try {
           const nextWorld: unknown = JSON.parse(event.data);
           if (!isWorldStateSnapshot(nextWorld)) throw new Error("Invalid world-state snapshot");
-          const nextMapKey = JSON.stringify(nextWorld.reference_map);
+          // Deduplicate map reference by ID and timestamp to avoid stringifying 120KB map on every 10Hz frame!
+          const nextRefMap = nextWorld.reference_map;
+          const nextMapKey = nextRefMap ? `${nextRefMap.map_id}:${nextRefMap.created_at_ms}:${nextRefMap.features?.length}` : "";
           if (nextMapKey !== mapKey) {
-            referenceMap = nextWorld.reference_map;
+            referenceMap = nextRefMap;
             mapKey = nextMapKey;
           }
           nextWorld.reference_map = referenceMap;
@@ -119,17 +121,17 @@ export function useTelemetry(): {
         socket = null;
         clearTimeout(staleTimer);
         setConnection("DISCONNECTED");
-        if (!document.hidden) {
-          retryTimer = setTimeout(connect, retryMs);
-          retryMs = Math.min(retryMs * 2, 30000);
-        }
+        retryTimer = setTimeout(connect, retryMs);
+        retryMs = Math.min(retryMs * 2, 30000);
       };
     };
 
     const visibilityChanged = () => {
-      disconnect();
-      setConnection("DISCONNECTED");
-      if (!document.hidden) connect();
+      // Reconnect if the socket was lost or closed while inactive.
+      // Never tear down an already connected healthy socket on visibility change.
+      if (!socket && !disposed) {
+        connect();
+      }
     };
     document.addEventListener("visibilitychange", visibilityChanged);
     connect();

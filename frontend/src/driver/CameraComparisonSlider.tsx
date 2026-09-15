@@ -15,22 +15,47 @@ interface CameraComparisonSliderProps {
 
 const OPTICAL_DEFAULT = "/camera/haul_truck_optical.png";
 const IR_DEFAULT = "/camera/haul_truck_ir.png";
+export const AUTO_SLIDER_MIN = 0.4;
+export const AUTO_SLIDER_MAX = 0.6;
+export const AUTO_SLIDER_HOLD_MS = 5000;
+export const AUTO_SLIDER_TRAVEL_MS = 2600;
+export const AUTO_SLIDER_CYCLE_MS =
+  AUTO_SLIDER_HOLD_MS * 2 + AUTO_SLIDER_TRAVEL_MS * 2;
+
+function easeInOut(progress: number): number {
+  return progress * progress * (3 - 2 * progress);
+}
+
+export function autoSliderPosition(elapsedMs: number): number {
+  const elapsed = ((elapsedMs % AUTO_SLIDER_CYCLE_MS) + AUTO_SLIDER_CYCLE_MS) % AUTO_SLIDER_CYCLE_MS;
+  const rightTravelStart = AUTO_SLIDER_HOLD_MS;
+  const rightHoldStart = rightTravelStart + AUTO_SLIDER_TRAVEL_MS;
+  const leftTravelStart = rightHoldStart + AUTO_SLIDER_HOLD_MS;
+
+  if (elapsed < rightTravelStart) return AUTO_SLIDER_MIN;
+  if (elapsed < rightHoldStart) {
+    const progress = (elapsed - rightTravelStart) / AUTO_SLIDER_TRAVEL_MS;
+    return AUTO_SLIDER_MIN + (AUTO_SLIDER_MAX - AUTO_SLIDER_MIN) * easeInOut(progress);
+  }
+  if (elapsed < leftTravelStart) return AUTO_SLIDER_MAX;
+
+  const progress = (elapsed - leftTravelStart) / AUTO_SLIDER_TRAVEL_MS;
+  return AUTO_SLIDER_MAX - (AUTO_SLIDER_MAX - AUTO_SLIDER_MIN) * easeInOut(progress);
+}
 
 export function CameraComparisonSlider({
   opticalSrc = OPTICAL_DEFAULT,
   irSrc = IR_DEFAULT,
   className = "",
 }: CameraComparisonSliderProps) {
-  const [sliderPos, setSliderPos] = useState(0.5); // 0.0 to 1.0 (50% default)
+  const [sliderPos, setSliderPos] = useState(AUTO_SLIDER_MIN);
   const [isAutoScanning, setIsAutoScanning] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const autoAnimRef = useRef<number | null>(null);
   const resumeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const startTimeRef = useRef<number>(Date.now());
-  const pauseTimeOffsetRef = useRef<number>(0);
 
-  // Auto-scan sinusoidal animation: sweeps smoothly between 15% and 85%
   useEffect(() => {
     if (!isAutoScanning || isDragging) {
       if (autoAnimRef.current !== null) {
@@ -40,17 +65,11 @@ export function CameraComparisonSlider({
       return;
     }
 
-    const PERIOD_MS = 6000; // 6 second full back-and-forth cycle
-    startTimeRef.current = Date.now() - pauseTimeOffsetRef.current;
+    startTimeRef.current = Date.now();
 
     const animate = () => {
       const elapsed = Date.now() - startTimeRef.current;
-      pauseTimeOffsetRef.current = elapsed % PERIOD_MS;
-      // Sine wave oscillates between -1 and 1 -> mapped to 0.15 to 0.85
-      const phase = (elapsed / PERIOD_MS) * Math.PI * 2;
-      const normalized = (Math.sin(phase) + 1) / 2; // 0 to 1
-      const smoothPos = 0.15 + normalized * 0.7; // 15% to 85%
-      setSliderPos(smoothPos);
+      setSliderPos(autoSliderPosition(elapsed));
       autoAnimRef.current = requestAnimationFrame(animate);
     };
 
@@ -64,11 +83,20 @@ export function CameraComparisonSlider({
     };
   }, [isAutoScanning, isDragging]);
 
+  useEffect(() => {
+    return () => {
+      if (resumeTimerRef.current) {
+        clearTimeout(resumeTimerRef.current);
+        resumeTimerRef.current = null;
+      }
+    };
+  }, []);
+
   const scheduleAutoResume = useCallback(() => {
     if (resumeTimerRef.current) clearTimeout(resumeTimerRef.current);
     resumeTimerRef.current = setTimeout(() => {
       startTimeRef.current = Date.now();
-      pauseTimeOffsetRef.current = 0;
+      setSliderPos(AUTO_SLIDER_MIN);
       setIsAutoScanning(true);
     }, 2800);
   }, []);
@@ -113,14 +141,24 @@ export function CameraComparisonSlider({
   };
 
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key === "ArrowLeft") {
+    if (e.key === "ArrowLeft" || e.key === "ArrowDown") {
       setIsAutoScanning(false);
       setSliderPos((pos) => Math.max(0.02, pos - 0.05));
       scheduleAutoResume();
       e.preventDefault();
-    } else if (e.key === "ArrowRight") {
+    } else if (e.key === "ArrowRight" || e.key === "ArrowUp") {
       setIsAutoScanning(false);
       setSliderPos((pos) => Math.min(0.98, pos + 0.05));
+      scheduleAutoResume();
+      e.preventDefault();
+    } else if (e.key === "Home") {
+      setIsAutoScanning(false);
+      setSliderPos(0.02);
+      scheduleAutoResume();
+      e.preventDefault();
+    } else if (e.key === "End") {
+      setIsAutoScanning(false);
+      setSliderPos(0.98);
       scheduleAutoResume();
       e.preventDefault();
     }
@@ -162,7 +200,7 @@ export function CameraComparisonSlider({
       {/* Top Layer: Optical Real Life View (Clipped by slider) */}
       <div
         className="slider-layer slider-layer-optical"
-        style={{ clipPath: `inset(0 calc(${100 - splitPercent}%) 0 0)` }}
+        style={{ clipPath: `inset(0 ${(1 - sliderPos) * 100}% 0 0)` }}
         aria-hidden="true"
       >
         <img

@@ -1,6 +1,6 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/addons/controls/OrbitControls.js";
-import type { MapFeature, HaulRouteState } from "../types";
+import type { MapFeature, HaulRouteState, HaulVehicleState } from "../types";
 import type { SupervisorVehicle } from "../supervisor/supervisorViewModel";
 import {
   buildTerrain,
@@ -16,6 +16,7 @@ import {
   disposeScene,
 } from "./mineSceneGeometry";
 import { buildInfrastructure } from "./mineInfrastructure";
+import { crusherLayout } from "./crusherLayout";
 
 export interface MineFrame {
   vehicles: SupervisorVehicle[];
@@ -27,7 +28,7 @@ export interface MineRenderer {
   zoom: (factor: number) => void;
   fit: () => void;
   dispose: () => void;
-  focus: (target: "pit" | "truck" | "crusher") => void;
+  focus: (target: "pit" | "truck" | "crusher" | "top") => void;
 }
 
 interface TruckItem {
@@ -47,11 +48,9 @@ interface TruckItem {
   frontWheelLeft?: THREE.Group;
   frontWheelRight?: THREE.Group;
   reverseLamps?: THREE.Mesh;
-  crusherPhase: "none" | "reverse" | "hoist" | "dump" | "lower" | "forward";
-  crusherTimer: number;
+  haul?: HaulVehicleState | null;
   dumpAngle: number;
   oreLevel: number;
-  dockOffset: THREE.Vector3;
   oreChute?: THREE.Mesh;
   boulders?: THREE.Mesh[];
 }
@@ -69,7 +68,7 @@ export function createMineRenderer(
   renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
-  renderer.toneMappingExposure = 1.2;
+  renderer.toneMappingExposure = 0.95;
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.autoUpdate = false;
   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -80,16 +79,16 @@ export function createMineRenderer(
   container.appendChild(renderer.domElement);
   container.dataset.context = "ready";
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color("#b3c0b8");
-  scene.fog = new THREE.Fog("#b3c0b8", 160, 260);
-  const camera = new THREE.PerspectiveCamera(40, 1, 0.2, 500);
+  scene.background = new THREE.Color("#c0d0d4");
+  scene.fog = new THREE.Fog("#c0d0d4", 310, 780);
+  const camera = new THREE.PerspectiveCamera(40, 1, 0.2, 1400);
   const controls = new OrbitControls(camera, renderer.domElement);
   controls.enableDamping = true;
   controls.dampingFactor = 0.1;
   controls.maxPolarAngle = Math.PI * 0.47;
   controls.minDistance = 12;
-  controls.maxDistance = 175;
-  controls.target.set(4, 2, -26);
+  controls.maxDistance = 420;
+  controls.target.set(8, -1, -39);
   let followingTruck = false;
   const stopFollowing = () => {
     followingTruck = false;
@@ -97,22 +96,22 @@ export function createMineRenderer(
   controls.addEventListener("start", stopFollowing);
   const fit = () => {
     followingTruck = false;
-    controls.target.set(12, 2, -25);
-    camera.position.set(67, 95, -79);
+    controls.target.set(24, -4, -26);
+    camera.position.set(45, 175, 88);
     controls.update();
     requestRender();
   };
-  const hemi = new THREE.HemisphereLight("#d9edff", "#55503c", 2);
+  const hemi = new THREE.HemisphereLight("#dcebf4", "#78614c", 1.65);
   scene.add(hemi);
-  const sun = new THREE.DirectionalLight("#fff0d4", 3.1);
-  sun.position.set(-45, 90, 30);
+  const sun = new THREE.DirectionalLight("#fff0d9", 2.7);
+  sun.position.set(-85, 160, 65);
   sun.castShadow = true;
   sun.shadow.mapSize.set(2048, 2048);
-  sun.shadow.camera.left = -85;
-  sun.shadow.camera.right = 85;
-  sun.shadow.camera.top = 85;
-  sun.shadow.camera.bottom = -85;
-  sun.shadow.camera.far = 240;
+  sun.shadow.camera.left = -150;
+  sun.shadow.camera.right = 150;
+  sun.shadow.camera.top = 145;
+  sun.shadow.camera.bottom = -145;
+  sun.shadow.camera.far = 450;
   sun.shadow.normalBias = 0.15;
   sun.shadow.bias = -0.0002;
   scene.add(sun);
@@ -127,6 +126,7 @@ export function createMineRenderer(
   )?.points[0];
   const crusherX = crusherFeature ? crusherFeature.x_m : 32.0;
   const crusherY = crusherFeature ? crusherFeature.y_m : 44.0;
+  const station = crusherLayout(features);
 
   const geometry = truckGeometry(),
     material = new THREE.MeshStandardMaterial({
@@ -141,6 +141,7 @@ export function createMineRenderer(
     metalness: 0.22,
     side: THREE.DoubleSide,
   });
+  const looseOreMaterial = new THREE.MeshStandardMaterial({ color: "#684536", roughness: 0.95 });
   const hydraulicMaterial = new THREE.MeshStandardMaterial({
     color: "#b4bec4",
     metalness: 0.85,
@@ -223,9 +224,18 @@ export function createMineRenderer(
     const ids = new Set(frame.vehicles.map((v) => v.vehicleId));
     for (const [id, item] of trucks)
       if (!ids.has(id)) {
+        disposeScene(item.mesh);
         scene.remove(item.mesh);
-        if (item.oreChute) scene.remove(item.oreChute);
-        if (item.boulders) item.boulders.forEach((b) => scene.remove(b));
+        if (item.oreChute) {
+          disposeScene(item.oreChute);
+          scene.remove(item.oreChute);
+        }
+        if (item.boulders) {
+          item.boulders.forEach((b) => {
+            disposeScene(b);
+            scene.remove(b);
+          });
+        }
         item.label.remove();
         trucks.delete(id);
       }
@@ -233,6 +243,7 @@ export function createMineRenderer(
       let item = trucks.get(v.vehicleId);
       if (!item) {
         const mesh = new THREE.Mesh(geometry, material);
+        mesh.name = `haul-truck-${v.vehicleId}`;
         mesh.castShadow = true;
         mesh.receiveShadow = true;
         mesh.position.set(v.xM, field(v.xM, v.yM).elevation, -v.yM);
@@ -255,6 +266,7 @@ export function createMineRenderer(
           const rightWheelGeom = frontWheelGeometry(false);
 
           dumpBedPivot = new THREE.Group();
+          dumpBedPivot.name = "dump-bed-pivot";
           dumpBedPivot.position.set(0, TRUCK_HINGE_Y, TRUCK_HINGE_Z);
 
           const dumpBedMesh = new THREE.Mesh(dumpGeom, material);
@@ -263,6 +275,7 @@ export function createMineRenderer(
           dumpBedPivot.add(dumpBedMesh);
 
           oreCargo = new THREE.Mesh(oreGeom, oreMaterial);
+          oreCargo.name = "ore-cargo";
           oreCargo.castShadow = true;
           dumpBedPivot.add(oreCargo);
 
@@ -304,7 +317,8 @@ export function createMineRenderer(
           boulders = [];
           for (let bIdx = 0; bIdx < 8; bIdx++) {
             const rockGeom = oreRockGeometry(bIdx);
-            const boulder = new THREE.Mesh(rockGeom, oreMaterial);
+            const boulder = new THREE.Mesh(rockGeom, looseOreMaterial);
+            boulder.scale.setScalar(0.65);
             boulder.castShadow = true;
             boulder.visible = false;
             scene.add(boulder);
@@ -335,59 +349,24 @@ export function createMineRenderer(
           frontWheelLeft,
           frontWheelRight,
           reverseLamps,
-          crusherPhase: "none",
-          crusherTimer: 0,
           dumpAngle: 0,
-          oreLevel: 1.0,
-          dockOffset: new THREE.Vector3(),
+          oreLevel: 0,
           oreChute,
           boulders,
         };
         trucks.set(v.vehicleId, item);
       }
-      item.target.set(v.xM, field(v.xM, v.yM).elevation + 0.06, -v.yM);
+      item.target.set(v.xM, (v.haul?.road_elevation_m ?? field(v.xM, v.yM).elevation) + 0.06, -v.yM);
+      item.haul = v.haul;
+      item.dumpAngle = THREE.MathUtils.degToRad(v.haul?.bed_angle_deg ?? 0);
+      item.oreLevel = v.haul?.payload_fraction ?? 0;
+      if (item.reverseLamps)
+        item.reverseLamps.visible =
+          v.haul?.phase === "REVERSING" || v.haul?.phase === "EXITING";
       item.heading = (-v.headingDeg * Math.PI) / 180;
       item.speed = v.speedMps;
       item.label.dataset.selected = String(frame.selected === v.vehicleId);
 
-      // Check crusher proximity and unloading state
-      const distToCrusher = Math.hypot(v.xM - crusherX, v.yM - crusherY);
-      const isUnloading =
-        distToCrusher < 3.5 &&
-        (v.speedMps < 0.35 ||
-          Boolean(frame.haul?.next_instruction?.toLowerCase().includes("crusher")) ||
-          frame.haul?.phase === "ARRIVED");
-
-      if (isUnloading && item.crusherPhase === "none" && item.oreLevel > 0.4) {
-        item.crusherPhase = "reverse";
-        item.crusherTimer = 0;
-      } else if (!isUnloading && distToCrusher > 4.5 && item.crusherPhase !== "none") {
-        item.crusherPhase = "none";
-        item.dockOffset.set(0, 0, 0);
-        item.dumpAngle = 0;
-        item.oreLevel = 0.0;
-        if (item.oreChute) item.oreChute.visible = false;
-        if (item.boulders) item.boulders.forEach((b) => (b.visible = false));
-        if (item.reverseLamps) item.reverseLamps.visible = false;
-      }
-
-      // After dumping, return trip to the mine loading bay must have an empty bed
-      if (
-        v.isPrimary &&
-        frame.haul?.destination === "Mine loading bay" &&
-        item.crusherPhase === "none"
-      ) {
-        item.oreLevel = 0.0;
-      }
-
-      // Refill cargo only when loaded at mine loading bay for a new trip
-      const distToMine = Math.hypot(v.xM, v.yM);
-      if (
-        distToMine < 5.0 &&
-        (frame.haul?.destination === "Dump point" || v.speedMps < 0.2)
-      ) {
-        item.oreLevel = 1.0;
-      }
     }
     rock.visible = Boolean(frame.haul?.obstacle);
     if (frame.haul?.obstacle) {
@@ -456,101 +435,11 @@ export function createMineRenderer(
     ring.visible = false;
     for (const [id, item] of trucks) {
       const distance = item.mesh.position.distanceTo(item.target);
-      // One final frame also lets the follow camera reach the snapped pose.
-      if (distance > 0) moving = true;
-      if (distance > 6 || distance <= 0.001)
-        item.mesh.position.copy(item.target);
+      if (distance > 0.001) moving = true;
+      if (distance > 6 || distance <= 0.001) item.mesh.position.copy(item.target);
       else item.mesh.position.lerp(item.target, 1 - Math.exp(-dt * 18));
 
-      // 1. Crusher Unloading Animation Sequence
-      if (item.crusherPhase !== "none") {
-        moving = true;
-        item.crusherTimer += dt;
-        const t = item.crusherTimer;
-
-        if (item.crusherPhase === "reverse") {
-          // Reversing backward into crusher hopper opening
-          const p = Math.min(1.0, t / 1.2);
-          const ease = p * p * (3 - 2 * p);
-          item.dockOffset.set(ease * 2.2, 0, -ease * 1.5);
-          item.currentHeading = THREE.MathUtils.lerp(item.currentHeading, 2.35, ease * 0.15);
-          if (item.reverseLamps) item.reverseLamps.visible = true;
-          if (t >= 1.2) item.crusherPhase = "hoist";
-        } else if (item.crusherPhase === "hoist") {
-          // Hoisting dump bed upward
-          const hoistT = t - 1.2;
-          const p = Math.min(1.0, hoistT / 1.4);
-          const ease = p * p * (3 - 2 * p);
-          item.dumpAngle = ease * 1.01;
-          if (hoistT >= 1.4) item.crusherPhase = "dump";
-        } else if (item.crusherPhase === "dump") {
-          // Pouring heavy iron ore and rock boulders
-          const dumpT = t - 2.6;
-          item.dumpAngle = 1.01;
-          const emptyP = Math.min(1.0, dumpT / 1.8);
-          item.oreLevel = Math.max(0.0, 1.0 - emptyP);
-
-          if (item.oreChute) {
-            item.oreChute.visible = true;
-            item.oreChute.position.set(34.2, field(36, 45).elevation + 4.3, -45.6);
-            item.oreChute.rotation.y = 0.8;
-            const pulse = 1.0 + Math.sin(dumpT * 20) * 0.06;
-            item.oreChute.scale.set(pulse, Math.min(1.0, dumpT * 3.5), pulse);
-          }
-
-          if (item.boulders) {
-            const hTop = field(36, 45).elevation + 4.4;
-            const hBottom = field(36, 45).elevation + 3.2;
-            item.boulders.forEach((rock, bIdx) => {
-              rock.visible = true;
-              const rockPhase = (dumpT * 1.8 + bIdx * 0.14) % 1.0;
-              const startX = 34.0 + ((bIdx % 3) - 1) * 0.22;
-              const startY = hTop;
-              const startZ = -45.4 + ((bIdx % 2) - 0.5) * 0.2;
-              const endX = 35.5 + (((bIdx * 7) % 5) - 2) * 0.15;
-              const endZ = -46.0 + (((bIdx * 3) % 5) - 2) * 0.15;
-
-              rock.position.x = THREE.MathUtils.lerp(startX, endX, rockPhase);
-              rock.position.z = THREE.MathUtils.lerp(startZ, endZ, rockPhase);
-              rock.position.y = THREE.MathUtils.lerp(startY, hBottom, rockPhase * rockPhase);
-
-              rock.rotation.x += dt * (6 + bIdx * 2);
-              rock.rotation.y += dt * (5 + bIdx * 3);
-              rock.rotation.z += dt * (4 + bIdx);
-            });
-          }
-
-          if (dumpT >= 2.4) {
-            item.crusherPhase = "lower";
-            if (item.oreChute) item.oreChute.visible = false;
-            if (item.boulders) item.boulders.forEach((b) => (b.visible = false));
-          }
-        } else if (item.crusherPhase === "lower") {
-          // Lowering dump bed
-          const lowerT = t - 5.0;
-          const p = Math.min(1.0, lowerT / 1.2);
-          const ease = p * p * (3 - 2 * p);
-          item.dumpAngle = (1.0 - ease) * 1.01;
-          if (lowerT >= 1.2) {
-            item.dumpAngle = 0;
-            item.crusherPhase = "forward";
-          }
-        } else if (item.crusherPhase === "forward") {
-          // Driving forward out of dock back onto haul road
-          const fwdT = t - 6.2;
-          const p = Math.min(1.0, fwdT / 1.0);
-          const ease = p * p * (3 - 2 * p);
-          item.dockOffset.set((1 - ease) * 2.2, 0, -(1 - ease) * 1.5);
-          item.currentHeading = THREE.MathUtils.lerp(2.35, item.heading, ease);
-          if (item.reverseLamps) item.reverseLamps.visible = false;
-          if (fwdT >= 1.0) {
-            item.crusherPhase = "none";
-            item.dockOffset.set(0, 0, 0);
-          }
-        }
-
-        item.mesh.position.add(item.dockOffset);
-      } else {
+      {
         // 2. Normal Travel: Smooth Turning in Curves
         const delta =
           THREE.MathUtils.euclideanModulo(
@@ -580,28 +469,29 @@ export function createMineRenderer(
         if (item.frontWheelRight) item.frontWheelRight.rotation.y = item.steerAngle;
       }
 
-      // 3. Terrain Pitch & Roll
-      const curH = item.currentHeading;
-      const fwdX = -Math.sin(curH);
-      const fwdZ = -Math.cos(curH);
-      const rgtX = Math.cos(curH);
-      const rgtZ = -Math.sin(curH);
-
-      const pX = item.mesh.position.x;
-      const pZ = item.mesh.position.z;
-
-      const hFwd = field(pX + fwdX * 1.5, -(pZ + fwdZ * 1.5)).elevation;
-      const hBack = field(pX - fwdX * 1.5, -(pZ - fwdZ * 1.5)).elevation;
-      const hL = field(pX - rgtX * 1.0, -(pZ - rgtZ * 1.0)).elevation;
-      const hR = field(pX + rgtX * 1.0, -(pZ + rgtZ * 1.0)).elevation;
-
-      const targetPitch = Math.atan2(hFwd - hBack, 3.0);
-      const targetRoll = Math.atan2(hR - hL, 2.0) - item.steerAngle * 0.04;
-
+      // Road grade controls the chassis. Adjacent cliff faces never tilt a truck.
+      const targetPitch = THREE.MathUtils.degToRad(item.haul?.road_pitch_deg ?? 0);
       item.pitch = THREE.MathUtils.lerp(item.pitch, targetPitch, 1 - Math.exp(-dt * 12));
-      item.roll = THREE.MathUtils.lerp(item.roll, targetRoll, 1 - Math.exp(-dt * 12));
+      item.roll = 0;
 
       item.mesh.rotation.set(item.pitch, item.currentHeading, item.roll, "YXZ");
+
+      const pouring = item.haul?.phase === "DUMPING" && item.oreLevel > 0.01 && item.dumpAngle > 0.8;
+      if (item.oreChute) item.oreChute.visible = false;
+      if (item.boulders) {
+        const outlet = item.mesh.localToWorld(new THREE.Vector3(0, 1.6, 1.7));
+        item.boulders.forEach((rock, index) => {
+          rock.visible = pouring;
+          if (!pouring) return;
+          const progress = ((item.haul?.phase_progress ?? 0) * 8 + index * 0.13) % 1;
+          rock.position.copy(outlet);
+          rock.position.x = THREE.MathUtils.lerp(outlet.x,
+            station.x + 2.6 + ((index % 3) - 1) * 0.15, progress);
+          rock.position.z = THREE.MathUtils.lerp(outlet.z, -station.y + ((index % 3) - 1) * 0.16, progress);
+          rock.position.y -= progress * progress * 3.4;
+          rock.rotation.set(progress * 7, index + progress * 5, progress * 4);
+        });
+      }
 
       // 4. Update Dump Bed & Hydraulic Rams
       if (item.dumpBedPivot) {
@@ -613,13 +503,13 @@ export function createMineRenderer(
         } else {
           item.oreCargo.visible = true;
           const s = Math.max(0.001, item.oreLevel);
-          item.oreCargo.scale.set(s > 0.05 ? 1 : 0.001, s, s);
-          item.oreCargo.position.z = (1 - s) * 0.6;
+          item.oreCargo.scale.set(1, s, 1);
+          item.oreCargo.position.z = 0;
         }
       }
       if (item.hydraulicLeft && item.hydraulicRight) {
         const angle = item.dumpAngle;
-        const bedY = TRUCK_HINGE_Y + -1.25 * Math.sin(angle) + 0.2 * Math.cos(angle);
+        const bedY = TRUCK_HINGE_Y + 1.25 * Math.sin(angle) + 0.2 * Math.cos(angle);
         const bedZ = TRUCK_HINGE_Z + -1.25 * Math.cos(angle) - 0.2 * Math.sin(angle);
         const stroke = Math.hypot(bedY - 0.42, bedZ - -0.15);
         const rot = Math.atan2(bedY - 0.42, -(bedZ - -0.15)) - Math.PI / 2;
@@ -681,19 +571,42 @@ export function createMineRenderer(
     update,
     fit,
     focus: (target) => {
+      if (target === "top") {
+        followingTruck = false;
+        controls.target.set(16, -6, -28);
+        camera.position.set(16, 220, 52);
+        controls.update();
+        requestRender();
+        return;
+      }
       followingTruck = target === "truck";
       const point =
         target === "truck" ? current.vehicles.find((v) => v.isPrimary) : null;
       const crusher = features.find((f) => f.feature_type === "DESTINATION")
         ?.points[0];
+      const pitPoint = features.find(
+        (f) =>
+          f.properties?.cartography === "pit-floor" ||
+          f.properties?.cartography === "pit-loading",
+      )?.points[0];
+      const pitX = pitPoint?.x_m ?? -31.8;
+      const pitY = pitPoint?.y_m ?? 10.5;
       const x =
-        point?.xM ?? (target === "crusher" ? (crusher?.x_m ?? 32) + 13 : 4);
+        point?.xM ?? (target === "crusher" ? (crusher?.x_m ?? 32) + 4 : pitX);
       const y =
-        point?.yM ?? (target === "crusher" ? (crusher?.y_m ?? 44) - 7 : 30);
+        point?.yM ?? (target === "crusher" ? (crusher?.y_m ?? 44) + 1 : pitY);
       const h = field(x, y).elevation,
-        d = target === "truck" ? 11 : target === "crusher" ? 34 : 48;
+        d = target === "truck" ? 11 : target === "crusher" ? 24 : 55;
       controls.target.set(x, h, -y);
-      camera.position.set(x + d * 0.7, h + d, -y + d * 0.65);
+      const atCrusher = target === "crusher" || Boolean(point &&
+        Math.hypot(point.xM - crusherX, point.yM - crusherY) < 12);
+      if (atCrusher) {
+        controls.target.set(station.x + 1, station.elevation + 1.3, -station.y);
+        camera.position.set(station.x - d, station.elevation + (target === "truck" ? 3 : 10),
+          -station.y + (target === "truck" ? 1.2 : d * 0.65));
+      } else {
+        camera.position.set(x + d * 0.7, h + d, -y + d * 0.65);
+      }
       controls.update();
       requestRender();
     },
@@ -718,10 +631,6 @@ export function createMineRenderer(
       renderer.domElement.removeEventListener("webglcontextlost", lost);
       renderer.domElement.removeEventListener("webglcontextrestored", restored);
       labels.remove();
-      trucks.forEach((item) => {
-        if (item.oreChute) scene.remove(item.oreChute);
-        if (item.boulders) item.boulders.forEach((b) => scene.remove(b));
-      });
       const hadTrucks = trucks.size > 0;
       trucks.clear();
       disposeScene(scene);

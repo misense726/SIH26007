@@ -252,6 +252,7 @@ class FleetVehicle:
             trip_id=self.current_trip_id,
             vehicle_id=self.vehicle_id,
             callsign=self.callsign,
+            source="SIMULATED",
             pickup_node=self.assigned_pickup,
             dump_node=self.assigned_dump,
             payload_tonnes=self.target_payload_tonnes,

@@ -102,9 +102,9 @@ html[data-theme="light"] .supervisor-dashboard {
 }
 
 .supervisor-section-nav {
-  position: sticky;
-  z-index: 35;
-  top: 101px;
+  position: relative;
+  z-index: 1;
+  top: auto;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 4px;
@@ -299,7 +299,45 @@ html[data-theme="light"] .supervisor-dashboard {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 12px;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.efficiency-data-status {
+  display: grid;
+  grid-template-columns: auto auto;
+  align-items: center;
+  column-gap: 6px;
+  row-gap: 1px;
+  min-width: max-content;
+  color: var(--text-soft);
+  font-family: var(--mono);
+  font-size: 0.57rem;
+  line-height: 1.1;
+}
+
+.efficiency-data-status i {
+  grid-row: span 2;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--status-good, #10b981);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--status-good, #10b981) 55%, transparent);
+}
+
+.efficiency-data-status span {
+  color: var(--text-soft);
+  font-weight: 700;
+}
+
+.efficiency-data-status small {
+  color: var(--supervisor-muted);
+  font-size: 0.52rem;
+}
+
+.efficiency-data-status.is-error i {
+  background: var(--status-attention, #f59e0b);
+  box-shadow: 0 0 7px color-mix(in srgb, var(--status-attention, #f59e0b) 55%, transparent);
 }
 
 .vehicle-dropdown-label {
@@ -491,8 +529,8 @@ html[data-theme="light"] .supervisor-dashboard {
   justify-content: space-between;
   border: 1px solid var(--supervisor-line-soft);
   border-radius: 12px;
-  background: var(--supervisor-surface-inset);
-  padding: 14px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--supervisor-surface-inset) 94%, #20333a), var(--supervisor-surface-inset));
+  padding: 12px;
   min-width: 0;
 }
 
@@ -565,24 +603,61 @@ html[data-theme="light"] .supervisor-dashboard {
   width: 100%;
 }
 
+.eff-chart-wrapper.is-refreshed {
+  animation: eff-chart-refresh 450ms ease-out;
+}
+
+@keyframes eff-chart-refresh {
+  from { opacity: 0.62; transform: translateY(3px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.eff-chart-empty {
+  display: grid;
+  min-height: 240px;
+  place-content: center;
+  justify-items: center;
+  gap: 8px;
+  padding: 20px;
+  color: var(--supervisor-muted);
+  text-align: center;
+}
+
+.eff-chart-empty-rule {
+  width: 42px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--truck-accent, var(--accent)), transparent);
+}
+
+.eff-chart-empty strong {
+  color: var(--text-soft);
+  font-size: 0.76rem;
+}
+
+.eff-chart-empty span:last-child {
+  max-width: 230px;
+  font-size: 0.6rem;
+}
+
 .eff-svg-canvas {
   display: block;
   width: 100%;
   height: auto;
-  min-height: 240px;
+  min-height: 232px;
 }
 
 .eff-grid-line {
-  stroke: var(--supervisor-line-soft, #263238);
-  stroke-width: 1;
-  stroke-dasharray: 2 4;
+  stroke: color-mix(in srgb, var(--supervisor-line-soft, #263238) 78%, transparent);
+  stroke-width: 0.75;
+  stroke-dasharray: 1 6;
+  vector-effect: non-scaling-stroke;
 }
 
 .eff-axis-tick {
   fill: var(--supervisor-muted, #94a3b8);
   font-family: var(--mono);
-  font-size: 8.5px;
-  font-weight: 600;
+  font-size: 8px;
+  font-weight: 500;
 }
 
 .eff-live-x-tick {
@@ -591,24 +666,34 @@ html[data-theme="light"] .supervisor-dashboard {
 
 .eff-axis-title {
   fill: var(--supervisor-muted, #94a3b8);
-  font-size: 8.5px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
+  font-size: 8px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
 }
 
 .eff-benchmark-line {
-  stroke-dasharray: 4 3;
+  stroke-dasharray: 3 4;
+  vector-effect: non-scaling-stroke;
 }
 
 .eff-benchmark-tag {
   font-family: var(--mono);
-  font-size: 8px;
-  font-weight: 700;
+  font-size: 7.5px;
+  font-weight: 650;
   letter-spacing: 0.02em;
 }
 
+.eff-data-line {
+  vector-effect: non-scaling-stroke;
+  shape-rendering: geometricPrecision;
+}
+
+.eff-area-fill {
+  pointer-events: none;
+}
+
 .eff-pulse-ring {
-  animation: eff-ring-pulse 2s ease-in-out infinite;
+  animation: eff-ring-pulse 3s ease-in-out infinite;
 }
 
 @keyframes eff-ring-pulse {
@@ -1836,15 +1921,15 @@ html[data-theme="light"] .supervisor-dashboard {
   }
 
   .supervisor-section-nav {
-    position: sticky;
-    top: 0;
-    grid-template-columns: repeat(5, minmax(82px, 1fr));
-    overflow-x: auto;
+    position: relative;
+    top: auto;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    overflow-x: visible;
   }
 
   .supervisor-section-nav button {
     grid-template-columns: 20px 1fr auto;
-    min-width: 112px;
+    min-width: 0;
     padding-inline: 9px;
   }
 
@@ -1962,7 +2047,7 @@ html[data-theme="light"] .supervisor-dashboard {
   }
 
   .supervisor-section-nav button {
-    min-width: 94px;
+    min-width: 0;
     min-height: 52px;
     grid-template-columns: 18px 1fr;
     gap: 6px;

@@ -1,6 +1,6 @@
 {
-  "name": "FogSen",
-  "short_name": "FogSen",
+  "name": "MI Sense",
+  "short_name": "MI Sense",
   "description": "Vehicle awareness and fleet operations dashboard",
   "start_url": "/",
   "display": "standalone",

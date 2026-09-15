@@ -22,6 +22,16 @@ html[data-theme="light"] {
   border-radius: 18px;
 }
 
+.app-shell-supervisor .topbar {
+  position: relative;
+  top: auto;
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
+.app-shell-supervisor .status-row {
+  justify-self: end;
+}
+
 .brand-lockup {
   min-width: 164px;
 }

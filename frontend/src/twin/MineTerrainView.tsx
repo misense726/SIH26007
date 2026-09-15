@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import type { MapFeature } from "../types";
-import type { MineFrame, MineRenderer } from "./mineRenderer";
+import { createMineRenderer, type MineFrame, type MineRenderer } from "./mineRenderer";
 
 export function MineTerrainView({
   features,
@@ -15,35 +15,38 @@ export function MineTerrainView({
 }) {
   const host = useRef<HTMLDivElement>(null),
     latest = useRef(frame),
-    select = useRef(onSelect);
+    select = useRef(onSelect),
+    featuresRef = useRef(features);
   latest.current = frame;
   select.current = onSelect;
+  featuresRef.current = features;
   const [status, setStatus] = useState<"loading" | "ready" | "error">(
     "loading",
   );
+
+  const featuresKey = useMemo(() => {
+    if (!features || features.length === 0) return "empty";
+    return `${features.length}:${features[0].feature_id}:${features[features.length - 1].feature_id}`;
+  }, [features]);
+
   useEffect(() => {
-    let cancelled = false,
-      active: MineRenderer | null = null;
-    setStatus("loading");
-    import("./mineRenderer")
-      .then(({ createMineRenderer }) => {
-        if (cancelled || !host.current) return;
-        active = createMineRenderer(host.current, features, (id) =>
-          select.current(id),
-        );
-        controller.current = active;
-        active.update(latest.current);
-        setStatus("ready");
-      })
-      .catch(() => {
-        if (!cancelled) setStatus("error");
-      });
-    return () => {
-      cancelled = true;
-      active?.dispose();
-      controller.current = null;
-    };
-  }, [features, controller]);
+    if (!host.current) return;
+    try {
+      const active = createMineRenderer(host.current, featuresRef.current, (id) =>
+        select.current(id),
+      );
+      controller.current = active;
+      active.update(latest.current);
+      setStatus("ready");
+      return () => {
+        active.dispose();
+        controller.current = null;
+      };
+    } catch (err) {
+      console.error("MineRenderer initialization error:", err);
+      setStatus("error");
+    }
+  }, [featuresKey, controller]);
   useEffect(() => {
     controller.current?.update(frame);
   }, [frame, controller]);

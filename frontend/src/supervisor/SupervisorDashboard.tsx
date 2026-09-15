@@ -187,7 +187,6 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
   const model = useMemo(() => createSupervisorViewModel(world), [world]);
   const hasHaulRoute = world.mode === "SIMULATED" && Boolean(world.haul_route);
   const [activeSection, setActiveSection] = useState<SupervisorSection>(hasHaulRoute ? "fleet" : "overview");
-  useEffect(() => { if (hasHaulRoute) setActiveSection("fleet"); }, [hasHaulRoute]);
   const [selectedTruckId, setSelectedTruckId] = useState<string | null>(world.primary_vehicle_id);
 
   useEffect(() => {
@@ -236,13 +235,15 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
 
   return (
     <section className="dashboard supervisor-dashboard" aria-label="Supervisor workspace">
-      <header className="supervisor-hero">
-        <div>
-          <p className="eyebrow">Supervisor workspace</p>
-          <h2>Fleet command</h2>
-          <p>{model.mapName}</p>
-        </div>
-      </header>
+      {activeSection !== "efficiency" && (
+        <header className="supervisor-hero">
+          <div>
+            <p className="eyebrow">Supervisor workspace</p>
+            <h2>Fleet command</h2>
+            <p>{model.mapName}</p>
+          </div>
+        </header>
+      )}
 
       <nav className="supervisor-section-nav" aria-label="Supervisor sections">
         {SECTION_LABELS.map((section) => {

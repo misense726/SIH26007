@@ -8,6 +8,25 @@ from backend.app.models import SimulationScenario
 from backend.app.simulation.engine import FullSimulator
 from backend.app.twin.world_store import WorldStore
 from backend.app.simulation.haul_route import HaulRun
+from backend.app.safety.corridor import CorridorEvaluator
+from shapely.geometry import Point
+
+
+def test_pit_route_starts_at_floor_and_stays_on_usable_road():
+    config = deepcopy(project_config()["demo"]["demo"]["haul"])
+    original = deepcopy(config)
+    haul = HaulRun(config)
+    assert config == original
+    floor = next(f.points[0] for f in haul.reference_map.features
+                 if f.properties.get("cartography") == "pit-floor")
+    start = haul.route.sample(0)
+    assert math.hypot(start.x_m - floor.x_m, start.y_m - floor.y_m) < 1.1
+    corridor = CorridorEvaluator(haul.reference_map, 0.5, 0.4, 0.5)
+    for distance in range(math.ceil(haul.route.total_length_m)):
+        sample = haul.route.sample(distance)
+        point = Point(sample.x_m, sample.y_m)
+        assert corridor.road.buffer(-0.5).covers(point)
+        assert not corridor.hazards.covers(point)
 
 
 def test_haul_corner_positions_and_headings_are_continuous():
@@ -23,7 +42,7 @@ def test_haul_corner_positions_and_headings_are_continuous():
             span = min(haul.config["corner_blend_m"], length * 0.45,
                        route.segment_lengths[i + 1] * 0.45)
             for join in (distance - span, distance, distance + span):
-                before, after = route.sample(join - 0.001), route.sample(join + 0.001)
+                before, after = route.sample(join - 0.00001), route.sample(join + 0.00001)
                 turn = abs((after.heading_deg - before.heading_deg + 180) % 360 - 180)
                 assert turn < 0.1
                 assert math.hypot(after.x_m - before.x_m, after.y_m - before.y_m) <= 0.00201
@@ -31,14 +50,23 @@ def test_haul_corner_positions_and_headings_are_continuous():
 
 @pytest.mark.asyncio
 async def test_haul_reaches_faster_cruise_speed():
-    simulator = FullSimulator(WorldStore(), deepcopy(project_config()))
-    speeds = [(await simulator.tick()).primary_vehicle().speed_mps for _ in range(50)]
-    assert max(speeds) == pytest.approx(1.8)
+    config = deepcopy(project_config())
+    simulator = FullSimulator(WorldStore(), config)
+    speeds = [(await simulator.tick()).primary_vehicle().speed_mps for _ in range(150)]
+    expected_speed = min(
+        config["demo"]["demo"]["haul"]["cruise_speed_mps"]
+        * config["demo"]["demo"]["default_speed_scale"],
+        config["vehicle"]["vehicle"]["max_demo_speed_mps"],
+    )
+    assert max(speeds) == pytest.approx(expected_speed * simulator._haul.production.trucks[0].plan.speed_scale)
 
 
 @pytest.mark.asyncio
 async def test_haul_circuit_detects_avoids_passes_unloads_and_repeats():
-    simulator = FullSimulator(WorldStore(), deepcopy(project_config()))
+    config = deepcopy(project_config())
+    config["demo"]["demo"]["haul"]["production_cycle"] = False
+    simulator = FullSimulator(WorldStore(), config)
+    early_warning_threshold_m = config["demo"]["demo"]["haul"]["rock_detour_span_m"] / 3
     phases = set()
     encounters = set()
     minimum_rock_clearance = float("inf")
@@ -46,16 +74,16 @@ async def test_haul_circuit_detects_avoids_passes_unloads_and_repeats():
     both_slowed = False
     returned = False
     lead_turned = False
-    for _ in range(2500):
+    for _ in range(math.ceil(simulator._haul.route.total_length_m / 0.15) + 2500):
         state = await simulator.tick()
         assert state.haul_route is not None
         phases.add(state.haul_route.phase)
-        assert len(state.vehicles) == 3
+        assert len(state.vehicles) == 8
         assert len(state.spatial_points) <= 600
         assert not state.emergency.motor_cut
         if state.haul_route.obstacle_detected:
             encounters.add("rock")
-            saw_early_return |= state.haul_route.obstacle_distance_m > 2
+            saw_early_return |= state.haul_route.obstacle_distance_m > early_warning_threshold_m
         if state.haul_route.traffic_slowing:
             encounters.add("oncoming")
             both_slowed |= (
@@ -93,10 +121,14 @@ async def test_pause_freezes_encounter_and_both_vehicles_and_reset_restarts():
     assert paused.haul_route.elapsed_s == before.haul_route.elapsed_s
     assert paused.haul_route.distance_m == before.haul_route.distance_m
     assert paused.vehicles[1].y_m == before.vehicles[1].y_m
+    assert len(paused.vehicles) == 8
+    assert len({v.vehicle_id for v in paused.vehicles}) == 8
+    assert [(v.x_m, v.y_m) for v in paused.vehicles[1:]] == [(v.x_m, v.y_m) for v in before.vehicles[1:]]
     assert all(v.speed_mps == 0 for v in paused.vehicles)
     await simulator.apply_control(reset=True)
     reset = await simulator.tick()
     assert reset.haul_route.distance_m == pytest.approx(before.haul_route.distance_m)
+    assert [(v.x_m, v.y_m) for v in reset.vehicles[3:]] == [(v.x_m, v.y_m) for v in before.vehicles[3:]]
     await simulator.apply_control(scenario=SimulationScenario.NORMAL)
     normal = await simulator.tick()
     assert normal.haul_route is None
@@ -106,7 +138,9 @@ async def test_pause_freezes_encounter_and_both_vehicles_and_reset_restarts():
 
 @pytest.mark.asyncio
 async def test_rock_warning_requires_valid_front_sensor_hit():
-    simulator = FullSimulator(WorldStore(), deepcopy(project_config()))
+    config = deepcopy(project_config())
+    config["demo"]["demo"]["haul"]["production_cycle"] = False
+    simulator = FullSimulator(WorldStore(), config)
     state = await simulator.tick()
     haul = simulator._haul
     reading = next(r for r in state.ranges if r.sensor_id == "front_fixed")

@@ -43,6 +43,10 @@ export function dashboardViewFromHash(hash: string): DashboardView {
   return viewByHash.get(hash.toLowerCase()) ?? "DRIVER";
 }
 
+export function dashboardRoleFromHash(hash: string): DashboardRole | null {
+  return dashboardViews.find((view) => view.hash === hash.toLowerCase())?.workspace ?? null;
+}
+
 export function dashboardViewsForRole(role: DashboardRole): DashboardViewOption[] {
   const allowedViews = rolePolicies[role].views;
   return dashboardViews.filter((view) => allowedViews.includes(view.value));

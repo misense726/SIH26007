@@ -6,21 +6,31 @@ Spatial after simulated telemetry connects. Explicit view links still work;
 LIVE mode retains the driver view.
 
 The continuous haul circuit follows a narrow, unmarked track through a conceptual
-open-cast mine. A small rock appears on the outbound track. A valid front ToF
-return enables the rock warning and a configured left-side detour. The rock stays
-in place; it is not deleted to let the truck pass. Both opposing trucks reduce
-speed during their encounter. A third truck ahead waits, then takes the service
-road. The primary truck stops at the crusher to unload, returns to the loading
-area, pauses to load, and starts another trip. Each encounter has distinct guidance.
+open-cast mine. Trucks start at the pit floor, climb the graded access road,
+complete the crusher circuit and descend to load again. The access road is part
+of the backend route and usable road geometry, with the surrounding pit excluded.
+The fleet contains eight dumpers. Each queues at the pit floor, loads iron ore,
+climbs to the crusher, waits for the tipping bay, reverses into it, raises its bed,
+empties the load, lowers the bed and returns empty. The loading bay and tipping
+bay each admit one truck at a time. Trucks slow for tight bends. Two excavators
+stand on the pit floor; there are no decorative dumpers on the upper benches.
 
-The scenario toolbar is removed. The status header retains SIMULATED, including
-on mobile. Existing simulation control endpoints remain available for testing.
-Pausing through the API freezes travel and encounter timing for all vehicles.
+The backend publishes each truck's phase, cargo fraction, bed angle and road
+elevation. The renderer uses that road grade for chassis pitch and keeps roll
+level. It does not sample nearby cliff faces for truck attitude or run a separate
+tipping timer. Pausing freezes travel, cargo transfer and tipping for every truck.
+The crusher has a fully roofed receiving hall with corrugated walls and a wide
+road-facing portal. Trucks reverse along a backend-owned curve into an off-road
+bay, stop with their rear wheels on the apron, and tip directly into the recessed
+pocket. Dock coordinates anchor the building, terrain cut and ore stream. A
+processing tower and covered conveyor connect to the lower stockyard.
 
-The road, vehicle poses, obstacle and trip progress originate in backend
-`WorldState`. The range provider raycasts the same obstacle and peer position
-that the spatial scene and navigation map draw. Both peers publish simulated
-V2V messages. No camera, radar or browser animation controls braking.
+The header retains SIMULATED. Existing simulation control endpoints remain
+available. The previous rock, opposing-traffic and service-road encounters can
+still be run with `demo.haul.production_cycle: false`. Those encounters use the
+original rim route. The ore cycle uses backend spacing and bay queues; its fleet
+traffic is not injected into the prototype 2D ToF raycast. V2X still publishes all
+seven peers. Hardware providers and their deterministic stop logic are unchanged.
 
 The navigation map is a local site plan with a blue route, heading markers,
 obstruction marker, distance remaining, progress, zoom, drag and follow controls.
@@ -50,7 +60,9 @@ road width, traffic position/speed, obstacle position/radius and encounter times
 Haul cruise speed is 1.8 m/s. Traffic and rock slowdowns retain a 1.15 m/s
 base before their reduction factors. Corners blend over 1.8 m on each side,
 limited by adjacent segment lengths, with continuous positions and headings.
-The backend applies the same rounded route to the primary and opposing truck.
+Every truck follows the same graded circuit. Loading, reversing, tipping and
+lowering durations, queue spacing and the turn-rate limit are configured alongside
+the route. The legacy encounter demo retains its opposing truck.
 Waypoint distances and loading/unloading stops retain their route coordinates.
 The previous Normal, Fog, Obstacle and Emergency scenarios retain the campus map.
 Hardware providers and calibration are unchanged.
@@ -62,6 +74,58 @@ is confined to the navigation map. Road geometry is clipped before projection, a
 is sorted by camera depth. This remains a 2.5D scene; SVG face sorting is not a
 full depth buffer and the illustrative truck dimensions are not a physical
 vehicle collision envelope.
+
+## Simulated haul analytics
+
+The SIMULATED runtime starts with 15 completed illustrative trips for each of
+DUMPER_01 through DUMPER_08, 120 records in total. Every trip carries
+`source: "SIMULATED"`. A deterministic seed varies payload, loaded and empty
+travel distance, loading and dumping time, queuing and fuel consumption. Each
+truck's first 15 efficiencies remain distinct when displayed to two decimals.
+The numerical values and IDs repeat across runs; timestamps anchor once to
+simulator startup. Reset restores that same startup history.
+
+Nominal capacities for trucks 01 through 08 are 100, 95, 105, 90, 100, 95, 105
+and 90 tonnes. A truck receives a new 80-99% capacity target once per cycle.
+Its visible cargo fraction rises to that target during loading, stays fixed
+while hauling, and falls during tipping. `haul.payload_target_tonnes` is the
+cycle target; `haul.payload_capacity_tonnes` and the existing operational
+`target_payload_tonnes` are rated capacity. Current tonnes are published in
+both `haul.payload_tonnes` and the operational fleet metadata.
+
+The default HAUL controller records one trip when each truck completes its
+empty return, including the primary dumper. It sums the controller's actual
+travel distances and phase durations and uses the completed cycle's fixed
+payload target, not its now-empty bed. Fuel is an estimate based on loaded and
+empty distance, payload, travel speed, hydraulic handling and stopped queue
+time. The formula is documented in `backend/app/analytics/simulated_haul.py`.
+It is not a calibrated sensor or manufacturer fuel specification. Startup
+trips represent illustrative mine hauls; ongoing trips follow the smaller,
+accelerated demo circuit. Operator pauses freeze the simulated cycle clock.
+An emergency motor cut instead counts as stopped idle time and estimated idle
+fuel while the simulation remains running; primary emergency status is preserved
+in both world fleet metadata and the fleet API.
+Selecting HAUL again retains completed history and resumes the next load
+ordinal; an explicit reset discards runtime completions and partial cycles.
+
+`GET /api/analytics/trip-history?vehicle_id=DUMPER_01&limit=15` returns newest
+first. `vehicle_id` is optional and `limit` is 1 through 200. Filtering happens
+before limiting. `total_trips` and `total_tonnes` cover all retained matching
+records, not just the returned page. Fleet metrics and vehicle totals use the
+same retained history, not lifetime shift counters. History is bounded at 200
+records and keeps at least 15 per truck by evicting older excess records from
+busier trucks first. An unknown vehicle returns an empty history.
+
+LIVE still starts with `seed_baseline=False`, never constructs this haul
+controller, and never pads missing measurements with generated records.
+Records without known provenance retain a null source. REPLAY does not run
+load generation. These changes do not add live payload or fuel sensors.
+
+Static demo builds include `/demo/trip-history.json` and
+`/demo/haulage-metrics.json`, using the same startup records and API response
+shapes. They are fixed demonstration history, not extra cycles generated by
+browser playback. Refresh only these small files without rebuilding world
+chunks or terrain with `python -m scripts.export_demo --analytics-only`.
 
 ## Supervisor terrain
 
@@ -109,9 +173,9 @@ simulation measurements, not doubled hardware readings. No browser route model,
 collision controller or fabricated live telemetry is introduced. The mode stays
 SIMULATED and the header explicitly identifies playback.
 
-The current recording is 771 frames in 31 independently decodable chunks, about
-3.43 MB gzip in total, plus a 26 KB manifest. One loop takes 77.1 seconds plus any
-download delays. The reference map is downloaded once and retains object identity.
+The manifest reports the generated frame count, duration and chunks. The longer
+pit-floor circuit takes more playback time than the previous rim-only recording.
+The reference map is downloaded once and retains object identity.
 Each chunk starts with a full frame without the map; later frames replace changed
 top-level fields. Integer timestamps are preserved and other numbers are rounded
 to three decimal places. The backend's safety computation runs before rounding.

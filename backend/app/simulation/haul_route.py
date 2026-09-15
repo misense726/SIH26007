@@ -17,11 +17,13 @@ from backend.app.models import (
 from backend.app.models.telemetry import HaulRouteState
 from backend.app.twin.route import PolylineRoute
 from backend.app.simulation.mine_terrain import mine_terrain
+from backend.app.simulation.pit_haul import connect_pit
+from backend.app.simulation.haul_fleet import HaulFleet
 
 
 class HaulRun:
     def __init__(self, config: dict) -> None:
-        self.config = config
+        self.config = dict(config)
         self.route = PolylineRoute(
             [Point2D(x_m=x, y_m=y) for x, y in config["route_points_m"]],
             corner_blend_m=config.get("corner_blend_m", 1.8),
@@ -44,7 +46,7 @@ class HaulRun:
 
         self.reference_map = ReferenceMap(
             map_id="FOGSEN_MINE_HAUL",
-            name="Bailadila sector · Conceptual mine",
+            name="Bailadila Deposit-14 · Kirandul",
             created_at_ms=0,
             features=[
                 feature(
@@ -103,6 +105,9 @@ class HaulRun:
                 )
             )
         self.dump_distance = sum(self.route.segment_lengths[: config["dump_waypoint"]])
+        if config.get("production_cycle"):
+            connect_pit(self)
+            config = self.config
         lead_start = self.route.sample(config["lead_distance_m"])
         self.lead_route = PolylineRoute(
             [
@@ -147,6 +152,32 @@ class HaulRun:
         self.lead_wait_s = 0.0
         self.lead_waiting = False
         self.last_distance = 0.0
+        self.production = HaulFleet(self.route, self.dump_distance, config, self.road_elevations) if config.get("production_cycle") else None
+        if self.production:
+            dock_x, dock_y, _ = self.production.dock_pose(1)
+            for feature in self.reference_map.features:
+                if feature.feature_type is MapFeatureType.DESTINATION:
+                    feature.properties.update(dock_x_m=dock_x, dock_y_m=dock_y,
+                                              dock_elevation_m=self.production.height(self.dump_distance))
+            bay = LineString([self.production.dock_pose(i / 32)[:2] for i in range(33)]).buffer(2.4)
+            features = []
+            for item in self.reference_map.features:
+                if item.feature_type is not MapFeatureType.BERM:
+                    features.append(item)
+                    continue
+                remaining = LineString([(p.x_m, p.y_m) for p in item.points]).difference(bay)
+                parts = list(remaining.geoms) if hasattr(remaining, "geoms") else [remaining]
+                for i, part in enumerate(parts):
+                    if not part.is_empty:
+                        features.append(item.model_copy(update={
+                            "feature_id": f"{item.feature_id}-bay-{i}",
+                            "points": [Point2D(x_m=x, y_m=y) for x, y in part.coords],
+                        }))
+            features.append(MapFeature(feature_id="crusher-bay", feature_type=MapFeatureType.ROAD,
+                geometry_type=GeometryType.POLYGON, label="Crusher receiving bay",
+                points=[Point2D(x_m=x, y_m=y) for x, y in bay.exterior.coords[:-1]],
+                properties={"cartography": "crusher-apron"}))
+            self.reference_map.features = features
 
     def speed_limit(self, distance: float, requested: float, dt: float) -> float:
         self.last_distance = distance
@@ -196,6 +227,8 @@ class HaulRun:
         self.lead_waiting = False
 
     def observe(self, readings, targets) -> None:
+        if self.production:
+            return
         hits = [
             r.range_m
             for r in readings
@@ -226,6 +259,8 @@ class HaulRun:
         )
 
     def lead(self, timestamp_ms: int, running: bool) -> VehiclePose:
+        if self.production:
+            return self.production.pose(2, timestamp_ms)
         p = self.lead_route.sample(self.lead_progress)
         return VehiclePose(
             vehicle_id="DUMPER_03",
@@ -245,7 +280,25 @@ class HaulRun:
             position_confidence=1.0,
         )
 
+    def fleet(self, distance: float, speed: float, timestamp_ms: int) -> list[VehiclePose]:
+        """Stagger additional haul trucks around the backend-owned circuit."""
+        count = max(3, int(self.config.get("fleet_size", 8)))
+        if self.production:
+            return [self.production.pose(i, timestamp_ms) for i in range(3, count)]
+        vehicles = []
+        for index in range(count - 3):
+            progress = (distance + (index + 1) * self.route.total_length_m / (count - 2)) % self.route.total_length_m
+            point = self.route.sample(progress)
+            vehicles.append(VehiclePose(
+                vehicle_id=f"DUMPER_{index + 4:02d}", timestamp_ms=timestamp_ms,
+                x_m=point.x_m, y_m=point.y_m, heading_deg=point.heading_deg,
+                speed_mps=speed, position_confidence=1.0,
+            ))
+        return vehicles
+
     def advance(self, dt: float, running: bool) -> bool:
+        if self.production:
+            return False
         if running:
             self.elapsed_s += dt
         return self.elapsed_s >= self.config["obstacle_appears_s"]
@@ -255,6 +308,8 @@ class HaulRun:
         return Point2D(x_m=point.x_m, y_m=point.y_m)
 
     def peer(self, timestamp_ms: int, running: bool) -> VehiclePose:
+        if self.production:
+            return self.production.pose(1, timestamp_ms)
         speed = self.peer_speed
         distance = self.peer_distance
         point = self.route.sample(distance)
@@ -273,6 +328,8 @@ class HaulRun:
     def snapshot(
         self, distance: float, enabled: bool, stopped: bool, speed: float = 0.0
     ) -> HaulRouteState:
+        if self.production:
+            return self.production.snapshot()
         destination = self.route.total_length_m if self.unloaded else self.dump_distance
         origin_distance = self.dump_distance if self.unloaded else 0.0
         remaining = max(0.0, destination - distance)
