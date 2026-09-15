@@ -9,6 +9,8 @@ import { SimulationControls } from "./simulation/SimulationControls";
 import { useTelemetry } from "./state/useTelemetry";
 import { applyTheme, readInitialTheme, saveTheme, type Theme } from "./theme";
 import "./styles.css";
+import "./layout/appShell.css";
+import "./supervisor/supervisor.css";
 
 export default function App() {
   const { world, connection } = useTelemetry();

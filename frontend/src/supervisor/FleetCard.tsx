@@ -1,113 +1,81 @@
-import { formatNumber, tofSensorHealthSummary } from "../state/selectors";
-import type { EmergencyState, EnvironmentState, SensorHealth } from "../types";
-
-export interface FleetTruckData {
-  vehicle_id: string;
-  is_primary: boolean;
-  is_simulated: boolean;
-  x_m: number;
-  y_m: number;
-  heading_deg: number;
-  speed_mps: number;
-  emergency_state: string;
-  distance_m?: number;
-  link_status?: string;
-}
+import { formatNumber } from "../state/selectors";
+import type { SupervisorVehicle, SupervisorVehicleTone } from "./supervisorViewModel";
 
 interface FleetCardProps {
-  truck: FleetTruckData;
-  environment?: EnvironmentState;
-  emergency?: EmergencyState;
-  sensors?: SensorHealth[];
+  truck: SupervisorVehicle;
   isSelected?: boolean;
   onSelect?: () => void;
 }
 
-export function FleetCard({
-  truck,
-  environment,
-  emergency,
-  sensors,
-  isSelected,
-  onSelect,
-}: FleetCardProps) {
-  const sensorSummary = sensors ? tofSensorHealthSummary(sensors) : null;
-  const emergencyClass = (truck.emergency_state || "SAFE").toLowerCase().replace("_", "-");
+const TONE_LABELS: Record<SupervisorVehicleTone, string> = {
+  nominal: "Nominal",
+  attention: "Needs attention",
+  critical: "Critical",
+  lost: "Contact lost",
+  unknown: "Position only",
+};
+
+export function formatTelemetryAge(ageMs: number): string {
+  if (!Number.isFinite(ageMs) || ageMs < 0) return "Unknown";
+  if (ageMs < 1_000) return "Now";
+  if (ageMs < 60_000) return `${Math.round(ageMs / 1_000)}s ago`;
+  return `${Math.round(ageMs / 60_000)}m ago`;
+}
+
+export function FleetCard({ truck, isSelected, onSelect }: FleetCardProps) {
+  const linkLabel = truck.isPrimary
+    ? "Direct"
+    : truck.linkStatus
+      ? truck.linkStatus.toLowerCase()
+      : "Not reported";
 
   return (
-    <article
-      className={`fleet-card ${isSelected ? "fleet-card-selected" : ""} ${truck.is_primary ? "fleet-card-primary" : "fleet-card-peer"}`}
-      onClick={onSelect}
-      onKeyDown={(event) => {
-        if (event.key === "Enter" || event.key === " ") {
-          event.preventDefault();
-          onSelect?.();
-        }
-      }}
-      role="button"
-      tabIndex={0}
-      aria-pressed={Boolean(isSelected)}
-      title={`Show ${truck.vehicle_id} on the fleet map`}
-    >
-      <header>
-        <div>
-          <span className="driver-role-tag">{truck.is_primary ? "PRIMARY" : "SIMULATED PEER"}</span>
-          <h3 className="truck-title">
-            {truck.vehicle_id}
-          </h3>
-        </div>
-        <span className={`fleet-state fleet-state-${emergencyClass}`}>
-          {truck.emergency_state.replaceAll("_", " ")}
+    <article className={`fleet-row fleet-row-${truck.tone} ${isSelected ? "fleet-row-selected" : ""}`}>
+      <button
+        type="button"
+        className="fleet-row-button"
+        onClick={onSelect}
+        aria-pressed={Boolean(isSelected)}
+        aria-label={`View ${truck.vehicleId} details`}
+      >
+        <span className="fleet-cell fleet-identity-cell" data-label="Vehicle">
+          <span
+            className={`fleet-vehicle-marker ${truck.isPrimary ? "fleet-vehicle-marker-primary" : "fleet-vehicle-marker-peer"}`}
+            aria-hidden="true"
+          />
+          <span>
+            <strong>{truck.vehicleId}</strong>
+            <small>{truck.sourceLabel}</small>
+          </span>
         </span>
-      </header>
 
-      <div className="fleet-speed">
-        <strong>{formatNumber(truck.speed_mps * 3.6, 1)}</strong>
-        <span>km/h</span>
-      </div>
+        <span className="fleet-cell fleet-state-cell" data-label="State">
+          <span className={`status-symbol status-symbol-${truck.tone}`} aria-hidden="true" />
+          <span>
+            <strong>{TONE_LABELS[truck.tone]}</strong>
+            <small>{truck.emergencyState?.replaceAll("_", " ") ?? "Safety unavailable"}</small>
+          </span>
+        </span>
 
-      <dl className="fleet-details">
-        <div>
-          <dt>Coordinates</dt>
-          <dd>
-            X:{formatNumber(truck.x_m, 1)} Y:{formatNumber(truck.y_m, 1)} m
-          </dd>
-        </div>
-        <div>
-          <dt>Heading</dt>
-          <dd>{formatNumber(truck.heading_deg, 0)}°</dd>
-        </div>
-        {truck.distance_m !== undefined && !truck.is_primary && (
-          <div>
-            <dt>Distance to primary</dt>
-            <dd>{formatNumber(truck.distance_m, 1)} m</dd>
-          </div>
-        )}
-        {truck.link_status && !truck.is_primary && (
-          <div>
-            <dt>Simulated link</dt>
-            <dd>
-              <span className={`link-badge link-${truck.link_status.toLowerCase()}`}>
-                {truck.link_status}
-              </span>
-            </dd>
-          </div>
-        )}
-        {truck.is_primary && environment && (
-          <div>
-            <dt>Visibility</dt>
-            <dd>{Math.round(environment.visibility_score * 100)}%</dd>
-          </div>
-        )}
-        {truck.is_primary && sensorSummary && (
-          <div>
-            <dt>ToF Health</dt>
-            <dd>
-              {sensorSummary.healthy}/{sensorSummary.total} healthy
-            </dd>
-          </div>
-        )}
-      </dl>
+        <span className="fleet-cell fleet-value-cell" data-label="Speed">
+          <strong>{formatNumber(truck.speedMps * 3.6, 1)}</strong>
+          <small>km/h</small>
+        </span>
+
+        <span className="fleet-cell fleet-value-cell" data-label="Position">
+          <strong>{formatNumber(truck.xM, 1)}, {formatNumber(truck.yM, 1)}</strong>
+          <small>local metres</small>
+        </span>
+
+        <span className="fleet-cell fleet-value-cell" data-label="Connection">
+          <strong className={`fleet-link fleet-link-${truck.linkStatus?.toLowerCase() ?? "direct"}`}>
+            {linkLabel}
+          </strong>
+          <small>{formatTelemetryAge(truck.ageMs)}</small>
+        </span>
+
+        <span className="fleet-row-chevron" aria-hidden="true">›</span>
+      </button>
     </article>
   );
 }

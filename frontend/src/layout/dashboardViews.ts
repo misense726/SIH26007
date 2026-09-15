@@ -1,16 +1,19 @@
 export type DashboardView = "DRIVER" | "SPATIAL" | "SUPERVISOR" | "SETTINGS";
+export type DashboardWorkspace = "DRIVER" | "SUPERVISOR";
 
 export interface DashboardViewOption {
   value: DashboardView;
   label: string;
   hash: string;
+  workspace: DashboardWorkspace;
+  description: string;
 }
 
 export const dashboardViews: DashboardViewOption[] = [
-  { value: "DRIVER", label: "Driver", hash: "#driver" },
-  { value: "SPATIAL", label: "Spatial", hash: "#spatial" },
-  { value: "SUPERVISOR", label: "Fleet", hash: "#fleet" },
-  { value: "SETTINGS", label: "Calibration", hash: "#calibration" },
+  { value: "DRIVER", label: "Awareness", hash: "#driver", workspace: "DRIVER", description: "Camera and corridor" },
+  { value: "SPATIAL", label: "Spatial", hash: "#spatial", workspace: "DRIVER", description: "Range field" },
+  { value: "SETTINGS", label: "Calibration", hash: "#calibration", workspace: "DRIVER", description: "Sensor setup" },
+  { value: "SUPERVISOR", label: "Supervisor", hash: "#fleet", workspace: "SUPERVISOR", description: "Fleet command" },
 ];
 
 const viewByHash = new Map(dashboardViews.map((view) => [view.hash, view.value]));
@@ -24,5 +27,5 @@ export function dashboardViewHash(view: DashboardView): string {
 }
 
 export function dashboardViewLabel(view: DashboardView): string {
-  return dashboardViews.find((candidate) => candidate.value === view)?.label ?? "Driver";
+  return dashboardViews.find((candidate) => candidate.value === view)?.label ?? "Awareness";
 }

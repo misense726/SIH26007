@@ -114,45 +114,43 @@ describe("V2XPanel", () => {
 
   it("renders offline banner when v2x telemetry is undefined", () => {
     const markup = renderToStaticMarkup(<V2XPanel />);
-    expect(markup).toContain("SIMULATED V2X");
+    expect(markup).toContain("NETWORK SIMULATION");
     expect(markup).toContain("Simulation data unavailable.");
   });
 
   it("renders standby message when v2x is disabled", () => {
     const disabledState: V2XState = { ...mockV2XState, enabled: false };
     const markup = renderToStaticMarkup(<V2XPanel v2x={disabledState} />);
-    expect(markup).toContain("SIMULATED V2X");
-    expect(markup).toContain("V2X simulation paused.");
+    expect(markup).toContain("NETWORK SIMULATION");
+    expect(markup).toContain("Coordination network paused.");
   });
 
-  it("labels simulated counts and peers without radio claims", () => {
+  it("shows coordination health without repeating fleet motion and safety data", () => {
     const markup = renderToStaticMarkup(<V2XPanel v2x={mockV2XState} />);
     expect(markup).toContain("Sent: <strong>42</strong>");
     expect(markup).toContain("Received: <strong>88</strong>");
-    expect(markup).toContain("SIMULATED · EXCELLENT");
-    expect(markup).toContain('id="v2x-tab-peers"');
-    expect(markup).toContain('aria-selected="true" aria-controls="v2x-tabpanel-peers" tabindex="0"');
+    expect(markup).toContain('id="v2x-tab-links"');
+    expect(markup).toContain('aria-selected="true" aria-controls="v2x-tabpanel-links" tabindex="0"');
     expect(markup).toContain('aria-selected="false" aria-controls="v2x-tabpanel-advisories" tabindex="-1"');
     expect(markup).not.toContain("GHz DSRC");
     expect(markup).not.toContain("dBm");
     expect(markup).toContain("DUMPER_02");
     expect(markup).toContain("29.1 m");
-    expect(markup).toContain("14.4 km/h");
-    expect(markup).toContain("92°");
-    expect(markup).toContain("SAFE");
-
+    expect(markup).toContain("EXCELLENT");
     expect(markup).toContain("HAULER_09");
-    expect(markup).toContain("SIMULATED · DEGRADED");
-    expect(markup).toContain("EMERGENCY STOP");
+    expect(markup).toContain("DEGRADED");
+    expect(markup).not.toContain("14.4 km/h");
+    expect(markup).not.toContain("92°");
+    expect(markup).not.toContain("EMERGENCY STOP");
   });
 
   it("renders empty peer list when no peers are in range", () => {
     const emptyPeersState: V2XState = { ...mockV2XState, active_peers: [] };
     const markup = renderToStaticMarkup(<V2XPanel v2x={emptyPeersState} />);
-    expect(markup).toContain("No simulated peers.");
+    expect(markup).toContain("No simulated coordination links.");
   });
 
-  it("renders in supervisor dashboard cleanly", () => {
+  it("renders an exception-first supervisor overview", () => {
     const world = {
       ...defaultWorldState,
       v2x: mockV2XState,
@@ -170,11 +168,13 @@ describe("V2XPanel", () => {
     const markup = renderToStaticMarkup(
       <SupervisorDashboard world={world} connection="CONNECTED" />,
     );
-    expect(markup).toContain("V2X simulation");
+    expect(markup).toContain("Fleet command");
+    expect(markup).toContain("What needs action");
     expect(markup).toContain("DUMPER_02");
-    expect(markup).toContain("HAULER_09: EMERGENCY STOP");
-    expect(markup).toContain("DUMPER_02: Low visibility");
-    expect(markup).toContain('alert-count alert-count-active">2</span>');
+    expect(markup).toContain("HAULER_09");
+    expect(markup).toContain("EMERGENCY STOP");
+    expect(markup).toContain("Low visibility");
+    expect(markup).not.toContain("Coordination network");
   });
 
   it("honors the designated primary vehicle and does not fabricate one", () => {
@@ -189,7 +189,8 @@ describe("V2XPanel", () => {
     const designatedMarkup = renderToStaticMarkup(
       <SupervisorDashboard world={designatedWorld} connection="CONNECTED" />,
     );
-    expect(designatedMarkup).toContain("DUMPER_02 [PRIMARY]");
+    expect(designatedMarkup).toContain("Focused on DUMPER_02");
+    expect(designatedMarkup).toContain("Primary vehicle");
 
     const emptyMarkup = renderToStaticMarkup(
       <SupervisorDashboard
