@@ -1,7 +1,8 @@
 import type { ReactNode } from "react";
 import { ConnectionPill, ModePill } from "../components/StatusPill";
 import { ThemeToggle } from "../components/ThemeToggle";
-import type { ConnectionState } from "../state/useTelemetry";
+import type { ConnectionState, DemoStatus } from "../state/useTelemetry";
+import { STATIC_DEMO } from "../simulation/demoMode";
 import type { DataMode } from "../types";
 import type { Theme } from "../theme";
 import { dashboardViews, type DashboardView, type DashboardWorkspace } from "./dashboardViews";
@@ -13,6 +14,9 @@ interface AppShellProps {
   onThemeChange: (theme: Theme) => void;
   connection: ConnectionState;
   mode: DataMode | null;
+  demoStatus?: DemoStatus;
+  demoPaused?: boolean;
+  onDemoPause?: () => void;
   children: ReactNode;
 }
 
@@ -95,6 +99,9 @@ export function AppShell({
   onThemeChange,
   connection,
   mode,
+  demoStatus,
+  demoPaused,
+  onDemoPause,
   children,
 }: AppShellProps) {
   const supervisorWorkspace = view === "SUPERVISOR";
@@ -136,8 +143,21 @@ export function AppShell({
         </nav>
 
         <div className="status-row" aria-label="System status">
-          <ConnectionPill state={connection} />
-          {connection === "CONNECTED" && mode && <ModePill mode={mode} />}
+          {STATIC_DEMO ? (
+            <>
+              <span className="mode-pill mode-simulated" title="Backend-generated simulation recording. No live hardware connection.">
+                SIMULATED · {demoStatus}
+              </span>
+              <button type="button" className="demo-pause" onClick={onDemoPause} aria-pressed={demoPaused}>
+                {demoPaused ? "Resume demo" : "Pause demo"}
+              </button>
+            </>
+          ) : (
+            <>
+              <ConnectionPill state={connection} />
+              {connection === "CONNECTED" && mode && <ModePill mode={mode} />}
+            </>
+          )}
           <ThemeToggle theme={theme} onChange={onThemeChange} />
         </div>
       </header>

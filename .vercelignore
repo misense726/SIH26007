@@ -19,7 +19,8 @@ docs
 artifacts
 recordings
 runtime
-scripts
+api
+frontend/public/demo
 
 compose.yaml
 .dockerignore

@@ -8,6 +8,7 @@ htmlcov/
 
 node_modules/
 frontend/dist/
+frontend/public/demo/
 frontend/.vite/
 .pio/
 

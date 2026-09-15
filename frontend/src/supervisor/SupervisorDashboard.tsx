@@ -19,14 +19,13 @@ interface SupervisorDashboardProps {
   connection: ConnectionState;
 }
 
-type SupervisorSection = "overview" | "fleet" | "efficiency" | "alerts" | "network";
+type SupervisorSection = "fleet" | "efficiency" | "alerts" | "network";
 
 const SECTION_LABELS: Array<{
   value: SupervisorSection;
   label: string;
   description: string;
 }> = [
-  { value: "overview", label: "Overview", description: "Operational picture" },
   { value: "fleet", label: "Fleet", description: "Vehicles and telemetry" },
   { value: "efficiency", label: "Efficiency", description: "Haul estimates" },
   { value: "alerts", label: "Alerts", description: "Issues and history" },
@@ -34,9 +33,6 @@ const SECTION_LABELS: Array<{
 ];
 
 function SectionIcon({ section }: { section: SupervisorSection }) {
-  if (section === "overview") {
-    return <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1.5" /><rect x="14" y="3" width="7" height="7" rx="1.5" /><rect x="3" y="14" width="18" height="7" rx="1.5" /></svg>;
-  }
   if (section === "fleet") {
     return <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 16V9l3-3h10l3 3v7" /><path d="M6 13h12M7 18h2M15 18h2M7 6l1-3h8l1 3" /></svg>;
   }
@@ -186,9 +182,7 @@ function SelectedVehiclePanel({
 
 export function SupervisorDashboard({ world, connection }: SupervisorDashboardProps) {
   const model = useMemo(() => createSupervisorViewModel(world), [world]);
-  const hasHaulRoute = world.mode === "SIMULATED" && Boolean(world.haul_route);
-  const [activeSection, setActiveSection] = useState<SupervisorSection>(hasHaulRoute ? "fleet" : "overview");
-  useEffect(() => { if (hasHaulRoute) setActiveSection("fleet"); }, [hasHaulRoute]);
+  const [activeSection, setActiveSection] = useState<SupervisorSection>("fleet");
   const [selectedTruckId, setSelectedTruckId] = useState<string | null>(world.primary_vehicle_id);
 
   useEffect(() => {
@@ -227,8 +221,6 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
 
   const selectedVehicle = model.vehicles.find((vehicle) => vehicle.vehicleId === selectedTruckId) ?? null;
   const positionedVehicles = model.vehicles.filter((vehicle) => vehicle.hasPosition);
-  const criticalIssues = model.issues.filter((issue) => issue.severity === "CRITICAL").length;
-  const attentionCount = model.counts.attention + model.counts.critical + model.counts.lost + model.counts.unknown;
 
   const openVehicle = (vehicleId: string) => {
     setSelectedTruckId(vehicleId);
@@ -269,97 +261,6 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
       </nav>
 
       <VehicleSensors world={world} />
-
-      {activeSection === "overview" && (
-        <div className="supervisor-section supervisor-overview-section">
-          <div className="supervisor-kpi-grid" aria-label="Fleet summary">
-            <article className="supervisor-kpi kpi-online">
-              <span className="kpi-label">Fleet available</span>
-              <strong>{model.counts.online}<small> / {model.counts.total}</small></strong>
-              <p><i aria-hidden="true" />{model.counts.online === model.counts.total ? "All known vehicles reporting" : `${model.counts.total - model.counts.online} awaiting telemetry`}</p>
-            </article>
-            <article className={`supervisor-kpi ${attentionCount > 0 ? "kpi-attention" : "kpi-clear"}`}>
-              <span className="kpi-label">Needs attention</span>
-              <strong>{attentionCount}</strong>
-              <p><i aria-hidden="true" />{attentionCount === 0 ? "No fleet exceptions" : "Vehicles outside nominal state"}</p>
-            </article>
-            <article className={`supervisor-kpi ${criticalIssues > 0 ? "kpi-critical" : "kpi-clear"}`}>
-              <span className="kpi-label">Critical issues</span>
-              <strong>{criticalIssues}</strong>
-              <p><i aria-hidden="true" />{criticalIssues === 0 ? "No critical exceptions" : "Immediate review required"}</p>
-            </article>
-            <article className={`supervisor-kpi visibility-${model.primary?.visibilityState.toLowerCase().replaceAll("_", "-") ?? "unknown"}`}>
-              <span className="kpi-label">Primary visibility</span>
-              <strong>{model.primary ? `${model.primary.visibilityPercent}%` : "--"}</strong>
-              <p><i aria-hidden="true" />{model.primary?.visibilityState.replaceAll("_", " ") ?? "Unavailable"}</p>
-            </article>
-          </div>
-
-          <div className="overview-command-grid">
-            <article className="supervisor-panel supervisor-map-panel">
-              <header className="supervisor-panel-heading">
-                <div><p className="eyebrow">Operational map</p><h3>{model.mapName}</h3></div>
-                <button type="button" className="panel-text-action" onClick={() => setActiveSection("fleet")}>Open fleet view</button>
-              </header>
-              <TwinMap
-                mode={world.mode}
-                haul={world.haul_route}
-                vehicles={positionedVehicles}
-                features={world.reference_map?.features ?? []}
-                mapName={model.mapName}
-                selectedTruckId={selectedTruckId}
-                onSelectTruck={setSelectedTruckId}
-              />
-            </article>
-
-            <aside className="supervisor-panel exception-queue-panel">
-              <header className="supervisor-panel-heading">
-                <div><p className="eyebrow">Exception queue</p><h3>What needs action</h3></div>
-                <span className={`exception-count ${model.issues.length > 0 ? "has-issues" : ""}`}>{model.issues.length}</span>
-              </header>
-              {model.issues.length === 0 ? (
-                <div className="supervisor-empty-state compact"><span aria-hidden="true">✓</span><strong>No active exceptions</strong><p>All reported fleet states are nominal.</p></div>
-              ) : (
-                <div className="supervisor-issue-list">
-                  {model.issues.slice(0, 5).map((issue) => <IssueItem key={issue.id} issue={issue} onOpenVehicle={openVehicle} />)}
-                </div>
-              )}
-              {model.issues.length > 5 && <button type="button" className="panel-footer-action" onClick={() => setActiveSection("alerts")}>View all {model.issues.length} issues</button>}
-            </aside>
-          </div>
-
-          <div className="overview-secondary-grid">
-            <article className="supervisor-panel primary-summary-panel">
-              <header className="supervisor-panel-heading">
-                <div><p className="eyebrow">Primary vehicle</p><h3>{model.primary?.vehicle.vehicleId ?? "Unavailable"}</h3></div>
-                <button type="button" className="panel-text-action" onClick={() => model.primary && openVehicle(model.primary.vehicle.vehicleId)}>Inspect telemetry</button>
-              </header>
-              {model.primary ? (
-                <div className="primary-summary-grid">
-                  <div><span>Nearest obstacle</span><strong>{model.primary.nearestObstacleM === null ? "--" : `${formatNumber(model.primary.nearestObstacleM, 2)} m`}</strong></div>
-                  <div><span>Safe corridor</span><strong>{model.primary.corridorState}</strong><small>{Math.round(model.primary.corridorConfidence * 100)}% confidence</small></div>
-                  <div><span>Range sensors</span><strong>{model.primary.sensorSummary.healthy}/{model.primary.sensorSummary.total}</strong><small>healthy</small></div>
-                  <div><span>Relative altitude</span><strong>{formatNumber(model.primary.relativeAltitudeM, 2)} m</strong><small>approximate</small></div>
-                </div>
-              ) : <div className="supervisor-empty-state compact"><strong>Primary vehicle missing</strong><p>The designated vehicle is not present in the current snapshot.</p></div>}
-            </article>
-
-            <article className="supervisor-panel recent-history-panel">
-              <header className="supervisor-panel-heading">
-                <div><p className="eyebrow">Event history</p><h3>Most recent</h3></div>
-                <button type="button" className="panel-text-action" onClick={() => setActiveSection("alerts")}>Open history</button>
-              </header>
-              {model.history.length === 0 ? (
-                <div className="supervisor-empty-state compact"><span aria-hidden="true">✓</span><strong>No recorded events</strong><p>Historical safety events will appear here.</p></div>
-              ) : (
-                <div className="supervisor-history-list compact-history-list">
-                  {model.history.slice(0, 3).map((event) => <HistoryItem key={event.event_id} event={event} />)}
-                </div>
-              )}
-            </article>
-          </div>
-        </div>
-      )}
 
       {activeSection === "fleet" && (
         <div className="supervisor-section supervisor-fleet-section">
@@ -436,7 +337,9 @@ export function SupervisorDashboard({ world, connection }: SupervisorDashboardPr
         </div>
       )}
 
-      {activeSection === "efficiency" && <HaulEfficiencyPanel />}
+      {activeSection === "efficiency" && (
+        <HaulEfficiencyPanel vehicles={model.vehicles} world={world} />
+      )}
 
       {activeSection === "network" && (
         <div className="supervisor-section">

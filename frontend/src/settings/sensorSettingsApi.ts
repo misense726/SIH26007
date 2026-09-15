@@ -1,4 +1,5 @@
 import type { RangeReading } from "../types";
+import { STATIC_DEMO } from "../simulation/demoMode";
 
 export const SENSOR_IDS = [
   "front_scanner",
@@ -119,7 +120,7 @@ async function readJson<T>(response: Response): Promise<T> {
 export async function loadSensorSettings(
   request: RequestClient = fetch,
 ): Promise<SensorSettingsState> {
-  return readJson<SensorSettingsState>(await request("/api/sensor-settings"));
+  return readJson<SensorSettingsState>(await request(STATIC_DEMO ? "/demo/sensor-settings.json" : "/api/sensor-settings"));
 }
 
 export async function saveSensorSetting(

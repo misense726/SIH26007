@@ -6,13 +6,14 @@ import { DashboardViewRouter } from "./layout/DashboardViewRouter";
 import { useDashboardNavigation } from "./layout/useDashboardNavigation";
 import { DashboardErrorBoundary } from "./components/DashboardErrorBoundary";
 import { useTelemetry } from "./state/useTelemetry";
+import { STATIC_DEMO } from "./simulation/demoMode";
 import { applyTheme, readInitialTheme, saveTheme, type Theme } from "./theme";
 import "./styles.css";
 import "./layout/appShell.css";
 import "./supervisor/supervisor.css";
 
 export default function App() {
-  const { world, connection } = useTelemetry();
+  const { world, connection, demoStatus, paused, togglePaused } = useTelemetry();
   const sensorSettings = useSensorSettings();
   const { view, navigate } = useDashboardNavigation();
   const [awarenessMode, setAwarenessMode] = useState<AwarenessMode>("AUTO");
@@ -42,9 +43,19 @@ export default function App() {
       onThemeChange={changeTheme}
       connection={connection}
       mode={world.mode}
+      demoStatus={demoStatus}
+      demoPaused={paused}
+      onDemoPause={togglePaused}
     >
       <DashboardErrorBoundary resetKey={view}>
-        <DashboardViewRouter
+        {STATIC_DEMO && world.sequence === 0 ? (
+          <section className="demo-loading" role="status">
+            <h2>{demoStatus === "Buffering demo" ? "Demo download interrupted" : "Loading the mine simulation"}</h2>
+            <p>{demoStatus === "Buffering demo"
+              ? "The download will retry automatically. No live hardware connection is needed."
+              : "Loading the first part of the recorded simulation. Playback pauses when this tab is hidden."}</p>
+          </section>
+        ) : <DashboardViewRouter
           view={view}
           world={world}
           connection={connection}
@@ -56,7 +67,7 @@ export default function App() {
           onSensorChange={sensorSettings.updateSensor}
           onSensorSave={sensorSettings.saveSensor}
           onZeroImu={sensorSettings.zeroImuNow}
-        />
+        />}
       </DashboardErrorBoundary>
     </AppShell>
   );

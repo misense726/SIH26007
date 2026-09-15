@@ -1,5 +1,6 @@
 import { useState, type KeyboardEvent } from "react";
 import { formatNumber } from "../state/selectors";
+import { STATIC_DEMO } from "../simulation/demoMode";
 import type { V2IAdvisoryType, V2XState } from "../types";
 
 interface V2XPanelProps {
@@ -264,11 +265,13 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
             )}
 
             <div className="v2x-quick-actions">
-              <span className="v2x-actions-label">Send advisory</span>
+              <span className="v2x-actions-label">
+                {STATIC_DEMO ? "Recorded demo. Sending advisories requires the local backend." : "Send advisory"}
+              </span>
               <button
                 type="button"
                 className="v2x-action-btn fog-btn"
-                disabled={isBroadcasting}
+                disabled={STATIC_DEMO || isBroadcasting}
                 onClick={() =>
                   handleBroadcast(
                     "FOG_WARNING",
@@ -283,7 +286,7 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
               <button
                 type="button"
                 className="v2x-action-btn hazard-btn"
-                disabled={isBroadcasting}
+                disabled={STATIC_DEMO || isBroadcasting}
                 onClick={() =>
                   handleBroadcast(
                     "HAZARD_ZONE",
@@ -297,7 +300,7 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
               <button
                 type="button"
                 className="v2x-action-btn priority-btn"
-                disabled={isBroadcasting}
+                disabled={STATIC_DEMO || isBroadcasting}
                 onClick={() =>
                   handleBroadcast(
                     "PASSAGE_PRIORITY",
@@ -311,7 +314,7 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
               <button
                 type="button"
                 className="v2x-action-btn maintenance-btn"
-                disabled={isBroadcasting}
+                disabled={STATIC_DEMO || isBroadcasting}
                 onClick={() =>
                   handleBroadcast(
                     "ROAD_MAINTENANCE",
@@ -326,7 +329,7 @@ export function V2XPanel({ v2x }: V2XPanelProps) {
               <button
                 type="button"
                 className="v2x-action-btn restriction-btn"
-                disabled={isBroadcasting}
+                disabled={STATIC_DEMO || isBroadcasting}
                 onClick={() =>
                   handleBroadcast(
                     "SPEED_RESTRICTION",

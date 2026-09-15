@@ -1,5 +1,11 @@
 import { useId, useMemo } from "react";
-import { buildTruckMesh, surfaceNormal } from "./truckMesh";
+import {
+  buildTruckMesh,
+  surfaceNormal,
+  DUMP_BED_PARTS,
+  TRUCK_HINGE_Y_M,
+  TRUCK_HINGE_Z_M,
+} from "./truckMesh";
 import type { RangeReading } from "../types";
 import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
 import {
@@ -26,6 +32,8 @@ interface Vehicle3DTruckProps {
   activeAlertSensorId?: string | null;
   imuOrientation?: ImuOrientation;
   steerAngleDeg?: number;
+  dumpAngleDeg?: number;
+  oreLevel?: number;
   cameraConfig?: CameraViewConfig;
   sceneOffset?: VehiclePoint3D;
 }
@@ -46,6 +54,8 @@ export function Vehicle3DTruck({
   activeAlertSensorId,
   imuOrientation = { pitch_deg: 0, roll_deg: 0, yaw_deg: 0, suspension_z_m: 0 },
   steerAngleDeg = 0,
+  dumpAngleDeg = 0,
+  oreLevel = 1.0,
   cameraConfig = {},
   sceneOffset = { x_m: 0, y_m: 0, z_m: 0 },
 }: Vehicle3DTruckProps) {
@@ -108,63 +118,159 @@ export function Vehicle3DTruck({
       })
       .join(" ");
 
+  const tiltDumpPoint = (p: VehiclePoint3D): VehiclePoint3D => {
+    if (!dumpAngleDeg) return p;
+    const rad = (dumpAngleDeg * Math.PI) / 180;
+    const cos = Math.cos(rad);
+    const sin = Math.sin(rad);
+    const dy = p.y_m - TRUCK_HINGE_Y_M;
+    const dz = p.z_m - TRUCK_HINGE_Z_M;
+    return {
+      x_m: p.x_m,
+      y_m: TRUCK_HINGE_Y_M + (dy * cos - dz * sin),
+      z_m: TRUCK_HINGE_Z_M + (dy * sin + dz * cos),
+    };
+  };
+
   const mesh = useMemo(() => buildTruckMesh(steerAngleDeg), [steerAngleDeg]);
-  const modelFaces = useMemo(
-    () =>
-      mesh
-        .flatMap((surface) => {
-          const points = surface.points.map((p) =>
-            offset(applyImuTransform(p, imuOrientation)),
-          );
-          if (
-            cameraDepthForVehiclePoint(surfaceNormal(points), cameraConfig) >=
-            -0.00001
-          )
-            return [];
-          const project = (vertices: VehiclePoint3D[]) =>
-            vertices
-              .map((p) => {
-                const screen = projectVehiclePointWithCamera(p, cameraConfig);
-                return `${screen.x.toFixed(2)},${screen.y.toFixed(2)}`;
-              })
-              .join(" ");
-          return [
-            {
-              ...surface,
-              depth:
-                points.reduce(
-                  (sum, p) => sum + cameraDepthForVehiclePoint(p, cameraConfig),
-                  0,
-                ) / points.length,
-              polygon: project(points),
-              details: surface.details.map((d) => ({
-                fill: d.fill,
-                polygon: project(
-                  d.points.map((p) =>
-                    offset(applyImuTransform(p, imuOrientation)),
-                  ),
-                ),
-              })),
-            },
-          ];
-        })
-        .sort((a, b) => b.depth - a.depth),
-    [
-      mesh,
-      imuOrientation.pitch_deg,
-      imuOrientation.roll_deg,
-      imuOrientation.yaw_deg,
-      imuOrientation.suspension_z_m,
-      cameraConfig.orbitYawDeg,
-      cameraConfig.cameraPitchDeg,
-      cameraConfig.zoomScale,
-      cameraConfig.panOffsetX,
-      cameraConfig.panOffsetY,
-      sceneOffset.x_m,
-      sceneOffset.y_m,
-      sceneOffset.z_m,
-    ],
-  );
+  const modelFaces = useMemo(() => {
+    const allSurfaces = [...mesh];
+    if (dumpAngleDeg > 2) {
+      for (const side of [-1, 1]) {
+        const x = 0.28 * side;
+        const base: VehiclePoint3D = { x_m: x, y_m: 0.15, z_m: 0.42 };
+        const top = tiltDumpPoint({ x_m: x, y_m: 0.15, z_m: 0.65 });
+        const w = 0.04;
+        allSurfaces.push({
+          key: `hydraulic-ram-${side}`,
+          part: "truck-hydraulic-ram",
+          points: [
+            { x_m: x - w, y_m: base.y_m, z_m: base.z_m },
+            { x_m: x + w, y_m: base.y_m, z_m: base.z_m },
+            { x_m: x + w, y_m: top.y_m, z_m: top.z_m },
+            { x_m: x - w, y_m: top.y_m, z_m: top.z_m },
+          ],
+          fill: "#a8b5ba",
+          details: [],
+        });
+      }
+    }
+
+    return allSurfaces
+      .flatMap((surface) => {
+        if (surface.part === "truck-ore-cargo" && oreLevel <= 0.04) {
+          return [];
+        }
+        const rawPoints = surface.points.map((p) => {
+          if (surface.part.startsWith("truck-hydraulic-ram")) {
+            return p;
+          }
+          if (DUMP_BED_PARTS.has(surface.part)) {
+            if (surface.part === "truck-ore-cargo" && dumpAngleDeg > 18) {
+              const slide = Math.min(0.85, (dumpAngleDeg - 18) * 0.022);
+              return tiltDumpPoint({
+                x_m: p.x_m,
+                y_m: p.y_m - slide,
+                z_m: p.z_m * Math.max(0.1, oreLevel),
+              });
+            }
+            return tiltDumpPoint(p);
+          }
+          return p;
+        });
+
+        const points = rawPoints.map((p) =>
+          offset(applyImuTransform(p, imuOrientation)),
+        );
+        if (
+          cameraDepthForVehiclePoint(surfaceNormal(points), cameraConfig) >=
+          -0.00001
+        )
+          return [];
+        const project = (vertices: VehiclePoint3D[]) =>
+          vertices
+            .map((p) => {
+              const screen = projectVehiclePointWithCamera(p, cameraConfig);
+              return `${screen.x.toFixed(2)},${screen.y.toFixed(2)}`;
+            })
+            .join(" ");
+        return [
+          {
+            ...surface,
+            depth:
+              points.reduce(
+                (sum, p) => sum + cameraDepthForVehiclePoint(p, cameraConfig),
+                0,
+              ) / points.length,
+            polygon: project(points),
+            details: surface.details.map((d) => ({
+              fill: d.fill,
+              polygon: project(
+                d.points
+                  .map((p) =>
+                    DUMP_BED_PARTS.has(surface.part) ? tiltDumpPoint(p) : p,
+                  )
+                  .map((p) => offset(applyImuTransform(p, imuOrientation))),
+              ),
+            })),
+          },
+        ];
+      })
+      .sort((a, b) => b.depth - a.depth);
+  }, [
+    mesh,
+    dumpAngleDeg,
+    oreLevel,
+    imuOrientation.pitch_deg,
+    imuOrientation.roll_deg,
+    imuOrientation.yaw_deg,
+    imuOrientation.suspension_z_m,
+    cameraConfig.orbitYawDeg,
+    cameraConfig.cameraPitchDeg,
+    cameraConfig.zoomScale,
+    cameraConfig.panOffsetX,
+    cameraConfig.panOffsetY,
+    sceneOffset.x_m,
+    sceneOffset.y_m,
+    sceneOffset.z_m,
+  ]);
+
+  // Range updates do not change the body mesh. Reuse its element tree as well
+  // as its projected geometry, while keeping the alert beacon responsive.
+  const modelBody = useMemo(() => (
+    <g
+      className="truck-model-surfaces"
+      strokeLinejoin="round"
+      aria-label="Mining dumper body"
+    >
+      {modelFaces.map((surface) => (
+        <g
+          key={surface.key}
+          data-part={surface.part}
+          className={surface.part.startsWith("wheel-")
+            ? "truck-wheels truck-tire-assembly"
+            : surface.part}
+        >
+          <polygon
+            className={surface.part.startsWith("wheel-")
+              ? "truck-tire-face"
+              : surface.part === "truck-beacon-lens" && hasAnyAlert
+                ? "truck-body-face beacon-pulse-alert"
+                : "truck-body-face"}
+            points={surface.polygon}
+            fill={surface.part === "truck-beacon-lens" && hasAnyAlert
+              ? "#ef4444" : surface.fill}
+            stroke={surface.part === "truck-beacon-lens" && hasAnyAlert
+              ? "#ef4444" : surface.fill}
+            strokeWidth="0.4"
+          />
+          {surface.details.map((detail, index) => (
+            <polygon key={index} points={detail.polygon} fill={detail.fill} />
+          ))}
+        </g>
+      ))}
+    </g>
+  ), [modelFaces, hasAnyAlert]);
 
   // Ground Contact & Shadow Coordinates (Grounded on z = 0)
   const shadowPoints: VehiclePoint3D[] = [
@@ -313,48 +419,7 @@ export function Vehicle3DTruck({
         </g>
       )}
 
-      <g
-        className="truck-model-surfaces"
-        strokeLinejoin="round"
-        aria-label="Mining dumper body"
-      >
-        {modelFaces.map((surface) => (
-          <g
-            key={surface.key}
-            data-part={surface.part}
-            className={
-              surface.part.startsWith("wheel-")
-                ? "truck-wheels truck-tire-assembly"
-                : surface.part
-            }
-          >
-            <polygon
-              className={
-                surface.part.startsWith("wheel-")
-                  ? "truck-tire-face"
-                  : surface.part === "truck-beacon-lens" && hasAnyAlert
-                    ? "truck-body-face beacon-pulse-alert"
-                    : "truck-body-face"
-              }
-              points={surface.polygon}
-              fill={
-                surface.part === "truck-beacon-lens" && hasAnyAlert
-                  ? "#ef4444"
-                  : surface.fill
-              }
-              stroke={
-                surface.part === "truck-beacon-lens" && hasAnyAlert
-                  ? "#ef4444"
-                  : surface.fill
-              }
-              strokeWidth="0.4"
-            />
-            {surface.details.map((detail, index) => (
-              <polygon key={index} points={detail.polygon} fill={detail.fill} />
-            ))}
-          </g>
-        ))}
-      </g>
+      {modelBody}
 
       {/* Mounted Sensor Pods */}
       {showSensorMounts && (

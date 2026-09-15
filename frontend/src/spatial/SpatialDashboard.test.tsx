@@ -5,6 +5,42 @@ import { defaultWorldState } from "../state/defaultState";
 import { SpatialDashboard } from "./SpatialDashboard";
 
 describe("SpatialDashboard scanner motion and proximity", () => {
+  it("retains all three point layers and tooltips without per-layer SVG groups", () => {
+    const vehicle = defaultWorldState.vehicles[0];
+    const world = {
+      ...defaultWorldState,
+      generated_at_ms: 1_000,
+      spatial_points: Array.from({ length: 240 }, (_, index) => ({
+        timestamp_ms: 1_000,
+        source_sensor_id: "front_scanner" as const,
+        x_m: vehicle.x_m,
+        y_m: vehicle.y_m + 0.85,
+        height_hint_m: 0.3,
+        quality: 0.5 + index / 480,
+      })),
+      sensor_health: [{
+        sensor_id: "front_scanner",
+        status: "HEALTHY" as const,
+        last_update_ms: 1_000,
+        confidence: 1,
+        detail: null,
+      }],
+    };
+    const markup = renderToStaticMarkup(
+      <SpatialDashboard world={world} connection="CONNECTED"
+        sensorSettings={defaultSensorSettings().sensors} />,
+    );
+    const cloud = markup.split('<g class="spatial-point-cloud"')[1].split("</g>")[0];
+    expect(markup).toContain("220 mapped returns");
+    expect(cloud.match(/class="spatial-dot /g)).toHaveLength(660);
+    expect(cloud.match(/<title>/g)).toHaveLength(220);
+    expect(cloud).not.toContain("<g");
+    // The same newest 220 eligible points remain, in chronological order.
+    expect(cloud).not.toContain("Quality: 50%");
+    expect(cloud).toContain("Quality: 54%");
+    expect(cloud).toContain("Quality: 100%");
+  });
+
   it("does not fabricate a truck when the primary vehicle is missing", () => {
     const markup = renderToStaticMarkup(
       <SpatialDashboard

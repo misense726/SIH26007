@@ -35,27 +35,27 @@ export const EMPTY_MAP_TILE =
   "data:image/gif;base64,R0lGODlhAQABAAD/ACwAAAAAAQABAAACADs=";
 
 /**
- * The local Cartesian origin is tied to the V699+X9 Chennai site. The anchor is
- * offset slightly west so the canonical route starts on the nearest mapped
- * campus road while remaining inside the requested site area.
+ * The local Cartesian origin is tied to the NMDC Bailadila iron ore mining
+ * complex in Dantewada district, Chhattisgarh. The anchor sits on the haul
+ * road between Deposit-14 and the Kirandul rail loading point.
  */
 export const DEFAULT_CAMPUS_CONFIG: CampusMapConfig = {
-  campusName: "FogSen Chennai route",
-  locationLabel: "V699+X9, Chennai, Tamil Nadu",
-  locationCode: "V699+X9",
+  campusName: "NMDC Bailadila iron ore mines",
+  locationLabel: "Bailadila, Dantewada, Chhattisgarh",
+  locationCode: "Bailadila",
   siteCenter: {
-    lat: 12.86965,
-    lng: 80.219921875,
+    lat: 18.6731,
+    lng: 81.2481,
   },
   anchor: {
-    lat: 12.8696442659944,
-    lng: 80.2197883739638,
-    altitude_m: 18.0,
+    lat: 18.6731,
+    lng: 81.2481,
+    altitude_m: 920.0,
   },
-  defaultZoom: 17,
-  minimapZoom: 17,
-  extendedZoom: 17,
-  minZoom: 15,
+  defaultZoom: 15,
+  minimapZoom: 15,
+  extendedZoom: 14,
+  minZoom: 12,
   maxZoom: 18,
   tiles: ROAD_MAP_TILES,
 };

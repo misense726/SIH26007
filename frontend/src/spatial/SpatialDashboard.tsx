@@ -1,4 +1,5 @@
 import {
+  Fragment,
   useEffect,
   useMemo,
   useRef,
@@ -62,16 +63,19 @@ function displayPoints(
   const settingsById = new Map<string, SensorDisplaySetting>(
     sensors.map((sensor) => [sensor.sensor_id, sensor]),
   );
-  return points
-    .flatMap((spatialPoint) => {
-      const source = settingsById.get(spatialPoint.source_sensor_id);
-      if (!source) return [];
-      const point = worldPointToVehicle(spatialPoint, vehicle);
-      const distanceM = pointDistanceFromSensor(point, source);
-      if (distanceM > source.visual_range_m) return [];
-      return [{ source, point, spatialPoint, distanceM }];
-    })
-    .slice(-220);
+  // Keep the same last 220 eligible returns, without transforming older points
+  // that cannot appear in the existing display budget.
+  const result: DisplayPoint[] = [];
+  for (let index = points.length - 1; index >= 0 && result.length < 220; index--) {
+    const spatialPoint = points[index];
+    const source = settingsById.get(spatialPoint.source_sensor_id);
+    if (!source) continue;
+    const point = worldPointToVehicle(spatialPoint, vehicle);
+    const distanceM = pointDistanceFromSensor(point, source);
+    if (distanceM > source.visual_range_m) continue;
+    result.push({ source, point, spatialPoint, distanceM });
+  }
+  return result.reverse();
 }
 
 function groundCirclePath(
@@ -228,7 +232,7 @@ function sensorClass(sensorId: string): string {
   return `sensor-${sensorId.replaceAll("_", "-")}`;
 }
 
-const DEFAULT_TRUCK_ORBIT_DEG = 145;
+const DEFAULT_TRUCK_ORBIT_DEG = 0;
 
 export function SpatialDashboard({
   world,
@@ -246,6 +250,22 @@ export function SpatialDashboard({
   const [cameraOrbit, setCameraOrbit] = useState(DEFAULT_TRUCK_ORBIT_DEG);
   const [cameraPitch, setCameraPitch] = useState(DEFAULT_CAMERA_PITCH_DEG);
   const [isCameraDragging, setIsCameraDragging] = useState(false);
+  const isCrusherDumping =
+    world.mode === "SIMULATED" &&
+    Boolean(
+      (world.haul_route?.phase === "ARRIVED" &&
+        world.haul_route.destination === "Dump point") ||
+        world.haul_route?.next_instruction?.toLowerCase().includes("crusher"),
+    );
+
+  const isReturningEmpty =
+    world.mode === "SIMULATED" &&
+    world.haul_route?.destination === "Mine loading bay";
+
+  const [dumpAngleDeg, setDumpAngleDeg] = useState(0);
+  const [oreLevel, setOreLevel] = useState(() => (isReturningEmpty ? 0.0 : 1.0));
+  const dumpTimerRef = useRef(0);
+  const dumpAnimRef = useRef<number | null>(null);
   const cameraDrag = useRef<{
     pointerId: number;
     clientX: number;
@@ -253,6 +273,78 @@ export function SpatialDashboard({
   } | null>(null);
   const pendingOrbitDelta = useRef({ x: 0, y: 0 });
   const orbitAnimationFrame = useRef<number | null>(null);
+  const dashboard = useRef<HTMLElement>(null);
+
+  useEffect(() => {
+    let active = true;
+    let lastTime = performance.now();
+
+    const animateDump = (time: number) => {
+      if (!active) return;
+      const dt = Math.min(0.1, (time - lastTime) / 1000);
+      lastTime = time;
+
+      if (isCrusherDumping) {
+        dumpTimerRef.current += dt;
+        const t = dumpTimerRef.current;
+        if (t <= 1.4) {
+          const p = Math.min(1.0, t / 1.4);
+          const ease = p * p * (3 - 2 * p);
+          setDumpAngleDeg(ease * 55);
+        } else if (t <= 4.2) {
+          setDumpAngleDeg(55);
+          const pourP = Math.min(1.0, (t - 1.4) / 2.2);
+          setOreLevel(Math.max(0.0, 1.0 - pourP));
+        } else if (t <= 5.4) {
+          const p = Math.min(1.0, (t - 4.2) / 1.2);
+          const ease = p * p * (3 - 2 * p);
+          setDumpAngleDeg((1 - ease) * 55);
+          setOreLevel(0.0);
+        } else {
+          setDumpAngleDeg(0);
+          setOreLevel(0.0);
+        }
+      } else {
+        dumpTimerRef.current = 0;
+        setDumpAngleDeg((prev) => (prev > 0 ? Math.max(0, prev - dt * 60) : 0));
+        if (world.haul_route?.destination === "Mine loading bay") {
+          setOreLevel(0.0);
+        } else if (
+          world.haul_route?.destination === "Dump point" &&
+          (world.haul_route?.distance_m ?? 99) < 10
+        ) {
+          setOreLevel(1.0);
+        }
+      }
+
+      dumpAnimRef.current = requestAnimationFrame(animateDump);
+    };
+
+    dumpAnimRef.current = requestAnimationFrame(animateDump);
+    return () => {
+      active = false;
+      if (dumpAnimRef.current !== null) cancelAnimationFrame(dumpAnimRef.current);
+    };
+  }, [
+    isCrusherDumping,
+    world.haul_route?.destination,
+    world.haul_route?.distance_m,
+  ]);
+
+  useEffect(() => {
+    const updateVisibility = () => {
+      if (!dashboard.current) return;
+      dashboard.current.dataset.pageHidden = String(document.hidden);
+      // CSS covers the pulses; SVG's own timeline drives unloading particles.
+      dashboard.current.querySelectorAll("svg").forEach((svg) => {
+        if (document.hidden) svg.pauseAnimations?.();
+        else svg.unpauseAnimations?.();
+      });
+    };
+    updateVisibility();
+    document.addEventListener("visibilitychange", updateVisibility);
+    return () => document.removeEventListener("visibilitychange", updateVisibility);
+  }, []);
 
   useEffect(
     () => () => {
@@ -271,20 +363,21 @@ export function SpatialDashboard({
     4,
     ...sensorSettings.map((sensor) => sensor.visual_range_m),
   );
-  const ranges = availableRangeReadings(
-    world.ranges,
-    world.sensor_health,
-    connected,
+  const ranges = useMemo(
+    () => availableRangeReadings(world.ranges, world.sensor_health, connected),
+    [world.ranges, world.sensor_health, connected],
   );
-  const points = availableSpatialPoints(
-    world.spatial_points,
-    world.sensor_health,
-    connected,
-    world.generated_at_ms,
-    vehicle,
-    maxVisualRange,
-  );
-  const plottedPoints = displayPoints(points, world, sensorSettings);
+  const plottedPoints = useMemo(() => {
+    const points = availableSpatialPoints(
+      world.spatial_points,
+      world.sensor_health,
+      connected,
+      world.generated_at_ms,
+      vehicle,
+      maxVisualRange,
+    );
+    return displayPoints(points, world, sensorSettings);
+  }, [world, connected, vehicle, maxVisualRange, sensorSettings]);
   const readingById = new Map(
     ranges.map((reading) => [reading.sensor_id, reading]),
   );
@@ -444,6 +537,7 @@ export function SpatialDashboard({
 
   return (
     <section
+      ref={dashboard}
       className="dashboard spatial-dashboard"
       aria-label="Live 2.5D ToF surrounding view"
     >
@@ -1106,7 +1200,7 @@ export function SpatialDashboard({
                     const layerRadius = layer === 2 ? radius : radius * 0.72;
 
                     return (
-                      <g key={`${index}-${layer}`}>
+                      <Fragment key={`${index}-${layer}`}>
                         {showPointAuras &&
                           layer === 0 &&
                           (alert || caution) && (
@@ -1139,7 +1233,7 @@ export function SpatialDashboard({
                             <title>{`${source.label}: ${distanceM.toFixed(2)} m (Quality: ${Math.round(spatialPoint.quality * 100)}%)`}</title>
                           )}
                         </circle>
-                      </g>
+                      </Fragment>
                     );
                   });
                 },
@@ -1152,6 +1246,7 @@ export function SpatialDashboard({
                 world={world}
                 vehicle={vehicle}
                 camera={cameraConfig}
+                dumpAngleDeg={dumpAngleDeg}
               >
                 <Vehicle3DTruck
                   sensors={sensorSettings}
@@ -1165,6 +1260,8 @@ export function SpatialDashboard({
                   activeAlertSensorId={closestAlert?.sensor.sensor_id ?? null}
                   imuOrientation={imuOrientation}
                   steerAngleDeg={effectiveSteer}
+                  dumpAngleDeg={dumpAngleDeg}
+                  oreLevel={oreLevel}
                   cameraConfig={cameraConfig}
                 />
               </HaulTraffic>

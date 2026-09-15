@@ -150,7 +150,7 @@ describe("V2XPanel", () => {
     expect(markup).toContain("No simulated coordination links.");
   });
 
-  it("renders an exception-first supervisor overview", () => {
+  it("renders fleet section with vehicle data by default", () => {
     const world = {
       ...defaultWorldState,
       v2x: mockV2XState,
@@ -169,11 +169,11 @@ describe("V2XPanel", () => {
       <SupervisorDashboard world={world} connection="CONNECTED" />,
     );
     expect(markup).toContain("Fleet command");
-    expect(markup).toContain("What needs action");
+    expect(markup).toContain("Fleet directory");
+    expect(markup).toContain("known vehicles");
     expect(markup).toContain("DUMPER_02");
     expect(markup).toContain("HAULER_09");
     expect(markup).toContain("EMERGENCY STOP");
-    expect(markup).toContain("Low visibility");
     expect(markup).not.toContain("Coordination network");
   });
 
@@ -182,8 +182,8 @@ describe("V2XPanel", () => {
       ...defaultWorldState,
       primary_vehicle_id: "DUMPER_02",
       vehicles: [
-        { ...defaultWorldState.vehicles[0], vehicle_id: "DUMPER_01" },
-        { ...defaultWorldState.vehicles[0], vehicle_id: "DUMPER_02" },
+        { ...defaultWorldState.vehicles[0], vehicle_id: "DUMPER_01", position_confidence: 0.9, timestamp_ms: 1000 },
+        { ...defaultWorldState.vehicles[0], vehicle_id: "DUMPER_02", position_confidence: 0.9, timestamp_ms: 1000 },
       ],
     };
     const designatedMarkup = renderToStaticMarkup(

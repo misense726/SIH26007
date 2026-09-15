@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { STATIC_DEMO } from "../simulation/demoMode";
 import {
   dashboardViewFromHash,
   dashboardViewHash,
@@ -7,7 +8,9 @@ import {
 } from "./dashboardViews";
 
 function currentDashboardView(): DashboardView {
-  return typeof window === "undefined" ? "DRIVER" : dashboardViewFromHash(window.location.hash);
+  if (typeof window === "undefined") return STATIC_DEMO ? "SPATIAL" : "DRIVER";
+  if (STATIC_DEMO && !window.location.hash) return "SPATIAL";
+  return dashboardViewFromHash(window.location.hash);
 }
 
 export function useDashboardNavigation(): {

@@ -232,7 +232,7 @@ export function CampusMinimap({ world, vehicle, onExpand }: CampusMinimapProps) 
         <div ref={mapContainerRef} className="campus-navigation-map-canvas" />
         <div className="campus-navigation-location" aria-hidden="true">
           <strong>{DEFAULT_CAMPUS_CONFIG.locationCode}</strong>
-          <span>Chennai</span>
+          <span>Chhattisgarh</span>
         </div>
         <button
           type="button"

@@ -1,3 +1,10 @@
+/* Preserve every effect, but stop its timeline while the tab is hidden. */
+.spatial-dashboard[data-page-hidden="true"] *,
+.spatial-dashboard[data-page-hidden="true"] *::before,
+.spatial-dashboard[data-page-hidden="true"] *::after {
+  animation-play-state: paused !important;
+}
+
 .route-navigation {
   margin-top: 20px;
   border: 1px solid var(--border);

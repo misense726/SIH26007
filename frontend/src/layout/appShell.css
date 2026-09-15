@@ -113,7 +113,31 @@ html[data-theme="light"] {
 }
 
 .status-row {
-  min-width: max-content;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+
+.demo-pause {
+  padding: 7px 10px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  background: var(--surface-control);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.demo-loading {
+  padding: 32px;
+  color: var(--text);
+  background: var(--surface);
+  border-radius: 16px;
+}
+
+.demo-pause:focus-visible {
+  outline: 2px solid var(--workspace-driver);
+  outline-offset: 2px;
 }
 
 @media (max-width: 1120px) {
