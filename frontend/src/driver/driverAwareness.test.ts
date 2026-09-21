@@ -3,8 +3,8 @@ import type { RangeReading, SpatialPoint, VehiclePose } from "../types";
 import { availableRangeReadings } from "../state/rangeReadings";
 import { availableSpatialPoints } from "../state/spatialPoints";
 import {
+  DEFAULT_AWARENESS_MODE,
   isUsableRangeReading,
-  shouldShowTofOverlay,
   spatialPointToPlot,
 } from "./driverAwareness";
 
@@ -40,16 +40,8 @@ const spatialPoint: SpatialPoint = {
 };
 
 describe("driver awareness mode", () => {
-  it("adds ToF in Auto only when visibility is low", () => {
-    expect(shouldShowTofOverlay("AUTO", "GOOD")).toBe(false);
-    expect(shouldShowTofOverlay("AUTO", "MODERATE")).toBe(false);
-    expect(shouldShowTofOverlay("AUTO", "LOW")).toBe(true);
-    expect(shouldShowTofOverlay("AUTO", "VERY_LOW")).toBe(true);
-  });
-
-  it("honours the manual display choice", () => {
-    expect(shouldShowTofOverlay("CAMERA", "VERY_LOW")).toBe(false);
-    expect(shouldShowTofOverlay("TOF_OVERLAY", "GOOD")).toBe(true);
+  it("defaults to the camera display", () => {
+    expect(DEFAULT_AWARENESS_MODE).toBe("CAMERA");
   });
 });
 

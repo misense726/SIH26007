@@ -110,10 +110,7 @@ export function DriverDashboard({
       <div className="driver-grid">
         <CameraAwareness
           world={world}
-          readings={ranges}
-          points={points}
           vehicle={vehicle}
-          sensorSettings={sensorSettings}
           mode={awarenessMode}
           onModeChange={onAwarenessModeChange}
           connection={driverConnection}

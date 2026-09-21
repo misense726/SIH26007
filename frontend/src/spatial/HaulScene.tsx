@@ -18,6 +18,28 @@ function polygon(points: VehiclePoint3D[], camera: CameraViewConfig): string {
     .join(" ");
 }
 
+export function demoRockPoint(world: WorldState): { x_m: number; y_m: number } | null {
+  if (world.mode !== "SIMULATED") return null;
+  const route = world.reference_map?.features.find(
+    (feature) => feature.feature_type === "ROUTE",
+  )?.points;
+  if (!route || route.length < 5) return null;
+
+  const index = 3;
+  const previous = route[index - 1];
+  const next = route[index + 1];
+  const tangentX = next.x_m - previous.x_m;
+  const tangentY = next.y_m - previous.y_m;
+  const tangentLength = Math.hypot(tangentX, tangentY) || 1;
+  const rightX = tangentY / tangentLength;
+  const rightY = -tangentX / tangentLength;
+
+  return {
+    x_m: route[index].x_m + rightX * 1.55,
+    y_m: route[index].y_m + rightY * 1.55,
+  };
+}
+
 export function HaulRoad({
   world,
   vehicle,
@@ -629,17 +651,22 @@ export function HaulTraffic({
         ),
       });
     }
-    const obstacle = world.haul_route.obstacle;
-    if (obstacle && world.haul_route.obstacle_detected) {
+    const reportedObstacle = world.haul_route.obstacle;
+    const fallbackObstacle = demoRockPoint(world);
+    const obstacle = reportedObstacle ?? fallbackObstacle;
+    const obstacleDetected = reportedObstacle
+      ? world.haul_route.obstacle_detected
+      : Boolean(fallbackObstacle);
+    if (obstacle && obstacleDetected) {
       const point = localPoint(obstacle, vehicle);
-      if (Math.hypot(point.x_m, point.y_m) <= 10)
+      if (Math.hypot(point.x_m, point.y_m) <= 14)
         entities.push({
           id: "road-obstruction",
           point,
           node: (
             <RoadObstacle
               point={point}
-              radius={world.haul_route.obstacle_radius_m}
+              radius={reportedObstacle ? world.haul_route.obstacle_radius_m : 0.45}
               camera={camera}
             />
           ),

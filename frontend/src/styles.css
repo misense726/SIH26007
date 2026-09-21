@@ -560,8 +560,15 @@ h3 {
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  flex-wrap: wrap;
   margin-bottom: 12px;
+}
+
+.awareness-primary-switcher {
+  width: min(360px, 100%);
+}
+
+.awareness-primary-switcher button {
+  flex: 1;
 }
 
 .awareness-mode-switcher {
@@ -981,6 +988,35 @@ h3 {
   text-transform: uppercase;
 }
 
+.monochrome-camera-canvas,
+.monochrome-camera-fallback {
+  image-rendering: auto;
+}
+
+.monochrome-camera-fallback {
+  filter: grayscale(1) contrast(1.16) brightness(0.96);
+}
+
+.camera-stage-lidar {
+  background: #03070b;
+}
+
+.lidar-point-cloud {
+  position: absolute;
+  z-index: 1;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  background: #03070b;
+}
+
+.lidar-point-cloud canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
 .camera-horizon {
   position: absolute;
   z-index: 7;
@@ -1006,49 +1042,6 @@ h3 {
   font-size: 0.8rem;
 }
 
-.tof-camera-overlay {
-  position: absolute;
-  z-index: 6;
-  right: 14px;
-  bottom: 14px;
-  display: grid;
-  width: min(210px, calc(100% - 28px));
-  padding: 9px;
-  overflow: visible;
-  border: 1px solid var(--sensor-line);
-  border-radius: 12px;
-  color: var(--sensor);
-  background: var(--camera-callout);
-  backdrop-filter: blur(9px);
-  box-shadow: var(--shadow-overlay);
-  pointer-events: none;
-}
-
-.proximity-svg.tof-overlay-grid {
-  position: static;
-  width: 100%;
-  height: auto;
-  margin: 0 auto;
-  opacity: 0.9;
-  filter: drop-shadow(0 0 14px var(--sensor-soft));
-}
-
-.tof-overlay-summary {
-  position: static;
-  display: grid;
-  gap: 3px;
-  min-width: 0;
-  padding: 0 2px 5px;
-  color: var(--text-strong);
-  font-family: var(--mono);
-  font-size: 0.61rem;
-  line-height: 1.35;
-}
-
-.tof-overlay-summary strong {
-  color: var(--sensor);
-  font-size: 0.72rem;
-}
 
 .driver-instruments {
   display: flex;
@@ -3394,22 +3387,6 @@ footer {
 
   .awareness-mode-switcher button {
     flex: 1;
-  }
-
-  .proximity-svg.tof-overlay-grid {
-    width: 100%;
-  }
-
-  .tof-camera-overlay {
-    right: 10px;
-    bottom: 10px;
-    width: min(158px, calc(100% - 20px));
-    padding: 7px;
-  }
-
-  .tof-overlay-summary {
-    padding: 0 1px 4px;
-    font-size: 0.56rem;
   }
 
   .driver-metric-grid,

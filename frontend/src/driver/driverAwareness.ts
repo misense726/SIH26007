@@ -1,21 +1,9 @@
-import type { SpatialPoint, VehiclePose, VisibilityState } from "../types";
+import type { SpatialPoint, VehiclePose } from "../types";
 
 export { isUsableRangeReading, usableRangeReadings } from "../state/rangeReadings";
 
-export type AwarenessMode = "AUTO" | "CAMERA" | "TOF_OVERLAY";
-
-export function shouldShowTofOverlay(
-  mode: AwarenessMode,
-  visibilityState: VisibilityState,
-): boolean {
-  if (mode === "TOF_OVERLAY") {
-    return true;
-  }
-  if (mode === "CAMERA") {
-    return false;
-  }
-  return visibilityState === "LOW" || visibilityState === "VERY_LOW";
-}
+export type AwarenessMode = "CAMERA" | "LIDAR";
+export const DEFAULT_AWARENESS_MODE: AwarenessMode = "CAMERA";
 
 export function spatialPointToPlot(
   point: SpatialPoint,

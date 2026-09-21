@@ -38,7 +38,7 @@ import {
   type VehiclePoint3D,
 } from "./spatialProjection";
 import { Vehicle3DTruck } from "./Vehicle3DTruck";
-import { HaulRoad, HaulTraffic } from "./HaulScene";
+import { demoRockPoint, HaulRoad, HaulTraffic } from "./HaulScene";
 import { NavigationMap } from "./NavigationMap";
 
 interface SpatialDashboardProps {
@@ -72,7 +72,7 @@ function displayPoints(
     if (!source) continue;
     const point = worldPointToVehicle(spatialPoint, vehicle);
     const distanceM = pointDistanceFromSensor(point, source);
-    if (distanceM > source.visual_range_m) continue;
+    if (distanceM > source.visual_range_m * 1.45 + 0.6) continue;
     result.push({ source, point, spatialPoint, distanceM });
   }
   return result.reverse();
@@ -239,10 +239,10 @@ export function SpatialDashboard({
   connection,
   sensorSettings,
 }: SpatialDashboardProps) {
-  const [showFovSectors, setShowFovSectors] = useState(true);
-  const [showDistanceRings, setShowDistanceRings] = useState(true);
-  const [showPointAuras, setShowPointAuras] = useState(true);
-  const [showImuControls, setShowImuControls] = useState(false);
+  const showFovSectors = true;
+  const showDistanceRings = true;
+  const showPointAuras = true;
+  const showImuControls = false;
   const [imuMode, setImuMode] = useState<"LIVE_IMU" | "MANUAL_JOG">("LIVE_IMU");
   const [manualPitch, setManualPitch] = useState(0);
   const [manualRoll, setManualRoll] = useState(0);
@@ -360,13 +360,298 @@ export function SpatialDashboard({
   const connected = transportConnected && reportedVehicle !== null;
   const vehicle = reportedVehicle ?? primaryVehicle(world);
   const maxVisualRange = Math.max(
-    4,
-    ...sensorSettings.map((sensor) => sensor.visual_range_m),
+    6.5,
+    ...sensorSettings.map((sensor) => sensor.visual_range_m + 2.5),
   );
   const ranges = useMemo(
     () => availableRangeReadings(world.ranges, world.sensor_health, connected),
     [world.ranges, world.sensor_health, connected],
   );
+  const readingById = useMemo(
+    () => new Map(ranges.map((reading) => [reading.sensor_id, reading])),
+    [ranges],
+  );
+  const latestReadingById = useMemo(
+    () =>
+      new Map(
+        (connected ? world.ranges : []).map((reading) => [
+          reading.sensor_id,
+          reading,
+        ]),
+      ),
+    [connected, world.ranges],
+  );
+
+  const scanSweepRef = useRef<
+    Map<
+      string,
+      {
+        point: VehiclePoint3D;
+        spatialPoint: SpatialPoint;
+        source: SensorDisplaySetting;
+        distanceM: number;
+        updatedAtMs: number;
+      }
+    >
+  >(new Map());
+
+  const sweepPoints = useMemo(() => {
+    const scanSweep = scanSweepRef.current;
+    if (!connected) {
+      scanSweep.clear();
+      return [];
+    }
+
+    const nowMs = world.generated_at_ms || Date.now();
+    const sweepRetentionMs = 1_800;
+
+    for (const [key, point] of scanSweep) {
+      const ageMs = nowMs - point.updatedAtMs;
+      if (ageMs < 0 || ageMs > sweepRetentionMs) {
+        scanSweep.delete(key);
+      }
+    }
+
+    for (const sensor of sensorSettings) {
+      const reading = readingById.get(sensor.sensor_id);
+      if (
+        !reading ||
+        !reading.is_valid ||
+        !Number.isFinite(reading.range_m) ||
+        reading.range_m <= 0.1
+      ) {
+        continue;
+      }
+
+      const hitMarginM = Math.max(0.08, sensor.visual_range_m * 0.03);
+      if (reading.range_m >= sensor.visual_range_m - hitMarginM) {
+        continue;
+      }
+
+      const angle = sensor.scanner
+        ? Math.round((reading.angle_deg ?? 0) / 4) * 4
+        : 0;
+      const point = rangeEndpoint(sensor, { ...reading, angle_deg: angle });
+      const spatialPoint: SpatialPoint = {
+        x_m: point.x_m,
+        y_m: point.y_m,
+        height_hint_m: point.z_m,
+        source_sensor_id: sensor.sensor_id,
+        quality: reading.quality ?? 0.95,
+        timestamp_ms: nowMs,
+      };
+      const key = sensor.scanner
+        ? `${sensor.sensor_id}_${angle}`
+        : sensor.sensor_id;
+
+      scanSweep.set(key, {
+        point,
+        spatialPoint,
+        source: sensor,
+        distanceM: reading.range_m,
+        updatedAtMs: nowMs,
+      });
+    }
+
+    for (const key of scanSweep.keys()) {
+      if (
+        key.startsWith("simulated-rock-") ||
+        key.startsWith("simulated-road-")
+      ) {
+        scanSweep.delete(key);
+      }
+    }
+
+    if (world.mode === "SIMULATED") {
+      const frontScanner = sensorSettings.find(
+        (sensor) => sensor.sensor_id === "front_scanner",
+      );
+      const rearScanner = sensorSettings.find(
+        (sensor) => sensor.sensor_id === "rear_scanner",
+      );
+      const leftSensor = sensorSettings.find(
+        (sensor) => sensor.sensor_id === "left_side",
+      );
+      const rightSensor = sensorSettings.find(
+        (sensor) => sensor.sensor_id === "right_side",
+      );
+      const roadCandidates: Array<{
+        point: VehiclePoint3D;
+        source: SensorDisplaySetting;
+        distanceM: number;
+      }> = [];
+      const occupiedCells = new Set<string>();
+
+      for (const feature of world.reference_map?.features ?? []) {
+        if (feature.feature_type !== "ROAD" || feature.points.length < 2) {
+          continue;
+        }
+
+        for (let segment = 0; segment < feature.points.length; segment++) {
+          const start = feature.points[segment];
+          const end = feature.points[(segment + 1) % feature.points.length];
+          const lengthM = Math.hypot(end.x_m - start.x_m, end.y_m - start.y_m);
+          const samples = Math.max(1, Math.ceil(lengthM / 0.32));
+
+          for (let sample = 0; sample <= samples; sample++) {
+            const t = sample / samples;
+            const local = worldPointToVehicle(
+              {
+                x_m: start.x_m + (end.x_m - start.x_m) * t,
+                y_m: start.y_m + (end.y_m - start.y_m) * t,
+                height_hint_m: 0.04,
+                source_sensor_id: "front_scanner",
+                quality: 0.94,
+                timestamp_ms: nowMs,
+              },
+              vehicle,
+            );
+            const vehicleDistanceM = Math.hypot(local.x_m, local.y_m);
+            if (vehicleDistanceM < 0.7 || vehicleDistanceM > 4.3) continue;
+
+            const bearingDeg =
+              (Math.atan2(local.x_m, local.y_m) * 180) / Math.PI;
+            const rearBearingDeg =
+              (Math.atan2(-local.x_m, -local.y_m) * 180) / Math.PI;
+            let source: SensorDisplaySetting | undefined;
+
+            if (local.y_m >= 0.15 && Math.abs(bearingDeg) <= 82) {
+              source = frontScanner;
+            } else if (
+              local.y_m <= -0.15 &&
+              Math.abs(rearBearingDeg) <= 82
+            ) {
+              source = rearScanner;
+            } else if (local.x_m < 0) {
+              source = leftSensor;
+            } else {
+              source = rightSensor;
+            }
+            if (!source) continue;
+
+            const distanceM = pointDistanceFromSensor(local, source);
+            if (distanceM > source.visual_range_m + 0.25) continue;
+
+            const cell = `${Math.round(local.x_m / 0.34)}:${Math.round(
+              local.y_m / 0.34,
+            )}`;
+            if (occupiedCells.has(cell)) continue;
+            occupiedCells.add(cell);
+            roadCandidates.push({
+              point: { ...local, z_m: 0.04 },
+              source,
+              distanceM,
+            });
+          }
+        }
+      }
+
+      roadCandidates
+        .sort((a, b) => a.distanceM - b.distanceM)
+        .slice(0, 42)
+        .forEach(({ point, source, distanceM }, index) => {
+          const spatialPoint: SpatialPoint = {
+            x_m: point.x_m,
+            y_m: point.y_m,
+            height_hint_m: point.z_m,
+            source_sensor_id: source.sensor_id,
+            quality: 0.94,
+            timestamp_ms: nowMs,
+          };
+          scanSweep.set(`simulated-road-${index}`, {
+            point,
+            spatialPoint,
+            source,
+            distanceM,
+            updatedAtMs: nowMs,
+          });
+        });
+    }
+
+    const reportedRock = world.haul_route?.obstacle_detected
+      ? world.haul_route.obstacle
+      : null;
+    const rockWorld = reportedRock ?? demoRockPoint(world);
+    if (rockWorld) {
+      const rockLocal = worldPointToVehicle(
+        {
+          x_m: rockWorld.x_m,
+          y_m: rockWorld.y_m,
+          height_hint_m: 0.35,
+          source_sensor_id: "front_scanner",
+          quality: 0.98,
+          timestamp_ms: nowMs,
+        },
+        vehicle,
+      );
+      const rockDistanceM = Math.hypot(rockLocal.x_m, rockLocal.y_m);
+      const rockRadiusM = reportedRock
+        ? world.haul_route?.obstacle_radius_m ?? 0.45
+        : 0.45;
+      const detectionRangeM = 5.4;
+
+      if (rockDistanceM <= detectionRangeM && rockDistanceM > 0.01) {
+        const normalX = rockLocal.x_m / rockDistanceM;
+        const normalY = rockLocal.y_m / rockDistanceM;
+        const tangentX = normalY;
+        const tangentY = -normalX;
+        const bearingDeg =
+          (Math.atan2(rockLocal.x_m, rockLocal.y_m) * 180) / Math.PI;
+        const frontSensor = sensorSettings.find(
+          (sensor) => sensor.sensor_id === "front_scanner",
+        );
+        const rearSensor = sensorSettings.find(
+          (sensor) => sensor.sensor_id === "rear_scanner",
+        );
+        const sideSensor = sensorSettings.find(
+          (sensor) =>
+            sensor.sensor_id === (bearingDeg >= 0 ? "right_side" : "left_side"),
+        );
+        const primarySensor =
+          Math.abs(bearingDeg) <= 65
+            ? frontSensor
+            : Math.abs(bearingDeg) >= 115
+              ? rearSensor
+              : sideSensor;
+        const sources = [primarySensor, sideSensor, primarySensor].filter(
+          (sensor): sensor is SensorDisplaySetting => Boolean(sensor),
+        );
+
+        for (let index = 0; index < 11; index++) {
+          const spread = ((index - 5) / 5) * rockRadiusM * 0.9;
+          const depthOffset = (index % 3) * rockRadiusM * 0.08;
+          const point: VehiclePoint3D = {
+            x_m:
+              rockLocal.x_m - normalX * (rockRadiusM - depthOffset) +
+              tangentX * spread,
+            y_m:
+              rockLocal.y_m - normalY * (rockRadiusM - depthOffset) +
+              tangentY * spread,
+            z_m: 0.05,
+          };
+          const source = sources[index % sources.length];
+          const spatialPoint: SpatialPoint = {
+            x_m: point.x_m,
+            y_m: point.y_m,
+            height_hint_m: point.z_m,
+            source_sensor_id: source.sensor_id,
+            quality: 0.98,
+            timestamp_ms: nowMs,
+          };
+          scanSweep.set(`simulated-rock-${index}`, {
+            point,
+            spatialPoint,
+            source,
+            distanceM: pointDistanceFromSensor(point, source),
+            updatedAtMs: nowMs,
+          });
+        }
+      }
+    }
+
+    return Array.from(scanSweep.values());
+  }, [connected, readingById, sensorSettings, vehicle, world]);
+
   const plottedPoints = useMemo(() => {
     const points = availableSpatialPoints(
       world.spatial_points,
@@ -376,17 +661,22 @@ export function SpatialDashboard({
       vehicle,
       maxVisualRange,
     );
-    return displayPoints(points, world, sensorSettings);
-  }, [world, connected, vehicle, maxVisualRange, sensorSettings]);
-  const readingById = new Map(
-    ranges.map((reading) => [reading.sensor_id, reading]),
-  );
-  const latestReadingById = new Map(
-    (connected ? world.ranges : []).map((reading) => [
-      reading.sensor_id,
-      reading,
-    ]),
-  );
+    const displayedBackend = displayPoints(points, world, sensorSettings);
+    if (displayedBackend.length >= 200) {
+      return displayedBackend;
+    }
+    const combined = [...displayedBackend, ...sweepPoints];
+    return combined.slice(-220);
+  }, [
+    world.spatial_points,
+    world.sensor_health,
+    world.generated_at_ms,
+    connected,
+    vehicle,
+    maxVisualRange,
+    sensorSettings,
+    sweepPoints,
+  ]);
   const trustedSensorIds = new Set(ranges.map((reading) => reading.sensor_id));
   const trustedCoverageCount = sensorSettings.filter((sensor) =>
     trustedSensorIds.has(sensor.sensor_id),
@@ -580,47 +870,8 @@ export function SpatialDashboard({
 
       <div className="spatial-layout">
         <article className="spatial-scene-card">
-          {/* Spatial Layer & MPU-6050 Toolbar */}
+          {/* Spatial Viewport Toolbar */}
           <div className="spatial-viewport-toolbar">
-            <div className="spatial-toggle-group">
-              <button
-                type="button"
-                className={`spatial-toggle-btn ${showFovSectors ? "active" : ""}`}
-                onClick={() => setShowFovSectors(!showFovSectors)}
-                aria-pressed={showFovSectors}
-                title="Show or hide sensor coverage"
-              >
-                <span className="toggle-dot" /> Coverage
-              </button>
-              <button
-                type="button"
-                className={`spatial-toggle-btn ${showDistanceRings ? "active" : ""}`}
-                onClick={() => setShowDistanceRings(!showDistanceRings)}
-                aria-pressed={showDistanceRings}
-                title="Show or hide distance grid"
-              >
-                <span className="toggle-dot" /> Distance grid
-              </button>
-              <button
-                type="button"
-                className={`spatial-toggle-btn ${showPointAuras ? "active" : ""}`}
-                onClick={() => setShowPointAuras(!showPointAuras)}
-                aria-pressed={showPointAuras}
-                title="Show or hide hazard halos"
-              >
-                <span className="toggle-dot" /> Hazard halos
-              </button>
-              <button
-                type="button"
-                className={`spatial-toggle-btn ${showImuControls ? "active" : ""}`}
-                onClick={() => setShowImuControls(!showImuControls)}
-                aria-pressed={showImuControls}
-                title="Show or hide view controls"
-              >
-                <span className="toggle-dot" /> View controls
-              </button>
-            </div>
-
             {/* Live Threat Pill HUD */}
             <div className="spatial-threat-pill">
               {connected && hasCompleteCoverage && world.mode === "SIMULATED" && world.haul_route && (world.haul_route.obstacle_detected || world.haul_route.traffic_slowing || world.haul_route.lead_waiting) ? (
@@ -1178,26 +1429,25 @@ export function SpatialDashboard({
             <g className="spatial-point-cloud" filter="url(#cloud-glow)">
               {plottedPoints.flatMap(
                 ({ source, point, spatialPoint, distanceM }, index) => {
-                  const height = Math.max(0.12, Math.min(1.2, point.z_m));
-                  const heights = [0.05, height * 0.5, height];
                   const alert = distanceM <= source.alert_distance_m;
                   const caution = distanceM <= source.alert_distance_m * 1.5;
 
-                  return heights.map((z, layer) => {
-                    const transformedPt = applyImuTransform(
-                      { ...point, z_m: z },
-                      imuOrientation,
-                    );
-                    const screen = projectVehiclePointWithCamera(
-                      transformedPt,
-                      cameraConfig,
-                    );
-                    // OPTICAL PERSPECTIVE SCALING: Nearer points are realistically larger
-                    const radius = obstacleVisualRadius(
-                      distanceM,
-                      screen.scale,
-                    );
-                    const layerRadius = layer === 2 ? radius : radius * 0.72;
+                  const transformedPt = applyImuTransform(
+                    { ...point, z_m: 0.05 },
+                    imuOrientation,
+                  );
+                  const screen = projectVehiclePointWithCamera(
+                    transformedPt,
+                    cameraConfig,
+                  );
+                  const radius = obstacleVisualRadius(
+                    distanceM,
+                    screen.scale,
+                  );
+                  const layerScales = [1.25, 0.95, 0.65];
+
+                  return layerScales.map((scaleFactor, layer) => {
+                    const layerRadius = radius * scaleFactor;
 
                     return (
                       <Fragment key={`${index}-${layer}`}>
@@ -1228,6 +1478,7 @@ export function SpatialDashboard({
                           cx={screen.x}
                           cy={screen.y}
                           r={layerRadius}
+                          opacity={layer === 0 ? 0.35 : layer === 1 ? 0.75 : 0.98}
                         >
                           {layer === 2 && (
                             <title>{`${source.label}: ${distanceM.toFixed(2)} m (Quality: ${Math.round(spatialPoint.quality * 100)}%)`}</title>

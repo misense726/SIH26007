@@ -1,70 +1,65 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
-import { defaultSensorSettings } from "../settings/sensorSettingsApi";
 import { defaultWorldState } from "../state/defaultState";
 import type { WorldState } from "../types";
+import type { AwarenessMode } from "./driverAwareness";
 import { CameraAwareness } from "./CameraAwareness";
 
 vi.mock("leaflet", () => ({ default: {} }));
 
-function renderCamera(world: WorldState, connection: "CONNECTED" | "DISCONNECTED" = "CONNECTED") {
+function renderAwareness(
+  world: WorldState,
+  mode: AwarenessMode = "CAMERA",
+  connection: "CONNECTED" | "DISCONNECTED" = "CONNECTED",
+) {
   return renderToStaticMarkup(
     <CameraAwareness
       world={world}
-      readings={[]}
-      points={[]}
       vehicle={world.vehicles[0] ?? defaultWorldState.vehicles[0]}
-      sensorSettings={defaultSensorSettings().sensors}
-      mode="CAMERA"
+      mode={mode}
       onModeChange={() => undefined}
       connection={connection}
     />,
   );
 }
 
-describe("CameraAwareness camera source boundaries", () => {
-  it("does not render simulated media while the world is LIVE", () => {
-    const liveWorld: WorldState = {
-      ...defaultWorldState,
-      mode: "LIVE",
-      camera: {
-        ...defaultWorldState.camera,
-        mode: "SIMULATED",
-        stream_status: "simulated",
-        raw_available: true,
-      },
-      environment: { ...defaultWorldState.environment, mode: "LIVE" },
-      vehicles: defaultWorldState.vehicles.map((vehicle) => ({ ...vehicle, mode: "LIVE" })),
-    };
-
-    const markup = renderCamera(liveWorld);
-
-    expect(markup).not.toContain("camera-comparison-container");
-    expect(markup).not.toContain("/camera/haul_truck_optical.png");
-    expect(markup).not.toContain("/camera/haul_truck_ir.png");
-    expect(markup).toContain("CAMERA UNAVAILABLE");
-  });
-
-  it("renders the comparison media only for a connected simulated camera", () => {
-    const simulatedWorld: WorldState = {
-      ...defaultWorldState,
+function simulatedWorld(): WorldState {
+  return {
+    ...defaultWorldState,
+    mode: "SIMULATED",
+    camera: {
+      ...defaultWorldState.camera,
       mode: "SIMULATED",
-      camera: {
-        ...defaultWorldState.camera,
-        mode: "SIMULATED",
-        stream_status: "simulated",
-        raw_available: true,
-      },
-    };
+      stream_status: "simulated",
+      raw_available: true,
+    },
+  };
+}
 
-    const markup = renderCamera(simulatedWorld);
+describe("CameraAwareness display modes", () => {
+  it("shows exactly Camera and LiDAR controls", () => {
+    const markup = renderAwareness(simulatedWorld());
+    const group = markup
+      .split('aria-label="Driver awareness display"')[1]
+      .split("</div>")[0];
 
-    expect(markup).toContain("camera-comparison-container");
-    expect(markup).toContain("/camera/haul_truck_optical.png");
-    expect(markup).toContain("/camera/haul_truck_ir.png");
+    expect(group.match(/<button/g)).toHaveLength(2);
+    expect(group).toContain(">Camera</button>");
+    expect(group).toContain(">LiDAR</button>");
+    expect(group.match(/aria-pressed="true"/g)).toHaveLength(1);
+    expect(markup).not.toMatch(/Auto|ToF overlay|Raw|Dehazed|False color|IR \(GPU\)|Thermal|GPU/);
   });
 
-  it("keeps the real stream path available for a LIVE camera", () => {
+  it("uses the monochrome simulated camera asset", () => {
+    const markup = renderAwareness(simulatedWorld());
+
+    expect(markup).toContain("MONO CAMERA SIMULATED");
+    expect(markup).toContain("/camera/haul_truck_ir.png");
+    expect(markup).not.toContain("/camera/haul_truck_optical.png");
+    expect(markup).toContain("Monochrome forward camera feed");
+  });
+
+  it("uses the raw live stream as the monochrome source", () => {
     const liveWorld: WorldState = {
       ...defaultWorldState,
       mode: "LIVE",
@@ -78,14 +73,56 @@ describe("CameraAwareness camera source boundaries", () => {
         measured_fps: 15,
       },
       environment: { ...defaultWorldState.environment, mode: "LIVE" },
-      vehicles: defaultWorldState.vehicles.map((vehicle) => ({ ...vehicle, mode: "LIVE" })),
+      vehicles: defaultWorldState.vehicles.map((vehicle) => ({
+        ...vehicle,
+        mode: "LIVE",
+      })),
     };
 
-    const markup = renderCamera(liveWorld);
+    const markup = renderAwareness(liveWorld);
 
-    expect(markup).toContain("camera-feed");
+    expect(markup).toContain("MONO CAMERA LIVE");
     expect(markup).toContain("/api/camera/stream?view=raw");
-    expect(markup).not.toContain("camera-comparison-container");
-    expect(markup).not.toContain("camera-unavailable");
+    expect(markup).not.toContain("view=ir");
+  });
+
+  it("renders LiDAR independently of camera availability", () => {
+    const world = {
+      ...simulatedWorld(),
+      camera: {
+        ...simulatedWorld().camera,
+        raw_available: false,
+        stream_status: "disabled" as const,
+      },
+    };
+    const markup = renderAwareness(world, "LIDAR");
+
+    expect(markup).toContain("LIDAR SIMULATED");
+    expect(markup).toContain("Vehicle-centered LiDAR view");
+    expect(markup).not.toContain("CAMERA UNAVAILABLE");
+    expect(markup).not.toContain("Monochrome forward camera feed");
+  });
+
+  it("does not render simulated media while the world is live", () => {
+    const liveWorld: WorldState = {
+      ...defaultWorldState,
+      mode: "LIVE",
+      camera: {
+        ...defaultWorldState.camera,
+        mode: "SIMULATED",
+        stream_status: "simulated",
+        raw_available: true,
+      },
+      environment: { ...defaultWorldState.environment, mode: "LIVE" },
+      vehicles: defaultWorldState.vehicles.map((vehicle) => ({
+        ...vehicle,
+        mode: "LIVE",
+      })),
+    };
+
+    const markup = renderAwareness(liveWorld);
+
+    expect(markup).not.toContain("/camera/haul_truck_ir.png");
+    expect(markup).toContain("CAMERA UNAVAILABLE");
   });
 });
