@@ -8,6 +8,7 @@ import {
 } from "./truckMesh";
 import type { RangeReading } from "../types";
 import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
+import { truckDisplayGeometry } from "./truckFootprint";
 import {
   applyImuTransform,
   cameraDepthForVehiclePoint,
@@ -36,6 +37,7 @@ interface Vehicle3DTruckProps {
   oreLevel?: number;
   cameraConfig?: CameraViewConfig;
   sceneOffset?: VehiclePoint3D;
+  scaleToSensors?: boolean;
 }
 
 function sensorClass(sensorId: string): string {
@@ -58,8 +60,20 @@ export function Vehicle3DTruck({
   oreLevel = 1.0,
   cameraConfig = {},
   sceneOffset = { x_m: 0, y_m: 0, z_m: 0 },
+  scaleToSensors = false,
 }: Vehicle3DTruckProps) {
   const id = useId();
+  const mesh = useMemo(() => buildTruckMesh(steerAngleDeg), [steerAngleDeg]);
+  const bodyScale = useMemo(() => {
+    // Fit the illustration inside the calibrated mounting footprint. Ranges
+    // and sensor origins stay in metres and are never scaled with the artwork.
+    return truckDisplayGeometry(sensors, scaleToSensors).scale;
+  }, [sensors, scaleToSensors]);
+  const scaleBodyPoint = (p: VehiclePoint3D): VehiclePoint3D => ({
+    x_m: p.x_m * bodyScale,
+    y_m: p.y_m * bodyScale,
+    z_m: p.z_m * bodyScale,
+  });
   const offset = (p: VehiclePoint3D) => ({
     x_m: p.x_m + sceneOffset.x_m,
     y_m: p.y_m + sceneOffset.y_m,
@@ -89,7 +103,7 @@ export function Vehicle3DTruck({
   // 1. Applies MPU-6050 pitch/roll/yaw/suspension transform
   // 2. Projects with perspective camera configuration
   const transformPoint = (p: VehiclePoint3D): VehiclePoint3D =>
-    offset(applyImuTransform(p, imuOrientation));
+    offset(applyImuTransform(scaleBodyPoint(p), imuOrientation));
 
   const proj = (p: VehiclePoint3D) =>
     projectVehiclePointWithCamera(transformPoint(p), cameraConfig);
@@ -97,7 +111,7 @@ export function Vehicle3DTruck({
   const projGround = (p: VehiclePoint3D) =>
     projectVehiclePointWithCamera(
       offset(
-        applyImuTransform(p, { ...imuOrientation, pitch_deg: 0, roll_deg: 0 }),
+        applyImuTransform(scaleBodyPoint(p), { ...imuOrientation, pitch_deg: 0, roll_deg: 0 }),
       ),
       cameraConfig,
     );
@@ -132,7 +146,6 @@ export function Vehicle3DTruck({
     };
   };
 
-  const mesh = useMemo(() => buildTruckMesh(steerAngleDeg), [steerAngleDeg]);
   const modelFaces = useMemo(() => {
     const allSurfaces = [...mesh];
     if (dumpAngleDeg > 2) {
@@ -180,7 +193,7 @@ export function Vehicle3DTruck({
         });
 
         const points = rawPoints.map((p) =>
-          offset(applyImuTransform(p, imuOrientation)),
+          transformPoint(p),
         );
         if (
           cameraDepthForVehiclePoint(surfaceNormal(points), cameraConfig) >=
@@ -210,7 +223,7 @@ export function Vehicle3DTruck({
                   .map((p) =>
                     DUMP_BED_PARTS.has(surface.part) ? tiltDumpPoint(p) : p,
                   )
-                  .map((p) => offset(applyImuTransform(p, imuOrientation))),
+                  .map(transformPoint),
               ),
             })),
           },
@@ -219,6 +232,7 @@ export function Vehicle3DTruck({
       .sort((a, b) => b.depth - a.depth);
   }, [
     mesh,
+    bodyScale,
     dumpAngleDeg,
     oreLevel,
     imuOrientation.pitch_deg,
@@ -429,8 +443,11 @@ export function Vehicle3DTruck({
             const hasFiniteReturn = Boolean(
               reading?.is_valid && Number.isFinite(reading.range_m),
             );
-            const origin = proj(sensor.display_pose);
-            const endpoint = proj(rangeEndpoint(sensor, reading));
+            const projectSensor = (p: VehiclePoint3D) => projectVehiclePointWithCamera(
+              offset(applyImuTransform(p, imuOrientation)), cameraConfig,
+            );
+            const origin = projectSensor(sensor.display_pose);
+            const endpoint = projectSensor(rangeEndpoint(sensor, reading));
             const threat = threatBySensor.get(sensor.sensor_id) ?? "UNKNOWN";
             const isAlert =
               threat === "ALERT" || activeAlertSensorId === sensor.sensor_id;
@@ -456,25 +473,25 @@ export function Vehicle3DTruck({
                   x2={origin.x + (endpoint.x - origin.x) * 0.15}
                   y2={origin.y + (endpoint.y - origin.y) * 0.15}
                   stroke={podColor}
-                  strokeWidth="3.5"
+                  strokeWidth={scaleToSensors ? 1.2 : 3.5}
                   strokeLinecap="round"
                 />
                 <circle
                   cx={origin.x}
                   cy={origin.y}
-                  r={sensor.scanner ? 7 : 5.5}
+                  r={scaleToSensors ? 3 : sensor.scanner ? 7 : 5.5}
                   fill="#0f172a"
                   stroke={podColor}
-                  strokeWidth="2"
+                  strokeWidth={scaleToSensors ? 1 : 2}
                 />
                 <circle
                   cx={origin.x}
                   cy={origin.y}
-                  r={sensor.scanner ? 3.8 : 2.8}
+                  r={scaleToSensors ? 1.5 : sensor.scanner ? 3.8 : 2.8}
                   fill={podColor}
                   className={isAlert ? "sensor-lens-alert" : ""}
                 />
-                {isAlert && (
+                {isAlert && !scaleToSensors && (
                   <circle
                     cx={origin.x}
                     cy={origin.y}
@@ -493,7 +510,7 @@ export function Vehicle3DTruck({
       )}
 
       {/* Floating Callsign Tag */}
-      <g
+      {!scaleToSensors && <g
         className="truck-callsign-hud"
         transform={`translate(${callsignScreen.x}, ${callsignScreen.y})`}
       >
@@ -533,7 +550,7 @@ export function Vehicle3DTruck({
         >
           {callsign}
         </text>
-      </g>
+      </g>}
     </g>
   );
 }

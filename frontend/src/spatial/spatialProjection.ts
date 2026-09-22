@@ -21,6 +21,7 @@ export interface ImuOrientation {
 }
 
 export interface CameraViewConfig {
+  projection?: "perspective" | "plan";
   orbitYawDeg?: number;
   cameraPitchDeg?: number;
   zoomScale?: number;
@@ -153,6 +154,14 @@ export function projectVehiclePointWithCamera(
   camera: CameraViewConfig = {},
 ): ScreenPoint {
   const safePoint = finiteVehiclePoint(point);
+  if (camera.projection === "plan") {
+    const zoom = Math.max(0.2, Math.min(4, finiteNumber(camera.zoomScale, 1)));
+    return {
+      x: 500 + finiteNumber(camera.panOffsetX, 0) + safePoint.x_m * 96 * zoom,
+      y: 400 + finiteNumber(camera.panOffsetY, 0) - safePoint.y_m * 96 * zoom,
+      scale: zoom,
+    };
+  }
   const yawRad = (finiteNumber(camera.orbitYawDeg, 0) * Math.PI) / 180;
   const pitchDeg = Math.max(
     CAMERA_PITCH_MIN_DEG,
@@ -222,6 +231,23 @@ export function rangeEndpoint(
   };
 }
 
+/** Match the backend's planar range-to-XY contract. Display pitch is not calibration. */
+export function groundRangeEndpoint(
+  setting: SensorDisplaySetting,
+  reading: RangeReading | undefined,
+): VehiclePoint3D {
+  const endpoint = rangeEndpoint({ ...setting, display_pose: {
+    ...setting.display_pose, pitch_deg: 0, z_m: 0,
+  } }, reading);
+  return { ...endpoint, z_m: 0 };
+}
+
+export function hasMeasuredHit(reading: RangeReading | undefined): boolean {
+  return Boolean(reading?.is_valid && Number.isFinite(reading.range_m) &&
+    reading.range_m > 0 && reading.quality >= 0.5 &&
+    reading.range_m < reading.max_range_m - 0.01);
+}
+
 export function pointDistanceFromSensor(
   point: VehiclePoint3D,
   setting: SensorDisplaySetting,
@@ -230,7 +256,6 @@ export function pointDistanceFromSensor(
   return Math.hypot(
     safePoint.x_m - finiteNumber(setting.display_pose.x_m, 0),
     safePoint.y_m - finiteNumber(setting.display_pose.y_m, 0),
-    safePoint.z_m - finiteNumber(setting.display_pose.z_m, 0),
   );
 }
 

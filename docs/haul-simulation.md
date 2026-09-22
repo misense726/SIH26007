@@ -67,13 +67,15 @@ Waypoint distances and loading/unloading stops retain their route coordinates.
 The previous Normal, Fog, Obstacle and Emergency scenarios retain the campus map.
 Hardware providers and calibration are unchanged.
 
-The detailed yellow truck mesh, steering, attitude, headlights, sensor effects
-and three-layer ToF points are retained in Spatial. Additional instances use their own gradient
-IDs and a scene offset. Road markings are absent in Spatial; blue route guidance
-is confined to the navigation map. Road geometry is clipped before projection, and traffic
-is sorted by camera depth. This remains a 2.5D scene; SVG face sorting is not a
-full depth buffer and the illustrative truck dimensions are not a physical
-vehicle collision envelope.
+Spatial uses the WebGL point-cloud renderer adapted from Claude's `d70c1fb`
+implementation. In SIMULATED mode, the backend road polygons, berm coordinates
+and fleet poses provide the moving surroundings. Road and berm samples are
+labelled simulated mapping, separate from measured ToF returns. The supervisor
+retains its mine scene and backend-driven loading and tipping animations.
+LIVE uses calibrated, planar ToF points. If both modes lack usable surroundings,
+Spatial displays a labelled SIMULATED PREVIEW, exported by the backend's
+`simulation/spatial_preview.py`. That visual fixture never enters WorldState,
+localization or emergency logic. REPLAY never substitutes this preview.
 
 ## Simulated haul analytics
 
@@ -230,9 +232,10 @@ the sequence without copying the previous world. Synthetic camera metrics are
 recomputed only when their input visibility target changes.
 
 The client retains one reference-map object while its contents are unchanged.
-The spatial grid is memoized, point slots have stable DOM identities, and the
-cloud blur is bounded to the viewport. These changes retain the 220-point display
-limit, all three height layers, animations and telemetry rate. Navigation resize
+The spatial renderer reuses GPU buffers and pauses rendering while hidden.
+Measured returns use a 240-point display budget shared between sensor sources.
+Repeated observations retain their newest sample in each 4 cm world cell;
+the displayed coordinates remain the measured positions. Navigation resize
 observers disconnect on unmount. Backend buffers retain their existing limits:
 900 accumulated points, 600 transmitted points, 420 occupancy cells, 60 alerts
 and 50 V2X log entries.
