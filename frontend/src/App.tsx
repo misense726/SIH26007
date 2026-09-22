@@ -7,7 +7,10 @@ import {
   type DashboardRole,
 } from "./auth/roleSession";
 import { DashboardErrorBoundary } from "./components/DashboardErrorBoundary";
-import type { AwarenessMode } from "./driver/driverAwareness";
+import {
+  DEFAULT_AWARENESS_MODE,
+  type AwarenessMode,
+} from "./driver/driverAwareness";
 import { AppShell } from "./layout/AppShell";
 import { DashboardViewRouter } from "./layout/DashboardViewRouter";
 import { dashboardRoleFromHash, resolveDashboardRoute } from "./layout/dashboardViews";
@@ -36,7 +39,7 @@ function AuthenticatedDashboard({
   const { world, connection, demoStatus, paused, togglePaused } = useTelemetry();
   const sensorSettings = useSensorSettings();
   const { view, navigate } = useDashboardNavigation(role);
-  const [awarenessMode, setAwarenessMode] = useState<AwarenessMode>("AUTO");
+  const [awarenessMode, setAwarenessMode] = useState<AwarenessMode>(DEFAULT_AWARENESS_MODE);
 
   return (
     <AppShell

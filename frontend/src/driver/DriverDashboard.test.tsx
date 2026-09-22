@@ -11,7 +11,7 @@ describe("DriverDashboard vehicle telemetry", () => {
     const markup = renderToStaticMarkup(
       <DriverDashboard
         world={{ ...defaultWorldState, vehicles: [], primary_vehicle_id: "MISSING" }}
-        awarenessMode="AUTO"
+        awarenessMode="CAMERA"
         onAwarenessModeChange={() => undefined}
         connection="CONNECTED"
         sensorSettings={defaultSensorSettings().sensors}

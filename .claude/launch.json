@@ -4,7 +4,7 @@
     {
       "name": "mine-review",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["--prefix", "frontend", "run", "dev", "--", "--host", "127.0.0.1", "--port", "5177", "--strictPort"],
+      "runtimeArgs": ["--prefix", "frontend", "run", "dev:demo", "--", "--host", "127.0.0.1", "--port", "5177", "--strictPort"],
       "port": 5177
     },
     {
