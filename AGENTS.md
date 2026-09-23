@@ -1,6 +1,6 @@
-# FogSen — AGENTS.md
+# MI Sense — AGENTS.md
 
-All coding agents working on FogSen must follow this file.
+All coding agents working on MI Sense must follow this file.
 
 Read `PROJECT_CONTEXT.md` before making changes.
 

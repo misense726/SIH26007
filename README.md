@@ -1,6 +1,9 @@
-# FogSen
+# MI Sense
 
-FogSen is a proof of concept for mine-vehicle operation in fog and low visibility. It builds one backend-owned world model from vehicle pose, range sensing, environment data, and safety state. The driver and supervisor interfaces render that same state.
+MI Sense is a proof of concept for mine-vehicle operation in fog and low visibility. It builds one backend-owned world model from vehicle pose, range sensing, environment data, and safety state. The driver and supervisor interfaces render that same state.
+
+The existing `fogsen` package name, `FOGSEN_*` settings, script names, and wire
+schema IDs remain in place for compatibility with hardware and recordings.
 
 The dashboard starts in `SIMULATED` mode. The repository also includes
 compile-verified firmware for BACK/MAIN, FRONT, and MIDDLE, a laptop serial
@@ -15,7 +18,7 @@ deterministic simulator still exercises those future interfaces.
 
 ## What runs now
 
-FogSen currently includes:
+MI Sense currently includes:
 
 - FastAPI health, status, and world-state endpoints;
 - a WebSocket telemetry stream;
@@ -70,7 +73,7 @@ See [docs/haul-simulation.md](docs/haul-simulation.md) for the haul run and effi
 The software named above is open-source. The Government of India's [Policy on Adoption of
 Open Source Software](https://www.meity.gov.in/static/uploads/2024/02/policy_on_adoption_of_oss.pdf)
 expresses a preference for open-source software in government e-governance
-systems. It does not certify FogSen or approve this particular stack.
+systems. It does not certify MI Sense or approve this particular stack.
 
 ## Requirements
 
@@ -193,7 +196,7 @@ is `/api/camera/stream?view=ir`; configuration is documented in `.env.example`.
 
 ## Maps and simulated V2X
 
-The backend `ReferenceMap` remains FogSen's operational map. Its route starts
+The backend `ReferenceMap` remains MI Sense's operational map. Its route starts
 near `V699+X9, Chennai, Tamil Nadu` and follows mapped campus roads. The driver
 gets a compact road map and an expanded route view. The supervisor can switch
 between the backend schematic and the same road map. The frontend converts
@@ -204,7 +207,7 @@ rendering. OpenStreetMap tiles are not localization or safety evidence.
 models peer vehicles, roadside units, basic safety messages, link estimates,
 advisories, and a bounded packet log. `GET /api/v2x/state` reads that state.
 `POST /api/v2x/messages/bsm` and `POST /api/v2x/broadcast-advisory` update the
-in-memory simulation. FogSen does not currently connect to a DSRC, C-V2X, or
+in-memory simulation. MI Sense does not currently connect to a DSRC, C-V2X, or
 other V2X radio.
 
 ## Wired firmware
@@ -262,7 +265,7 @@ Set-Location ..
 
 ## Coordinate convention
 
-FogSen uses metres and seconds internally. In the vehicle frame, positive X points right and positive Y points forward. The world frame is fixed local Cartesian. Heading is clockwise from world positive Y.
+MI Sense uses metres and seconds internally. In the vehicle frame, positive X points right and positive Y points forward. The world frame is fixed local Cartesian. Heading is clockwise from world positive Y.
 
 ## Repository layout
 
@@ -282,7 +285,7 @@ Read `PROJECT_CONTEXT.md` before changing the frozen V1 architecture. Contributo
 
 ## License
 
-The contributors license FogSen's project-authored code and documentation under
+The contributors license MI Sense's project-authored code and documentation under
 the [MIT License](LICENSE). Third-party software and assets keep their own terms;
 see [third-party components](docs/THIRD_PARTY.md),
 [mine terrain materials](frontend/public/textures/mine/ATTRIBUTION.md), and

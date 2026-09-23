@@ -123,7 +123,7 @@ class LiveCameraStream:
         self._frame_sequence = 0
         self._snapshot = CameraFrameSnapshot(
             status="connecting",
-            detail=f"Connecting to the FogSen Pi camera at {source_uri}",
+            detail=f"Connecting to the Pi camera at {source_uri}",
             enhancement_status="loading" if enhancer is not None else "disabled",
             enhancement_detail=(
                 f"Loading {enhancer.name}" if enhancer is not None else "ML enhancement is disabled"
@@ -180,7 +180,7 @@ class LiveCameraStream:
             await asyncio.to_thread(enhancement_thread.join, 4.0)
         if ir_thread is not None:
             await asyncio.to_thread(ir_thread.join, 4.0)
-        self._set_status("disabled", "FogSen camera ingest stopped")
+        self._set_status("disabled", "Camera ingest stopped")
 
     def snapshot(self) -> CameraFrameSnapshot:
         with self._lock:
@@ -492,7 +492,7 @@ class LiveCameraStream:
         while not self._stop_event.is_set():
             self._set_status(
                 "connecting",
-                f"Connecting to the FogSen Pi camera at {self.source_uri}",
+                f"Connecting to the Pi camera at {self.source_uri}",
             )
             capture = self._open_capture(cv2)
             self._capture = capture
@@ -501,7 +501,7 @@ class LiveCameraStream:
                 self._capture = None
                 self._set_status(
                     "error",
-                    f"Could not open the FogSen Pi camera at {self.source_uri}",
+                    f"Could not open the Pi camera at {self.source_uri}",
                 )
                 self._stop_event.wait(self._reconnect_s)
                 continue
@@ -514,7 +514,7 @@ class LiveCameraStream:
             while not self._stop_event.is_set():
                 ok, frame = capture.read()
                 if not ok or frame is None:
-                    self._set_status("error", "The FogSen Pi camera stream disconnected")
+                    self._set_status("error", "The Pi camera stream disconnected")
                     break
 
                 if self._rotation == 180:

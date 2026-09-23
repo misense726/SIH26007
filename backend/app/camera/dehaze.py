@@ -45,7 +45,7 @@ class DehazeFormerEnhancer:
         else:
             device = self._requested_device
         if device == "cuda" and not torch.cuda.is_available():
-            raise RuntimeError("CUDA was requested but is unavailable to the FogSen container")
+            raise RuntimeError("CUDA was requested but is unavailable to the MI Sense container")
 
         network = model_module.dehazeformer()
         checkpoint = torch.load(

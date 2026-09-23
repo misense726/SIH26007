@@ -1,6 +1,6 @@
 # Firmware agent prompt for FRONT XIAO ESP32-C6
 
-Implement the FogSen FRONT sensor node. Read `FIRMWARE_CONTEXT.md` first and
+Implement the MI Sense FRONT sensor node. Read `FIRMWARE_CONTEXT.md` first and
 keep this project wired-only.
 
 ## Fixed hardware contract

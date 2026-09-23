@@ -1,4 +1,4 @@
-# FogSen front XIAO ESP32-C6 firmware
+# MI Sense front XIAO ESP32-C6 firmware
 
 This node reads one servo-mounted VL53L1X V2 scanner and one fixed forward
 VL53L0X V2. Both sensors share the local SDA/SCL bus and have separate XSHUT

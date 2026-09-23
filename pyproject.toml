@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "fogsen"
 version = "0.1.0"
-description = "FogSen low-visibility mine vehicle digital twin proof of concept"
+description = "MI Sense low-visibility mine vehicle digital twin proof of concept"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [

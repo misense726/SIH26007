@@ -1,2 +1,2 @@
-"""FogSen backend package."""
+"""MI Sense backend package."""
 

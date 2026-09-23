@@ -1,7 +1,7 @@
 /*
- * FogSen SX1278 base station receiver for an ESP8266/Wemos D1 mini.
+ * MI Sense SX1278 base station receiver for an ESP8266/Wemos D1 mini.
  *
- * This is the FogSen-local replacement for the old base-station sketch. It
+ * This is the MI Sense replacement for the old base-station sketch. It
  * prints every received LoRa JSON packet and optionally forwards the raw line
  * to a TCP listener on the laptop. Keep the current working base-station image
  * installed until Wi-Fi credentials and the backend address are configured.

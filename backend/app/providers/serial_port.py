@@ -18,7 +18,7 @@ class MainControllerSerial:
         try:
             import serial
         except ImportError as exc:
-            raise RuntimeError("Install FogSen with the hardware extra to use live USB serial") from exc
+            raise RuntimeError("Install MI Sense with the hardware extra to use live USB serial") from exc
         self._serial = serial.Serial()
         self._serial.port = port
         self._serial.baudrate = baud

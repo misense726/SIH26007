@@ -288,4 +288,4 @@ roughly 43–53 MB of JavaScript heap
 after warmup in a fresh tab, with one document and 340 event listeners across the
 traffic and obstacle scenes. Backend private memory was about 537 MB. These are
 short-run observations, not a long-duration leak guarantee. The reported 8 GB
-was not reproduced or attributed to a specific FogSen process in this check.
+was not reproduced or attributed to a specific MI Sense process in this check.

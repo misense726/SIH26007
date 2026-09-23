@@ -143,11 +143,11 @@ def load_yaml(name: str, settings: RuntimeSettings | None = None) -> dict[str, A
     active_settings = settings or runtime_settings()
     path = active_settings.config_dir / name
     if not path.is_file():
-        raise FileNotFoundError(f"FogSen configuration file not found: {path}")
+        raise FileNotFoundError(f"MI Sense configuration file not found: {path}")
     with path.open("r", encoding="utf-8") as handle:
         data = yaml.safe_load(handle) or {}
     if not isinstance(data, dict):
-        raise ValueError(f"FogSen configuration must contain a mapping: {path}")
+        raise ValueError(f"MI Sense configuration must contain a mapping: {path}")
     return data
 
 

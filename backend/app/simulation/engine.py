@@ -65,7 +65,7 @@ if TYPE_CHECKING:
 
 
 class FullSimulator:
-    """Deterministic provider-driven simulator for the complete FogSen V1 chain."""
+    """Deterministic provider-driven simulator for the complete MI Sense V1 chain."""
 
     def __init__(
         self,

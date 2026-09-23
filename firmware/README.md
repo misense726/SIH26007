@@ -1,6 +1,6 @@
-# FogSen firmware
+# MI Sense firmware
 
-FogSen uses wired controller links and USB for MAIN-to-laptop telemetry. An
+MI Sense uses wired controller links and USB for MAIN-to-laptop telemetry. An
 optional LoRa Base Station provides a second USB telemetry path:
 
 ```text

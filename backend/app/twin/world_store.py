@@ -13,7 +13,7 @@ StateMutator = Callable[[WorldState], WorldState]
 
 
 class WorldStore:
-    """The single backend-owned state rendered by every FogSen client."""
+    """The single backend-owned state rendered by every MI Sense client."""
 
     def __init__(self, initial_state: WorldState | None = None) -> None:
         self._state = initial_state or WorldState()

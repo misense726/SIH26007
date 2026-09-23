@@ -1,12 +1,12 @@
-# FogSen ESP8266 LoRa base station
+# MI Sense ESP8266 LoRa base station
 
 The base station listens for the same SX1278 profile used by truck 2 and
 prints packets to USB. If configured, it also forwards each received JSON line
-over a TCP connection to the FogSen computer listener on port `8765`.
+over a TCP connection to the MI Sense computer listener on port `8765`.
 
 The current connected COM6 station already reports `LoRa listening...`; leave
 that image in place for the first radio test. This sketch is available inside
-FogSen for the later replacement once `wifi_secrets.h` and the backend packet
+MI Sense for the later replacement once `wifi_secrets.h` and the backend packet
 adapter are configured.
 
 ## Wemos D1 mini pin map

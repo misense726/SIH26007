@@ -1,6 +1,6 @@
-# FogSen — MASTER_AGENT_PROMPT.md
+# MI Sense — MASTER_AGENT_PROMPT.md
 
-You are the main engineering agent for **FogSen**.
+You are the main engineering agent for **MI Sense**.
 
 Before writing code:
 
@@ -16,9 +16,9 @@ Do not redesign the project unless explicitly instructed by the project owner.
 
 # Mission
 
-Build the complete **FogSen V1 proof-of-concept** in phases.
+Build the complete **MI Sense V1 proof-of-concept** in phases.
 
-FogSen should demonstrate:
+MI Sense should demonstrate:
 
 **low-cost spatial reconstruction + Digital Twin + driver synthetic awareness + supervisor fleet awareness + emergency-stop simulation**
 

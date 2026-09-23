@@ -150,7 +150,7 @@ async def camera_status(request: Request) -> dict[str, object]:
         return {
             "configured": False,
             "status": "disabled",
-            "detail": "No FogSen camera stream is configured",
+            "detail": "No camera stream is configured",
             "raw_available": False,
         }
     return camera_feed.status_payload()
@@ -163,7 +163,7 @@ async def camera_frame(
 ) -> Response:
     camera_feed = request.app.state.camera_feed
     if camera_feed is None:
-        raise HTTPException(status_code=503, detail="FogSen camera is not configured")
+        raise HTTPException(status_code=503, detail="Camera is not configured")
     snapshot = camera_feed.snapshot()
     if view == "ir":
         jpeg = snapshot.ir_jpeg
@@ -184,7 +184,7 @@ async def camera_frame(
                 if view == "enhanced"
                 else snapshot.detail
             )
-            or f"FogSen {view} camera frame is unavailable",
+            or f"{view.capitalize()} camera frame is unavailable",
         )
     return Response(
         jpeg,
@@ -204,7 +204,7 @@ async def camera_stream(
 ) -> StreamingResponse:
     camera_feed = request.app.state.camera_feed
     if camera_feed is None:
-        raise HTTPException(status_code=503, detail="FogSen camera is not configured")
+        raise HTTPException(status_code=503, detail="Camera is not configured")
 
     async def frames():
         last_frame_id: str | None = None

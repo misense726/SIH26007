@@ -1,4 +1,4 @@
-# FogSen Raspberry Pi camera sender
+# MI Sense Raspberry Pi camera sender
 
 The Pi exposes one H.264 stream at `tcp://<pi-ip>:8888` over Wi-Fi. The laptop
 decodes the stream, calculates visibility, and runs optional dehazing. The Pi

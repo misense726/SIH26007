@@ -1,4 +1,4 @@
-/* FogSen truck 2: direct Wi-Fi. GPS TX -> D1, RX unconnected. */
+/* MI Sense truck 2: direct Wi-Fi. GPS TX -> D1, RX unconnected. */
 
 #include <Arduino.h>
 #include <ESP8266HTTPClient.h>

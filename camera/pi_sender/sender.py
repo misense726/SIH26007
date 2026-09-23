@@ -1,4 +1,4 @@
-"""Supervise FogSen's continuous H.264 camera stream on the Raspberry Pi."""
+"""Supervise MI Sense's continuous H.264 camera stream on the Raspberry Pi."""
 
 from __future__ import annotations
 

@@ -1,4 +1,4 @@
-"""Check FogSen live telemetry and Pi camera boundaries."""
+"""Check MI Sense live telemetry and Pi camera boundaries."""
 
 from __future__ import annotations
 
@@ -20,7 +20,7 @@ def _get(base_url: str, path: str) -> dict[str, object]:
 
 def _arguments() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Check FogSen MAIN telemetry and Pi camera status."
+        description="Check MI Sense MAIN telemetry and Pi camera status."
     )
     parser.add_argument("--base-url", default="http://127.0.0.1:8000")
     parser.add_argument("--stale-ms", type=int, default=1_500)
@@ -46,7 +46,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             else _get(arguments.base_url, "/api/camera/status")
         )
     except (OSError, URLError, ValueError, json.JSONDecodeError) as exc:
-        print(f"FAIL FogSen live API: {exc}")
+        print(f"FAIL MI Sense live API: {exc}")
         return 1
 
     now_ms = int(time.time() * 1_000)

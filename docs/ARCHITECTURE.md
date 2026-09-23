@@ -1,6 +1,6 @@
 # Architecture
 
-FogSen keeps one world state in the backend. Sensor providers normalize hardware, simulated, or replay data before it reaches the world model. API and WebSocket clients receive snapshots of that state. Neither dashboard owns a second map.
+MI Sense keeps one world state in the backend. Sensor providers normalize hardware, simulated, or replay data before it reaches the world model. API and WebSocket clients receive snapshots of that state. Neither dashboard owns a second map.
 
 ```text
 providers -> normalized contracts -> canonical world model -> HTTP/WebSocket

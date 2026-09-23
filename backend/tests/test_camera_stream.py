@@ -118,7 +118,7 @@ def test_wifi_camera_reaches_world_and_raw_and_enhanced_endpoints() -> None:
                 break
             time.sleep(0.01)
         else:
-            raise AssertionError("Live camera state did not reach the FogSen world")
+            raise AssertionError("Live camera state did not reach the MI Sense world")
 
         assert world["mode"] == "SIMULATED"
         assert world["camera"]["mode"] == "LIVE"

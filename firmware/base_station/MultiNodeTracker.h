@@ -10,7 +10,7 @@ namespace basestation {
 
 // Compact binary LoRa payload layout (38 bytes)
 struct __attribute__((packed)) LoRaBinaryPayload {
-  uint8_t  magic;        // 0x46 ('F' for FogSen)
+  uint8_t  magic;        // 0x46 is the legacy protocol marker.
   uint8_t  nodeId;       // 1 (FRONT) or 2 (REAR)
   uint32_t seq;          // Monotonic packet sequence from node
   uint32_t nodeMs;       // Node internal millis() timestamp
@@ -109,7 +109,7 @@ class MultiNodeTracker {
   uint32_t totalDrops() const { return nodes_[0].dropCount + nodes_[1].dropCount; }
   uint32_t parseErrors() const { return parseErrors_; }
 
-  // Nearest forward obstacle calculation for FogSen safety / E-Stop
+  // Nearest forward obstacle calculation for MI Sense safety / E-Stop
   float calculateNearestForwardM(bool& hasValidRange) const;
   bool isForwardCoverageSufficient() const;
 

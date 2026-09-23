@@ -86,7 +86,7 @@ def _normalized_gps(packet: MainTelemetryPacket) -> GpsTelemetry:
 
 
 class LiveSerialRuntime:
-    """Publish wired MAIN telemetry through the canonical FogSen world store."""
+    """Publish wired MAIN telemetry through the canonical MI Sense world store."""
 
     def __init__(
         self,

@@ -1,6 +1,6 @@
 # Truck 2 Wi-Fi telemetry
 
-This NodeMCU ESP8266 sketch sends GPS status directly to the FogSen backend
+This NodeMCU ESP8266 sketch sends GPS status directly to the MI Sense backend
 over Wi-Fi. LoRa and the base station are no longer used.
 
 GPS TX connects to D1, GPIO5. GPS RX is unconnected. Join grounds and power

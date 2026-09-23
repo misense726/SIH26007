@@ -1,6 +1,6 @@
 # Demo
 
-FogSen starts in a deterministic `NORMAL` simulation. The backend publishes the
+MI Sense starts in a deterministic `NORMAL` simulation. The backend publishes the
 same `WorldState` contract used by the wired live runtime. Both dashboards read
 that shared state.
 

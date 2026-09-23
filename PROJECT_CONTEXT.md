@@ -1,12 +1,13 @@
-# FogSen — PROJECT_CONTEXT.md
+# MI Sense — PROJECT_CONTEXT.md
 
 ## Project Identity
 
-**Project:** FogSen  
+**Project:** MI Sense
+
 **Target:** Smart India Hackathon 2026 — Problem Statement 26007  
 **Domain:** Safe and efficient operation of mine vehicles in fog and low-visibility conditions in open-cast iron ore mines.
 
-FogSen is not primarily a fog detector. Its core is:
+MI Sense is not primarily a fog detector. Its core is:
 
 **Digital Twin + Synthetic Driver Awareness + Confidence-Aware Sensor Fusion**
 
@@ -218,7 +219,7 @@ camera ML alone.
 
 # 4. V1-to-Production Mapping
 
-| Production FogSen | V1 |
+| Production MI Sense | V1 |
 |---|---|
 | LiDAR | Front/rear servo-scanned VL53L1X |
 | Local proximity sensing | Three fixed VL53L0X V2 sensors |
@@ -235,7 +236,7 @@ Never claim ToF is equivalent to industrial LiDAR.
 
 Preferred wording:
 
-> The V1 reproduces the angular ranging and spatial reconstruction principle using low-cost ToF sensors. Production FogSen replaces this prototype layer with industrial LiDAR and distributed mmWave radar.
+> The V1 reproduces the angular ranging and spatial reconstruction principle using low-cost ToF sensors. Production MI Sense replaces this prototype layer with industrial LiDAR and distributed mmWave radar.
 
 ---
 
@@ -621,7 +622,7 @@ Not allowed:
 
 # 17. Frozen Project Rule
 
-This file is the canonical FogSen V1 architecture.
+This file is the canonical MI Sense V1 architecture.
 
 Do not change:
 - sensor count/layout;

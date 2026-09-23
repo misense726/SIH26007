@@ -27,7 +27,7 @@ arduino-cli lib install `
     "Adafruit MPU6050@2.2.9" `
     "Adafruit BMP280 Library@3.0.0"
 if ($LASTEXITCODE -ne 0) {
-    throw "Could not install the pinned FogSen firmware libraries."
+    throw "Could not install the pinned MI Sense firmware libraries."
 }
 
-Write-Host "FogSen firmware toolchain is ready."
+Write-Host "MI Sense firmware toolchain is ready."

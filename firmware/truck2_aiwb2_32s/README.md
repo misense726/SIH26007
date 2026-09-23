@@ -66,6 +66,6 @@ Watch USB for `LORA_READY` and `LORA_TX_OK`. The base station must print a match
 counts checksum-valid NMEA sentences. Neither alone proves a GPS fix.
 
 The old station may print the packet and then reject it as missing `miner_id`.
-That proves radio reception only. The FogSen base sketch forwards the raw
-`fogsen.lora.v1` packet; FogSen's existing `fogsen.main.v1` TCP parser still needs
+That proves radio reception only. The MI Sense base sketch forwards the raw
+`fogsen.lora.v1` packet; MI Sense's existing `fogsen.main.v1` TCP parser still needs
 a separate GPS/fleet adapter before these packets can drive the dashboard.

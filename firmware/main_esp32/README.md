@@ -1,4 +1,4 @@
-# FogSen BACK/MAIN ESP32 firmware
+# MI Sense BACK/MAIN ESP32 firmware
 
 This project targets a normal ESP32-WROOM DevKit. It runs the rear VL53L1X and
 rear SG90 locally, receives FRONT and MIDDLE telemetry over separate UARTs,

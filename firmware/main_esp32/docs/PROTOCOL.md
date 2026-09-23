@@ -1,7 +1,7 @@
 # MAIN firmware protocol
 
 Packets use newline-delimited UTF-8 JSON. Internal node links and the USB
-fallback use 115200 baud. MAIN also sends the same telemetry to the FogSen
+fallback use 115200 baud. MAIN also sends the same telemetry to the MI Sense
 backend over Wi-Fi TCP. Wi-Fi targets 20 Hz; the full USB packet sustains about
 10 Hz at 115200 baud.
 

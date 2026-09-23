@@ -1,5 +1,5 @@
 [Unit]
-Description=FogSen continuous Wi-Fi camera stream
+Description=MI Sense continuous Wi-Fi camera stream
 After=network-online.target
 Wants=network-online.target
 StartLimitIntervalSec=60

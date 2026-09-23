@@ -63,7 +63,7 @@ readings stay unavailable rather than becoming zero kilograms or valid positions
 
 ## Backend and dashboard
 
-Run from the FogSen root:
+Run from the MI Sense root:
 
 ```powershell
 $env:FOGSEN_MODE = 'LIVE'

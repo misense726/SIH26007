@@ -33,7 +33,7 @@ COMMANDS = (
 
 def _arguments() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Read and validate FogSen MAIN telemetry over a USB cable."
+        description="Read and validate MI Sense MAIN telemetry over a USB cable."
     )
     parser.add_argument(
         "--port",

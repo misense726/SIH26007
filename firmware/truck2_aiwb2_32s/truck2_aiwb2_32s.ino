@@ -1,5 +1,5 @@
 /*
- * FogSen truck 2 GPS/LoRa sender.
+ * MI Sense truck 2 GPS/LoRa sender.
  *
  * Target: Ai-Thinker Ai-WB2-32S-Kit (BL602).
  * The sender publishes one compact JSON packet every two seconds. The packet

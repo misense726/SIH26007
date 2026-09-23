@@ -44,9 +44,9 @@ reported `lora_ready=true` and `packets_received=0` during the same capture.
 The fallback did not resolve the failure. Wiring, supply, reset level, and
 module identity need physical inspection; no individual cause is proven.
 
-The FogSen replacement base-station sketch also compiled with
+The MI Sense replacement base-station sketch also compiled with
 `esp8266:esp8266:nodemcuv2`: 250,480 bytes of flash code, 28,408 bytes of global
 RAM and 60,267 bytes of the instruction-memory region including its reserved
 cache. It has not been uploaded. Wi-Fi forwarding is disabled until local
 credentials and a PC address are supplied. The GPS/fleet packet adapter for
-the FogSen backend is still outstanding.
+the MI Sense backend is still outstanding.

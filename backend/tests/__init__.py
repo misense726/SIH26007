@@ -1,2 +1,1 @@
-"""FogSen backend tests."""
-
+"""MI Sense backend tests."""

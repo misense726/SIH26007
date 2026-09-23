@@ -1,8 +1,8 @@
-# FogSen firmware context
+# MI Sense firmware context
 
 ## Controller ownership
 
-FogSen uses three controllers. Their sensor links remain wired, while MAIN
+MI Sense uses three controllers. Their sensor links remain wired, while MAIN
 publishes the combined dashboard packet to the laptop over Wi-Fi:
 
 - FRONT XIAO ESP32-C6 owns `front_scanner`, `front_fixed`, and the front SG90;

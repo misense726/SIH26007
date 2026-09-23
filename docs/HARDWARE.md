@@ -1,6 +1,6 @@
 # Hardware
 
-FogSen V1 keeps five ToFs and three wired controllers:
+MI Sense V1 keeps five ToFs and three wired controllers:
 
 1. FRONT, a Seeed XIAO ESP32-C6 with the front scanner, fixed-front ToF, and
    front SG90;

@@ -1,4 +1,4 @@
-# Run FogSen with Docker
+# Run MI Sense with Docker
 
 The Compose stack runs two containers:
 

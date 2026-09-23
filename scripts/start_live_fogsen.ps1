@@ -14,7 +14,7 @@ Set-Location $projectRoot
 
 $python = Join-Path $projectRoot ".venv\Scripts\python.exe"
 if (-not (Test-Path -LiteralPath $python)) {
-    throw "FogSen virtual environment is missing: $python"
+    throw "MI Sense virtual environment is missing: $python"
 }
 
 if (-not $SerialPort.Trim()) {
@@ -22,7 +22,7 @@ if (-not $SerialPort.Trim()) {
     $detectedPorts = @($detectedPorts | Where-Object { $_ -match '^COM\d+$' })
     if ($detectedPorts.Count -ne 1) {
         $found = if ($detectedPorts.Count -eq 0) { "none" } else { $detectedPorts -join ", " }
-        throw "FogSen could not identify one MAIN CP210x USB port (found: $found). Pass -SerialPort COMx after checking the connected boards."
+        throw "MI Sense could not identify one MAIN CP210x USB port (found: $found). Pass -SerialPort COMx after checking the connected boards."
     }
     $SerialPort = $detectedPorts[0]
 }
@@ -36,7 +36,7 @@ if (-not $NoCamera) {
         if ($PiHost -match '^\d{1,3}(\.\d{1,3}){3}$') {
             $piAddress = $PiHost
         } else {
-            throw "FogSen could not resolve the Pi host '$PiHost'. Pass -PiHost with its current LAN IP or use -NoCamera."
+            throw "MI Sense could not resolve the Pi host '$PiHost'. Pass -PiHost with its current LAN IP or use -NoCamera."
         }
     }
     $cameraUrl = "tcp://{0}:{1}" -f $piAddress, $PiCameraPort
@@ -55,10 +55,10 @@ if ($NoCamera) {
     Remove-Item Env:FOGSEN_CAMERA_STREAM_URL -ErrorAction SilentlyContinue
     $env:FOGSEN_CAMERA_DEHAZE_ENABLED = "false"
     $env:FOGSEN_CAMERA_IR_ENABLED = "false"
-    Write-Host ("FogSen LIVE: API 0.0.0.0:{0}, MAIN USB {1} + Wi-Fi 0.0.0.0:{2}, {3} Hz, camera disabled" -f $ApiPort, $SerialPort, $TelemetryPort, $TelemetryHz)
+    Write-Host ("MI Sense LIVE: API 0.0.0.0:{0}, MAIN USB {1} + Wi-Fi 0.0.0.0:{2}, {3} Hz, camera disabled" -f $ApiPort, $SerialPort, $TelemetryPort, $TelemetryHz)
 } else {
     $env:FOGSEN_CAMERA_STREAM_URL = $cameraUrl
-    Write-Host ("FogSen LIVE: API 0.0.0.0:{0}, MAIN USB {1} + Wi-Fi 0.0.0.0:{2}, {3} Hz, Pi camera {4}" -f $ApiPort, $SerialPort, $TelemetryPort, $TelemetryHz, $cameraUrl)
+    Write-Host ("MI Sense LIVE: API 0.0.0.0:{0}, MAIN USB {1} + Wi-Fi 0.0.0.0:{2}, {3} Hz, Pi camera {4}" -f $ApiPort, $SerialPort, $TelemetryPort, $TelemetryHz, $cameraUrl)
     Write-Host "Camera processing settings are loaded from .env when present."
 }
 

@@ -237,4 +237,4 @@ def test_firmware_prompts_match_the_compiled_configuration() -> None:
     assert "FRONT and MIDDLE clear a stuck SDA line" in firmware_context
     assert "FRONT uses GPIO22 and GPIO23 at 100 kHz" in research
     assert "MIDDLE uses GPIO4 and GPIO5 at 400 kHz" in research
-    assert "Both FogSen scanners use short mode with a 20 ms budget" in research
+    assert "Both MI Sense scanners use short mode with a 20 ms budget" in research

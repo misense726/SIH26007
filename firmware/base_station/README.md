@@ -1,6 +1,6 @@
-# FogSen Base Station Firmware
+# MI Sense Base Station Firmware
 
-The FogSen Base Station receives high-frequency LoRa RF telemetry from up to 2 vehicle nodes (SX1278 transceivers), aggregates their multi-sensor streams (GPS NEO-6M, HX711 5kg Load Cell, ToFs, IMU, Environment, Safety), and bridges the data over USB Serial (115200 baud) to the FogSen backend and dashboard in the standard `fogsen.main.v1` JSON wire schema.
+The MI Sense Base Station receives high-frequency LoRa RF telemetry from up to 2 vehicle nodes (SX1278 transceivers), aggregates their multi-sensor streams (GPS NEO-6M, HX711 5kg Load Cell, ToFs, IMU, Environment, Safety), and bridges the data over USB Serial (115200 baud) to the MI Sense backend and dashboard in the standard `fogsen.main.v1` JSON wire schema.
 
 The firmware is dual-targeted and compiles cleanly on **ESP32** or **ESP8266** (NodeMCU v2/v3 / WeMos D1 Mini).
 
