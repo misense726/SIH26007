@@ -25,11 +25,45 @@ html[data-theme="light"] {
 .app-shell-supervisor .topbar {
   position: relative;
   top: auto;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: auto minmax(0, 1fr) auto;
 }
 
 .app-shell-supervisor .status-row {
   justify-self: end;
+}
+
+.supervisor-spatial-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.supervisor-spatial-link {
+  display: inline-flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  color: var(--text);
+  background: var(--surface-control);
+  text-decoration: none;
+}
+
+.supervisor-spatial-link:hover {
+  border-color: var(--workspace-driver);
+  color: var(--workspace-driver);
+}
+
+.supervisor-spatial-link:focus-visible {
+  outline: 2px solid var(--workspace-driver);
+  outline-offset: 2px;
+}
+
+.supervisor-spatial-link svg {
+  width: 16px;
+  height: 16px;
 }
 
 .brand-lockup {
@@ -174,6 +208,10 @@ html[data-theme="light"] {
     order: 3;
   }
 
+  .supervisor-spatial-nav {
+    margin-left: auto;
+  }
+
   .workspace-nav-group {
     display: block;
   }
@@ -204,6 +242,11 @@ html[data-theme="light"] {
     min-width: 0;
     min-height: 52px;
     padding: 5px 2px;
+  }
+
+  .supervisor-spatial-link {
+    min-height: 38px;
+    padding: 6px 10px;
   }
 
   .status-row .mode-pill {

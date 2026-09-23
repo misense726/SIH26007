@@ -96,6 +96,15 @@ export function AppShell({
           </nav>
         )}
 
+        {role === "SUPERVISOR" && (
+          <nav className="supervisor-spatial-nav" aria-label="Spatial navigation">
+            <a href="#spatial" className="supervisor-spatial-link">
+              <DashboardViewIcon view="SPATIAL" />
+              <span>Spatial view</span>
+            </a>
+          </nav>
+        )}
+
         <div className="status-row" aria-label="System status and session">
           <span className="role-chip">{roleLabel}</span>
           {STATIC_DEMO ? (
