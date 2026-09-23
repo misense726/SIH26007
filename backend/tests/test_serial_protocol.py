@@ -300,11 +300,24 @@ def test_serial_reader_separates_events_from_telemetry(monkeypatch: pytest.Monke
     )
 
     class FakeSerial:
-        def __init__(self, **kwargs: object) -> None:
-            self.port = kwargs["port"]
+        def __init__(self) -> None:
+            self.port = None
+            self.baudrate = None
+            self.timeout = None
+            self.write_timeout = None
+            self.dtr = True
+            self.rts = True
+            self.opened = False
             self._buffer = bytearray(wire_bytes)
             self.writes: list[bytes] = []
             self.closed = False
+
+        def open(self) -> None:
+            assert self.port == "COM42"
+            assert self.baudrate == 115200
+            assert self.timeout == self.write_timeout == 0
+            assert self.dtr is False and self.rts is False
+            self.opened = True
 
         @property
         def in_waiting(self) -> int:
@@ -325,6 +338,7 @@ def test_serial_reader_separates_events_from_telemetry(monkeypatch: pytest.Monke
     fake_module = SimpleNamespace(Serial=FakeSerial)
     monkeypatch.setitem(sys.modules, "serial", fake_module)
     reader = MainControllerSerial("COM42")
+    assert reader._serial.opened
 
     packets = reader.poll()
     assert len(packets) == 1
