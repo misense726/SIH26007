@@ -2,8 +2,8 @@
 
 MI Sense is a proof of concept for mine-vehicle operation in fog and low visibility. It builds one backend-owned world model from vehicle pose, range sensing, environment data, and safety state. The driver and supervisor interfaces render that same state.
 
-The existing `fogsen` package name, `FOGSEN_*` settings, script names, and wire
-schema IDs remain in place for compatibility with hardware and recordings.
+Existing package names, configuration keys, scripts, and wire schema IDs remain
+unchanged for compatibility with hardware and recordings.
 
 The dashboard starts in `SIMULATED` mode. The repository also includes
 compile-verified firmware for BACK/MAIN, FRONT, and MIDDLE, a laptop serial
