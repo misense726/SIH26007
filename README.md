@@ -59,6 +59,19 @@ FogSen currently includes:
 See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for the milestone record.
 See [docs/haul-simulation.md](docs/haul-simulation.md) for the haul run and efficiency checks.
 
+## Technology stack
+
+| Layer | Software |
+| --- | --- |
+| Backend and simulation | Python, FastAPI, Pydantic, NumPy, and Shapely |
+| Dashboard and mine scene | React, TypeScript, Vite, and Three.js |
+| Controller firmware | ESP32, Arduino framework, and PlatformIO |
+
+The software named above is open-source. The Government of India's [Policy on Adoption of
+Open Source Software](https://www.meity.gov.in/static/uploads/2024/02/policy_on_adoption_of_oss.pdf)
+expresses a preference for open-source software in government e-governance
+systems. It does not certify FogSen or approve this particular stack.
+
 ## Requirements
 
 - Python 3.11 or newer;
@@ -266,3 +279,11 @@ scripts/     Local launch and validation helpers
 ```
 
 Read `PROJECT_CONTEXT.md` before changing the frozen V1 architecture. Contributors and coding agents must also follow `AGENTS.md`.
+
+## License
+
+The contributors license FogSen's project-authored code and documentation under
+the [MIT License](LICENSE). Third-party software and assets keep their own terms;
+see [third-party components](docs/THIRD_PARTY.md),
+[mine terrain materials](frontend/public/textures/mine/ATTRIBUTION.md), and
+license notices included with dependencies.
