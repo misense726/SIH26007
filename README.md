@@ -1,72 +1,55 @@
 # MI Sense
 
-MI Sense is a proof of concept for mine-vehicle operation in fog and low visibility. It builds one backend-owned world model from vehicle pose, range sensing, environment data, and safety state. The driver and supervisor interfaces render that same state.
+MI Sense is purpose-built for mine haulage in fog and low visibility. In a local
+LIVE setup, truck telemetry feeds one world model for both consoles. The driver
+screen keeps nearby hazards and corridor status prominent; the supervisor
+screen separates fleet status, alerts and haul analysis.
 
-Existing package names, configuration keys, scripts, and wire schema IDs remain
-unchanged for compatibility with hardware and recordings.
+## Website views
 
-The dashboard starts in `SIMULATED` mode. The repository also includes
-compile-verified firmware for BACK/MAIN, FRONT, and MIDDLE, a laptop serial
-monitor, and an opt-in `LIVE` runtime. The live backend accepts MAIN telemetry
-over USB, Wi-Fi, or both at once and publishes the same dashboard state. It does
-not claim that prototype ToF sensors are industrial LiDAR, that BMP280 produces
-precise altitude, or that a relay motor cut is production braking.
+Screenshots are from the SIMULATED demo.
 
-The current `LIVE` hardware profile leaves Hall sensors and the motor-cut relay
-unconnected. Their code remains behind disabled flags for a later build. The
-deterministic simulator still exercises those future interfaces.
+### Spatial surroundings
 
-## What runs now
+![MI Sense spatial view with mapped surroundings and a rock-ahead alert](docs/screenshots/spatial-rock-alert.png)
 
-MI Sense currently includes:
+The spatial view shows point-mapped surroundings and a rock-ahead warning above the truck scene.
 
-- FastAPI health, status, and world-state endpoints;
-- a WebSocket telemetry stream;
-- strict Pydantic telemetry contracts with additive operational state;
-- Driver and Supervisor console separation via client-side demo role selection;
-- NMDC Bailadila Deposit 5 / Deposit 14 inspired mine road graph (pickups, dumps, junctions, waypoints, road status, gradients, and speed limits);
-- payload-aware multi-criteria Dijkstra route optimizer (loaded dumpers receive gentle bypasses, empty dumpers take steep shortcuts);
-- dynamic rerouting on edge closures with retained V2I advisories;
-- multi-vehicle haulage cycle state machine and kinematic progression;
-- peer-to-peer V2V BSM mesh exchange and tactical collision threat alerts;
-- haulage efficiency analytics with fleet-wide ranking, production rate, and underperforming truck detection;
-- 8 deterministic operational demonstration scenarios with isolated baselines;
-- configuration for the vehicle, five ToFs, calibration, safety, and the demo;
-- provider interfaces for simulated, wired live, replay, and future hardware;
-- a React and TypeScript dashboard connected to backend telemetry;
-- a continuous mine-to-crusher circuit with sensor-confirmed rock avoidance,
-  opposing traffic, a turning lead truck, an angled mine map and navigation;
-- separate Driver workspace navigation for Awareness, Spatial, and Calibration,
-  and a Supervisor workspace for Fleet command;
-- supervisor Overview, Fleet, Alerts, and Network sections with active exceptions
-  separated from event history and primary telemetry separated from V2X peers;
-- the spatial dumper mesh documented in [docs/spatial-truck-model.md](docs/spatial-truck-model.md);
-- a road-aligned Chennai campus route with a moving dumper;
-- a camera-first driver dashboard with Auto, Camera, and calibrated ToF spatial views;
-- a Raspberry Pi RGB feed over Wi-Fi with raw and GPU-dehazed driver views;
-- an optional CPU or CUDA false-color IR view derived from the RGB feed, not a
-  thermal camera;
-- a compact Leaflet road map with a solid route and stable heading pointers;
-- saved light and dark themes with neutral surfaces and safety-only status colors;
-- a supervisor fleet map with selectable backend schematic and road-map views,
-  multi-truck selection, environment, sensor health, and alerts;
-- an in-memory V2V/V2I simulation with peer state, roadside units, advisories,
-  packet history, and API controls;
-- deterministic normal, fog, obstacle, emergency, and 8 Bailadila scenarios;
-- backend and frontend tests;
-- wired firmware for one ESP32-WROOM BACK/MAIN, one XIAO ESP32-C6 FRONT, and
-  one ESP32-C3 Super Mini MIDDLE controller;
-- MAIN-to-laptop telemetry over USB and Wi-Fi, with duplicate suppression and
-  either link able to carry the dashboard independently.
+### Driver awareness
 
-See [docs/IMPLEMENTATION_STATUS.md](docs/IMPLEMENTATION_STATUS.md) for the milestone record.
-See [docs/haul-simulation.md](docs/haul-simulation.md) for the haul run and efficiency checks.
+![MI Sense driver awareness with a forward camera view and safety panels](docs/screenshots/driver-awareness.png)
+
+The driver sees the forward camera view, route, visibility, corridor status and speed on one screen.
+
+### Supervisor fleet
+
+![MI Sense supervisor mine scene with dumpers and crusher](docs/screenshots/supervisor-fleet.png)
+
+The supervisor map locates dumpers between the mining area and crusher in an illustrative 3D scene.
+
+### Haul efficiency
+
+![MI Sense haul efficiency view with trip chart and vehicle metrics](docs/screenshots/haul-efficiency.png)
+
+The per-haul chart compares transport efficiency and payload. A side panel shows estimated fuel and the latest completed trip.
+
+## Live system
+
+- The local LIVE runtime accepts telemetry from MAIN over USB or Wi-Fi. MAIN aggregates the FRONT and MIDDLE sensor nodes.
+- The backend owns the map, vehicle state, hazards and safety status. Both consoles read that state.
+- The driver console prioritizes forward awareness and warnings. The supervisor console shows fleet and sensor status, alerts and available haul data.
+
+The current physical profile leaves Hall sensors and the motor-cut relay disconnected. Prototype ToF sensing is not industrial LiDAR, BMP280 altitude is relative, and the motor-cut output is not production braking.
+
+See [implementation status](docs/IMPLEMENTATION_STATUS.md),
+[haul workflow and efficiency](docs/haul-simulation.md) and
+[hardware setup](firmware/README.md) for details.
 
 ## Technology stack
 
 | Layer | Software |
 | --- | --- |
-| Backend and simulation | Python, FastAPI, Pydantic, NumPy, and Shapely |
+| Backend and world model | Python, FastAPI, Pydantic, NumPy, and Shapely |
 | Dashboard and mine scene | React, TypeScript, Vite, and Three.js |
 | Controller firmware | ESP32, Arduino framework, and PlatformIO |
 
