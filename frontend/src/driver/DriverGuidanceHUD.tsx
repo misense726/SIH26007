@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { fetchNavigationGuidance } from "../api/mineApi";
+import { STATIC_DEMO } from "../simulation/demoMode";
 import type { GuidanceResponse, WorldState } from "../types";
 
 interface DriverGuidanceHUDProps {
@@ -17,6 +18,7 @@ export function DriverGuidanceHUD({
   const canonicalGuidance = world.operations?.guidance?.[world.primary_vehicle_id];
 
   useEffect(() => {
+    if (STATIC_DEMO) return;
     let mounted = true;
 
     async function loadGuidance() {

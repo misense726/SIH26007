@@ -225,6 +225,8 @@ calibration is tab-local; sending advisories and zeroing hardware require the lo
 backend. The regular `npm --prefix frontend run build` and local backend retain
 LIVE/SIMULATED/REPLAY behavior and hardware controls. Local WebSocket clients also
 disconnect when hidden and use bounded reconnect backoff.
+The public Driver view reads guidance from each recorded WorldState rather than
+polling a nonexistent API. Static analytics read the recorded JSON fixtures once.
 
 Build and preview the public demo without running a backend:
 

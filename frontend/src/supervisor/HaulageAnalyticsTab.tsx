@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import type { HaulageMetrics, TripHistoryResponse } from "../types";
 import { fetchHaulageMetrics, fetchTripHistory } from "../api/mineApi";
 import { formatNumber } from "../state/selectors";
+import { STATIC_DEMO } from "../simulation/demoMode";
 
 interface HaulageAnalyticsTabProps {
   onSelectTruck?: (truckId: string) => void;
@@ -50,10 +51,10 @@ export function HaulageAnalyticsTab({ onSelectTruck }: HaulageAnalyticsTabProps)
     }
 
     loadData();
-    const interval = setInterval(loadData, 2000);
+    const interval = STATIC_DEMO ? null : setInterval(loadData, 2000);
     return () => {
       mounted = false;
-      clearInterval(interval);
+      if (interval !== null) clearInterval(interval);
     };
   }, []);
 

@@ -59,7 +59,7 @@ export async function fetchFleetVehicles(): Promise<FleetVehicleSummary[]> {
 }
 
 export async function fetchHaulageMetrics(): Promise<HaulageMetrics> {
-  const res = await fetch("/api/analytics/haulage-metrics");
+  const res = await fetch(STATIC_DEMO ? "/demo/haulage-metrics.json" : "/api/analytics/haulage-metrics");
   if (!res.ok) {
     throw new Error(`Failed to fetch haulage metrics: ${res.statusText}`);
   }
