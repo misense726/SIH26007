@@ -29,10 +29,10 @@ from backend.app.sensor_settings import SensorSettingsStore
 from backend.app.simulation.engine import FullSimulator
 from backend.app.twin.world_store import WorldStore
 
-TICK_HZ = 10
-SAMPLE_EVERY_TICKS = 2
+TICK_HZ = 5
 FRAMES_PER_CHUNK = 25
 FRAME_INTERVAL_MS = 100  # Five simulated Hz played at twice recorded speed.
+DEMO_V2X_HISTORY_LIMIT = 8
 DEFAULT_MAX_SECONDS = 1200
 # Fixed epoch and gzip mtime make identical source/config produce identical URLs.
 START_TIMESTAMP_MS = 1_783_036_800_000
@@ -131,18 +131,20 @@ async def export_demo(
             simulator = FullSimulator(WorldStore(), config, telemetry_hz=TICK_HZ)
             write_analytics(staging, simulator.analytics, simulator.active_fleet_count)
             for tick in range(1, math.floor(max_seconds * TICK_HZ) + 1):
-                clock_ms = START_TIMESTAMP_MS + tick * 100
+                clock_ms = START_TIMESTAMP_MS + tick * round(1000 / TICK_HZ)
                 world = await simulator.tick()
                 if world.mode is not DataMode.SIMULATED or world.haul_route is None:
                     raise RuntimeError("Demo export requires SIMULATED haul telemetry")
                 if world.haul_route.cycle > 1:
-                    duration_ms = (tick - 1) * 100
+                    duration_ms = (tick - 1) * round(1000 / TICK_HZ)
                     break
-                if (tick - 1) % SAMPLE_EVERY_TICKS:
-                    continue
                 if reference_map is None:
                     reference_map = round_floats(world.reference_map.model_dump(mode="json"))
                 current = round_floats(world.model_dump(mode="json", exclude={"reference_map"}))
+                # The public playback displays recent network events only. Keep
+                # its rolling window small so every frame does not re-upload a
+                # 50-message log to static hosting.
+                current["v2x"]["recent_messages"] = current["v2x"]["recent_messages"][-DEMO_V2X_HISTORY_LIMIT:]
                 frames.append(delta_frame(previous, current))
                 previous = current
                 frame_count += 1
@@ -164,7 +166,7 @@ async def export_demo(
             "scenario": "HAUL",
             "encoding": "gzip-json-top-level-delta",
             "frame_interval_ms": FRAME_INTERVAL_MS,
-            "sample_interval_ms": 200,
+            "sample_interval_ms": round(1000 / TICK_HZ),
             "playback_speed": 2,
             "loop": True,
             "total_frames": frame_count,

@@ -44,7 +44,7 @@ demo:
     reversing_s: 6
     dumping_s: 6
     lowering_s: 2
-    cruise_speed_mps: 1.8
+    cruise_speed_mps: 1.9
     encounter_speed_mps: 1.15
     corner_blend_m: 1.8
     route_points_m: [[0, 0], [0, 22], [2, 26], [6, 28], [20, 30], [28, 34], [32, 40], [32, 44], [30, 61], [16, 75], [-14, 78], [-40, 68], [-58, 50], [-63, 24], [-58, 0], [-39, -15], [-15, -10], [0, 0]]
@@ -56,6 +56,19 @@ demo:
     acceleration_mps2: 0.6
     rock_detour_offset_m: -1.65
     rock_detour_span_m: 4.5
+    production_rock_distance_m: 24
+    production_rock_encounters_m: [135, 216, 332, 420, 580, 631, 732, 834, 925, 1030, 1131, 1246]
+    production_rock_shoulder_offset_m: 2.2
+    production_rock_radius_m: 0.42
+    production_rock_detour_offset_m: 1.55
+    production_rock_detour_span_m: 8
+    production_staging_lane_offset_m: 1.2
+    production_staging_offset_start_m: 80
+    production_staging_offset_ramp_m: 20
+    production_conflict_zones_m:
+      - [[288, 334]]
+      - [[78, 140], [1175, 1245]]
+      - [[490, 516], [792, 830]]
     lead_distance_m: 38
     lead_yield_s: 3
     lead_speed_mps: 0.9

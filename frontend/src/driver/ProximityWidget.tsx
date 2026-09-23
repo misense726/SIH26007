@@ -299,6 +299,27 @@ function latestReading(readings: RangeReading[], sensorId: string): RangeReading
     .sort((left, right) => right.timestamp_ms - left.timestamp_ms)[0];
 }
 
+export interface ProximityAlert {
+  sensor: SensorDisplaySetting;
+  reading: RangeReading;
+}
+
+export function activeProximityAlerts(
+  readings: RangeReading[],
+  sensors: SensorDisplaySetting[],
+): ProximityAlert[] {
+  return sensors
+    .map((sensor) => ({
+      sensor,
+      reading: latestReading(readings, sensor.sensor_id),
+    }))
+    .filter((candidate): candidate is ProximityAlert =>
+      candidate.reading !== undefined &&
+      getSensorThreatLevel(candidate.reading, candidate.sensor) === "ALERT"
+    )
+    .sort((left, right) => left.reading.range_m - right.reading.range_m);
+}
+
 export function ProximityWidget({
   points,
   vehicle,
@@ -328,6 +349,8 @@ export function ProximityWidget({
   const trustedPoints = telemetryConnected
     ? points.filter((point) => trustedSensorIds.has(point.source_sensor_id))
     : [];
+  const proximityAlerts = activeProximityAlerts(trustedReadings, sensorSettings);
+  const nearestAlert = proximityAlerts[0];
 
   return (
     <article className="proximity-card">
@@ -338,6 +361,13 @@ export function ProximityWidget({
         </div>
         <span className="source-badge">ToF · 2.5D</span>
       </div>
+
+      {nearestAlert && (
+        <div className="proximity-alert" role="alert" aria-live="assertive">
+          <strong>PROXIMITY ALERT</strong>
+          <span>{nearestAlert.sensor.label}: {nearestAlert.reading.range_m.toFixed(2)} m</span>
+        </div>
+      )}
 
       <TofRangePlot
         points={trustedPoints}

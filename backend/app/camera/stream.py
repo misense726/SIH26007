@@ -94,8 +94,10 @@ class LiveCameraStream:
         enhancement_max_fps: float = 30.0,
         ir_enhancer: FrameEnhancer | None = None,
         ir_max_fps: float = 30.0,
+        rotation: int = 0,
     ) -> None:
         self.source_uri = source_uri
+        self._rotation = rotation
         self._stale_ms = stale_ms
         self._reconnect_s = reconnect_ms / 1_000.0
         self._open_timeout_ms = open_timeout_ms
@@ -514,6 +516,13 @@ class LiveCameraStream:
                 if not ok or frame is None:
                     self._set_status("error", "The FogSen Pi camera stream disconnected")
                     break
+
+                if self._rotation == 180:
+                    frame = cv2.rotate(frame, cv2.ROTATE_180)
+                elif self._rotation == 90:
+                    frame = cv2.rotate(frame, cv2.ROTATE_90_CLOCKWISE)
+                elif self._rotation == 270:
+                    frame = cv2.rotate(frame, cv2.ROTATE_90_COUNTERCLOCKWISE)
 
                 captured_at = time.monotonic()
                 timestamp_ms = now_ms()

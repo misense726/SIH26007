@@ -70,6 +70,7 @@ def create_app(
                 enhancement_max_fps=active_settings.camera_dehaze_max_fps,
                 ir_enhancer=ir_enhancer,
                 ir_max_fps=active_settings.camera_ir_max_fps,
+                rotation=active_settings.camera_rotation,
             )
         app.state.camera_feed = active_camera_feed
         if active_camera_feed is not None:

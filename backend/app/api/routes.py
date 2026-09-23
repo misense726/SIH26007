@@ -11,6 +11,7 @@ from backend.app.analytics.models import HaulageMetrics, TripHistoryResponse
 from backend.app.fleet.models import FleetVehicleSummary
 from backend.app.mine_map.models import MineEdge, MineNetwork, RoadStatus
 from backend.app.models import (
+    DataMode,
     ReferenceMap,
     SimulationControlRequest,
     SimulationState,

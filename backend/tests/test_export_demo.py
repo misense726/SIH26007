@@ -15,6 +15,7 @@ from backend.app.models import DataMode, VehiclePose, WorldState
 from backend.app.sensor_settings import SensorSettingsState
 from backend.app.simulation.engine import FullSimulator
 from scripts.export_demo import (
+    DEMO_V2X_HISTORY_LIMIT,
     FRAMES_PER_CHUNK,
     START_TIMESTAMP_MS,
     delta_frame,
@@ -23,6 +24,7 @@ from scripts.export_demo import (
     export_analytics,
     round_floats,
 )
+from scripts.prepare_vercel_demo import prepare
 
 
 def digest(frame: dict) -> str:
@@ -37,8 +39,10 @@ def recording(tmp_path_factory):
 
     async def observed_tick(self):
         world = await original_tick(self)
-        if world.haul_route.cycle == 1 and world.sequence % 2:
-            expected.append(digest(round_floats(world.model_dump(mode="json"))))
+        if world.haul_route.cycle == 1:
+            frame = round_floats(world.model_dump(mode="json"))
+            frame["v2x"]["recent_messages"] = frame["v2x"]["recent_messages"][-DEMO_V2X_HISTORY_LIMIT:]
+            expected.append(digest(frame))
         return world
 
     with pytest.MonkeyPatch.context() as monkeypatch:
@@ -102,6 +106,7 @@ def test_full_cycle_roundtrip_matches_backend_frames(recording):
         assert len(world.spatial_points) <= 600
         assert len(world.occupancy.occupied_cells) <= 420
         assert len(world.alerts) <= 60
+        assert len(world.v2x.recent_messages) <= DEMO_V2X_HISTORY_LIMIT
         timestamps.append(world.generated_at_ms)
         phases.add(world.haul_route.phase)
         destinations.add(world.haul_route.destination)
@@ -112,7 +117,7 @@ def test_full_cycle_roundtrip_matches_backend_frames(recording):
     assert lead_moving_frames > 0
     assert actual == expected
     assert len(actual) == manifest["total_frames"]
-    assert timestamps[0] == START_TIMESTAMP_MS + 100 == manifest["first_timestamp_ms"]
+    assert timestamps[0] == START_TIMESTAMP_MS + 200 == manifest["first_timestamp_ms"]
     assert timestamps[-1] == manifest["last_timestamp_ms"]
     assert all(second - first == 200 for first, second in zip(timestamps, timestamps[1:]))
     assert manifest["simulation_duration_ms"] <= 1_200_000
@@ -234,3 +239,27 @@ def test_vercel_only_publishes_static_output():
     assert "Content-Encoding" not in headers["/demo/:chunk.json.gz"]
     assert headers["/demo/manifest.json"]["Cache-Control"] == "no-cache"
     assert headers["/demo/sensor-settings.json"]["Cache-Control"] == "no-cache"
+
+
+def test_prebuilt_vercel_upload_keeps_only_current_chunks(tmp_path):
+    demo = tmp_path / "demo"
+    demo.mkdir()
+    current = f"{'a' * 64}.json.gz"
+    old = f"{'b' * 64}.json.gz"
+    (demo / current).write_bytes(b"current")
+    (demo / old).write_bytes(b"old")
+    (demo / "manifest.json").write_text(json.dumps({
+        "mode": "SIMULATED", "scenario": "HAUL",
+        "chunks": [{"url": f"/demo/{current}", "frames": 1}],
+        "compressed_bytes": 7,
+    }))
+
+    assert prepare(tmp_path) == {"chunks": 1, "removed_old_chunks": 1, "compressed_bytes": 7}
+    assert (demo / current).read_bytes() == b"current"
+    assert not (demo / old).exists()
+    deployed_config = json.loads((tmp_path / "vercel.json").read_text())
+    assert deployed_config["framework"] is None
+    assert "buildCommand" not in deployed_config
+    assert "installCommand" not in deployed_config
+    assert "outputDirectory" not in deployed_config
+    assert deployed_config["headers"] == json.loads((PROJECT_ROOT / "vercel.json").read_text())["headers"]

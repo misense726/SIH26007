@@ -127,4 +127,41 @@ describe("proximity point projection", () => {
     expect(markup).not.toContain("1.42 m");
     expect(markup).not.toContain("15° scan");
   });
+
+  it("announces a close side ToF return as a proximity alert", () => {
+    const settings = defaultSensorSettings().sensors;
+    const reading: RangeReading = {
+      timestamp_ms: 10,
+      sensor_id: "left_side",
+      angle_deg: 0,
+      range_m: 0.3,
+      quality: 1,
+      max_range_m: 2,
+      is_valid: true,
+      mode: "LIVE",
+    };
+    const sensorHealth: SensorHealth[] = [{
+      sensor_id: "left_side",
+      status: "HEALTHY",
+      last_update_ms: 10,
+      confidence: 1,
+      detail: null,
+    }];
+
+    const markup = renderToStaticMarkup(
+      createElement(ProximityWidget, {
+        points: [],
+        vehicle,
+        readings: [reading],
+        sensorHealth,
+        sensorSettings: settings,
+        telemetryConnected: true,
+      }),
+    );
+
+    expect(markup).toContain('role="alert"');
+    expect(markup).toContain("PROXIMITY ALERT");
+    expect(markup).toContain("Left fixed: 0.30 m");
+    expect(markup).toContain("sensor-card-alert");
+  });
 });

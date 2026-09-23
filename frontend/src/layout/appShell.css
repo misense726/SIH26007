@@ -172,6 +172,7 @@ html[data-theme="light"] {
   cursor: pointer;
 }
 
+
 .demo-loading {
   padding: 32px;
   color: var(--text);

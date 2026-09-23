@@ -26,13 +26,22 @@ class IREnhancer:
         *,
         device: str = "auto",
         use_fp16: bool = True,
-        colormap: str = "INFERNO",
+        colormap: str = "GRAY",
         clahe_clip: float = 3.0,
         clahe_grid: tuple[int, int] = (8, 8),
     ) -> None:
         self._requested_device = device
         self._use_fp16 = use_fp16
         self._colormap_name = colormap.upper()
+        self._is_monochrome = self._colormap_name in {
+            "GRAY",
+            "GREY",
+            "BW",
+            "MONO",
+            "MONOCHROME",
+            "BLACKANDWHITE",
+            "IR",
+        }
         self._clahe_clip = clahe_clip
         self._clahe_grid = clahe_grid
         self._torch = None
@@ -91,9 +100,14 @@ class IREnhancer:
             self.precision = "FP16" if fp16 else "FP32"
 
             # Precompute 256-entry BGR colourmap LUT on GPU
-            lut_base = np.arange(256, dtype=np.uint8).reshape(256, 1)
-            lut_bgr = cv2.applyColorMap(lut_base, self._colormap_id)
-            lut_bgr = np.ascontiguousarray(lut_bgr.reshape(256, 3))
+            if self._is_monochrome:
+                lut_base = np.arange(256, dtype=np.uint8)
+                lut_bgr = np.stack([lut_base, lut_base, lut_base], axis=-1)
+                lut_bgr = np.ascontiguousarray(lut_bgr)
+            else:
+                lut_base = np.arange(256, dtype=np.uint8).reshape(256, 1)
+                lut_bgr = cv2.applyColorMap(lut_base, self._colormap_id)
+                lut_bgr = np.ascontiguousarray(lut_bgr.reshape(256, 3))
 
             self._gpu_lut = torch.from_numpy(lut_bgr).to(
                 device="cuda",
@@ -156,9 +170,11 @@ class IREnhancer:
         # CPU Fallback via OpenCV
         import cv2
         assert self._clahe is not None
-        assert self._colormap_id is not None
 
         grey = cv2.cvtColor(bgr_frame, cv2.COLOR_BGR2GRAY)
         grey = self._clahe.apply(grey)
+        if self._is_monochrome:
+            return cv2.cvtColor(grey, cv2.COLOR_GRAY2BGR)
+        assert self._colormap_id is not None
         ir_bgr = cv2.applyColorMap(grey, self._colormap_id)
         return ir_bgr

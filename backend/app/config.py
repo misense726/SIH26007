@@ -22,7 +22,7 @@ class RuntimeSettings(BaseModel):
     telemetry_transport: Literal["SERIAL", "WIFI", "BOTH"] = "SERIAL"
     serial_port: str | None = None
     serial_baud: int = Field(default=115200, ge=1200, le=3_000_000)
-    serial_stale_ms: int = Field(default=750, ge=50, le=60_000)
+    serial_stale_ms: int = Field(default=3000, ge=50, le=60_000)
     serial_poll_interval_ms: int = Field(default=10, ge=1, le=1_000)
     serial_reconnect_ms: int = Field(default=1_000, ge=50, le=60_000)
     wifi_listen_host: str = "0.0.0.0"
@@ -43,7 +43,8 @@ class RuntimeSettings(BaseModel):
     camera_ir_device: Literal["auto", "cuda", "cpu"] = "auto"
     camera_ir_fp16: bool = True
     camera_ir_max_fps: float = Field(default=30.0, gt=0.0, le=60.0)
-    camera_ir_colormap: str = "INFERNO"
+    camera_ir_colormap: str = "GRAY"
+    camera_rotation: int = Field(default=0, ge=0, le=270)
 
     @model_validator(mode="after")
     def require_live_serial_port(self) -> "RuntimeSettings":
@@ -94,7 +95,7 @@ def runtime_settings() -> RuntimeSettings:
         .upper(),
         serial_port=os.getenv("FOGSEN_SERIAL_PORT"),
         serial_baud=int(os.getenv("FOGSEN_SERIAL_BAUD", "115200")),
-        serial_stale_ms=int(os.getenv("FOGSEN_SERIAL_STALE_MS", "750")),
+        serial_stale_ms=int(os.getenv("FOGSEN_SERIAL_STALE_MS", "3000")),
         serial_poll_interval_ms=int(os.getenv("FOGSEN_SERIAL_POLL_MS", "10")),
         serial_reconnect_ms=int(os.getenv("FOGSEN_SERIAL_RECONNECT_MS", "1000")),
         wifi_listen_host=os.getenv("FOGSEN_WIFI_LISTEN_HOST", "0.0.0.0"),
@@ -131,9 +132,10 @@ def runtime_settings() -> RuntimeSettings:
         camera_ir_max_fps=float(
             os.getenv("FOGSEN_CAMERA_IR_MAX_FPS", "30")
         ),
-        camera_ir_colormap=os.getenv("FOGSEN_CAMERA_IR_COLORMAP", "INFERNO")
+        camera_ir_colormap=os.getenv("FOGSEN_CAMERA_IR_COLORMAP", "GRAY")
         .strip()
         .upper(),
+        camera_rotation=int(os.getenv("FOGSEN_CAMERA_ROTATION", "0")),
     )
 
 

@@ -57,21 +57,46 @@ The detour is configured for this track; this does not prove safe real-world pas
 
 Configuration is under `demo.haul` in `config/demo.yaml`. It owns route points,
 road width, traffic position/speed, obstacle position/radius and encounter times.
-Haul cruise speed is 1.8 m/s. Traffic and rock slowdowns retain a 1.15 m/s
-base before their reduction factors. Corners blend over 1.8 m on each side,
+Haul cruise speed is 1.9 m/s before the SIMULATED speed scale, capped at
+2.8 m/s in the local demo. Traffic and rock slowdowns retain a 1.15 m/s
+base before their reduction factors. The floor rock has a configured detour.
+Additional scripted rocks sit along the road shoulder at roughly 100 m
+intervals so the Spatial view presents another rock encounter about every
+40 seconds while trucks are travelling. The crusher and loading bay create
+longer gaps. These rocks are illustrative SIMULATED hazards; they do not
+change live ToF or automatic stop logic. Corners blend over 1.8 m on each side,
 limited by adjacent segment lengths, with continuous positions and headings.
 Every truck follows the same graded circuit. Loading, reversing, tipping and
 lowering durations, queue spacing and the turn-rate limit are configured alongside
-the route. The legacy encounter demo retains its opposing truck.
+the route. A staging-lane offset separates the loading queue from departing
+trucks, and paired crossing sections admit one direction at a time while
+same-direction trucks keep their queue spacing. Both sides of the crossing
+share one reservation so opposing trucks cannot wait on each other. The
+full-cycle footprint check samples all eight trucks and finds no intersections.
+The legacy encounter demo retains its opposing truck.
 Waypoint distances and loading/unloading stops retain their route coordinates.
 The previous Normal, Fog, Obstacle and Emergency scenarios retain the campus map.
 Hardware providers and calibration are unchanged.
 
 Spatial uses the WebGL point-cloud renderer adapted from Claude's `d70c1fb`
-implementation. In SIMULATED mode, the backend road polygons, berm coordinates
-and fleet poses provide the moving surroundings. Road and berm samples are
-labelled simulated mapping, separate from measured ToF returns. The supervisor
-retains its mine scene and backend-driven loading and tipping animations.
+implementation. In SIMULATED mode, it samples the graded mine terrain around the
+backend vehicle pose. Dense, world-anchored points follow the road grade and
+ordered side-wall bands. Distance sets their colour: near returns red, distant
+returns blue. The short green mark ahead indicates the truck's forward path.
+The configured floor rock is bright red, and backend fleet poses follow a
+smooth detour around it. Later shoulder rocks appear as the route approaches;
+the fleet stays in its lane. Nearby trucks first appear as blue scan points, then
+resolve into correctly sized 3D truck bodies. The moving vehicle stays solid.
+Terrain, rocks and truck surfaces are illustrative scene geometry, labelled
+SIMULATED MAPPING and kept separate from measured ToF returns and safety
+decisions. The simulated warning panel names a rock or truck only when it is
+inside the forward corridor; it does not treat roadside berm returns as a
+classified obstacle. Encounter banners remain briefly visible after passing,
+with wording that no longer claims the object is ahead. The displayed route
+level is relative to the fictional mine datum, not surveyed altitude.
+The supervisor retains its mine scene and backend-driven loading and tipping animations.
+Background forest density and shadow refresh are limited so the mine remains
+legible and the browser has less work per frame.
 LIVE uses calibrated, planar ToF points. If both modes lack usable surroundings,
 Spatial displays a labelled SIMULATED PREVIEW, exported by the backend's
 `simulation/spatial_preview.py`. That visual fixture never enters WorldState,
@@ -167,9 +192,9 @@ it does not establish long-duration memory stability or account for total browse
 ## Public Vercel demo
 
 The Vercel deployment is a static, read-only demonstration, not a running Python
-simulation server. During the build, `scripts/export_demo.py` runs the canonical
-backend simulator through one haul cycle at 10 Hz and samples its WorldState at
-5 Hz. The browser displays those samples at 10 Hz, so trucks, encounters and
+simulation server. Before the build, `scripts/export_demo.py` runs the canonical
+backend simulator through one haul cycle at 5 Hz and records each WorldState.
+The browser displays those samples at 10 Hz, so trucks, encounters and
 loading/unloading play faster. Displayed speed values remain the recorded
 simulation measurements, not doubled hardware readings. No browser route model,
 collision controller or fabricated live telemetry is introduced. The mode stays
@@ -183,7 +208,7 @@ top-level fields. Integer timestamps are preserved and other numbers are rounded
 to three decimal places. The backend's safety computation runs before rounding.
 The interface shows SIMULATED and Demo, without a playback-speed label.
 
-Chunks load only when reached. The player keeps at most 8 MiB of compressed data
+Chunks load only when reached. The player keeps at most 20 MiB of compressed data
 and one decoded chunk, so repeat loops reuse downloads without retaining a whole
 uncompressed recording. There is no background prefetch. Hiding the tab or using
 Pause demo stops playback, cancels pending downloads and prevents new requests.
@@ -192,9 +217,9 @@ retry with exponential backoff up to 30 seconds; the last valid scene remains on
 screen with a Buffering demo label. Before the first frame, a loading/retry panel
 appears instead of a misleading hardware-offline dashboard.
 
-Vercel serves `frontend/dist` directly. `.vercelignore` excludes `api`, and the
-Python framework entrypoint is removed, so the hosted demo does not deploy a
-function. Hash-named chunks use immutable caching. Manifest/settings are revalidated.
+Vercel serves a locally prepared `frontend/dist` directly. The upload contains no
+Python backend or function. Hash-named chunks use immutable caching.
+Manifest/settings are revalidated.
 There are no hosted telemetry sockets, camera streams or control writes. Display
 calibration is tab-local; sending advisories and zeroing hardware require the local
 backend. The regular `npm --prefix frontend run build` and local backend retain
@@ -212,16 +237,23 @@ npm --prefix frontend run build:demo
 ```
 
 ```bash
+python -m scripts.prepare_vercel_demo
+```
+
+```bash
 npm --prefix frontend run preview:demo
 ```
 
-The Vercel build commands and output directory are in `vercel.json`. Redeploy this
-revision to replace the previous function-backed deployment. Existing deployments
-are not modified by local code changes. The hosted demo still consumes static
-bandwidth, edge requests, build time and browser CPU/GPU. This reduces ongoing
-usage, but cannot guarantee a monthly quota for an arbitrary number of visitors
-or reset usage already incurred. Check Vercel's deployment output for zero Functions
-and its Network/Usage panels after deployment.
+Deploy `frontend/dist` from the CLI to upload the prepared static files without
+running the Python export or npm build on Vercel. The preparation step removes
+chunks that are not referenced by the current manifest from the generated build;
+the local source recording is retained. The root `vercel.json` still describes a
+source build and must not be used for the low-build-cost production upload. The
+hosted demo still consumes CDN requests, data transfer and browser CPU/GPU.
+Check the deployment for zero Functions and review usage in Vercel.
+The recorded playback keeps the eight most recent V2X messages per frame; live
+telemetry retains its normal history limit. The current compressed recording is
+about 8.3 MB, below the previous 15.4 MB recording.
 
 ## Efficiency checks
 

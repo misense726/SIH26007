@@ -86,6 +86,19 @@ describe("CameraAwareness display modes", () => {
     expect(markup).not.toContain("view=ir");
   });
 
+  it("uses the live IR stream when the camera provides it", () => {
+    const liveWorld: WorldState = {
+      ...defaultWorldState,
+      mode: "LIVE",
+      camera: { ...defaultWorldState.camera, mode: "LIVE", raw_available: true,
+        ir_available: true, ir_fps: 12, ir_latency_ms: 42 },
+    };
+    const markup = renderAwareness(liveWorld);
+    expect(markup).toContain("IR CAMERA LIVE");
+    expect(markup).toContain("/api/camera/stream?view=ir");
+    expect(markup).toContain("IR camera output from the forward camera");
+  });
+
   it("renders LiDAR independently of camera availability", () => {
     const world = {
       ...simulatedWorld(),

@@ -19,7 +19,14 @@ class MainControllerSerial:
             import serial
         except ImportError as exc:
             raise RuntimeError("Install FogSen with the hardware extra to use live USB serial") from exc
-        self._serial = serial.Serial(port=port, baudrate=baud, timeout=0, write_timeout=0)
+        self._serial = serial.Serial()
+        self._serial.port = port
+        self._serial.baudrate = baud
+        self._serial.timeout = 0
+        self._serial.write_timeout = 0
+        self._serial.dtr = False
+        self._serial.rts = False
+        self._serial.open()
         self._lines = BoundedLineBuffer()
         self._events: deque[dict[str, Any]] = deque(maxlen=16)
         self.invalid_packets = 0

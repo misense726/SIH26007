@@ -1,9 +1,10 @@
 .spatial-mapping-page { min-width: 0; }
 .spatial-mapping-page .spatial-page-heading { display: flex; flex-direction: row; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
 .spatial-mode-status { display: flex; align-items: center; gap: 14px; color: var(--muted); font-size: 12px; }
-.spatial-mapping-page .spatial-alert { position: relative; inset: auto; z-index: auto; margin: 0 0 12px; padding: 10px 14px; border-radius: 6px; box-shadow: none; animation: none; }
-.spatial-mapping-page .spatial-alert.simulated-spatial-warning { flex-direction: row; align-items: center; padding: 10px 14px; background: #452025; border-color: #874149; animation: none; color: #ffd5d7; }
-.spatial-mapping-page .simulated-spatial-warning > span { font-size: 12px; }
+.spatial-mapping-page .spatial-alert { position: relative; inset: auto; z-index: auto; min-height: 58px; margin: 0 0 12px; padding: 12px 18px; border-radius: 8px; backdrop-filter: none; -webkit-backdrop-filter: none; animation: none; }
+.spatial-mapping-page .spatial-alert.simulated-spatial-warning { flex-direction: row; align-items: center; padding: 12px 18px; background: #631d26; border-color: #e46a73; box-shadow: inset 4px 0 #ff727d, 0 8px 24px #24080d66; animation: none; color: #fff1f2; }
+.spatial-mapping-page .simulated-spatial-warning > strong { font-size: 16px; font-weight: 750; }
+.spatial-mapping-page .simulated-spatial-warning > span { font-size: 14px; color: #ffe0e2; }
 .point-cloud-stage { position: relative; overflow: hidden; isolation: isolate; height: max(540px, calc(100dvh - 228px)); max-height: 960px; border: 1px solid #242633; border-radius: 8px; background: #050509; color: #eef3ff; }
 .point-cloud-canvas, .point-cloud-canvas canvas { display: block; width: 100%; height: 100%; }
 .point-cloud-topline { position: absolute; inset: 22px 24px auto; display: flex; justify-content: space-between; align-items: center; gap: 12px; font-size: 12px; color: #a8b3c6; pointer-events: none; }
@@ -12,8 +13,15 @@
 .point-cloud-source.is-preview { color: #f1d29b; background: #1d190fe8; border-color: #504229; }
 .point-cloud-source.is-preview::before { background: #eec582; }
 .point-cloud-footer { position: absolute; inset: auto 0 0; padding: 50px 24px 24px; display: flex; align-items: end; justify-content: space-between; gap: 20px; background: linear-gradient(transparent, #050509ed); pointer-events: none; }
+.point-cloud-summary { min-width: 0; }
+.point-cloud-summary strong { display: block; margin-bottom: 7px; font-size: 16px; font-weight: 500; }
 .point-cloud-footer strong { display: block; margin-bottom: 7px; font-size: 16px; font-weight: 500; }
 .point-cloud-footer span { color: #a8b3c6; font-size: 12px; line-height: 1.6; }
+.point-cloud-activity { min-width: 218px; padding: 4px 0 2px 18px; border-left: 2px solid #dba85b; text-align: right; }
+.point-cloud-activity .point-cloud-activity-label { display: block; color: #f0c78a; font-size: 12px; font-weight: 650; }
+.point-cloud-activity strong { display: block; color: #fff4df; font-size: 26px; line-height: 1.15; font-variant-numeric: tabular-nums; letter-spacing: -0.035em; }
+.point-cloud-progress { height: 3px; margin-top: 8px; background: #5a4931; overflow: hidden; }
+.point-cloud-progress span { display: block; height: 100%; background: #f0c78a; }
 .point-cloud-key { display: flex; align-items: center; gap: 8px; white-space: nowrap; }
 .point-cloud-key i { display: inline-block; width: 11px; height: 11px; border: 1px solid #67ef77; background: #67ef771a; }
 .point-cloud-error { position: absolute; top: 40%; width: 100%; text-align: center; color: #dbe5f4; }
@@ -23,6 +31,7 @@
   .spatial-mode-status { gap: 8px; flex-direction: column-reverse; align-items: end; font-size: 10px; }
   .point-cloud-stage { min-height: 440px; height: calc(100dvh - 220px); }
   .point-cloud-topline { inset: 16px 14px auto; }
-  .point-cloud-footer { padding: 50px 14px 18px; flex-direction: column; align-items: start; gap: 10px; }
+  .point-cloud-footer { padding: 50px 14px 18px; flex-direction: column; align-items: stretch; gap: 10px; }
   .point-cloud-footer span { font-size: 11px; }
+  .point-cloud-activity { width: 100%; min-width: 0; padding: 8px 0 0; border-left: 0; border-top: 2px solid #dba85b; text-align: left; }
 }

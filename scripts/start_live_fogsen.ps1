@@ -50,17 +50,23 @@ $env:FOGSEN_TELEMETRY_TRANSPORT = "BOTH"
 $env:FOGSEN_SERIAL_PORT = $SerialPort
 $env:FOGSEN_WIFI_LISTEN_HOST = "0.0.0.0"
 $env:FOGSEN_WIFI_LISTEN_PORT = [string]$TelemetryPort
-$env:FOGSEN_CAMERA_DEHAZE_ENABLED = "false"
-$env:FOGSEN_CAMERA_IR_ENABLED = "false"
 
 if ($NoCamera) {
     Remove-Item Env:FOGSEN_CAMERA_STREAM_URL -ErrorAction SilentlyContinue
+    $env:FOGSEN_CAMERA_DEHAZE_ENABLED = "false"
+    $env:FOGSEN_CAMERA_IR_ENABLED = "false"
     Write-Host ("FogSen LIVE: API 0.0.0.0:{0}, MAIN USB {1} + Wi-Fi 0.0.0.0:{2}, {3} Hz, camera disabled" -f $ApiPort, $SerialPort, $TelemetryPort, $TelemetryHz)
 } else {
     $env:FOGSEN_CAMERA_STREAM_URL = $cameraUrl
     Write-Host ("FogSen LIVE: API 0.0.0.0:{0}, MAIN USB {1} + Wi-Fi 0.0.0.0:{2}, {3} Hz, Pi camera {4}" -f $ApiPort, $SerialPort, $TelemetryPort, $TelemetryHz, $cameraUrl)
-    Write-Host "Raw camera is enabled; optional ML enhancement stays off."
+    Write-Host "Camera processing settings are loaded from .env when present."
 }
 
-& $python -m uvicorn backend.app.main:app --host 0.0.0.0 --port $ApiPort
+$uvicornArgs = @("-m", "uvicorn", "backend.app.main:app", "--host", "0.0.0.0", "--port", [string]$ApiPort)
+$envFile = Join-Path $projectRoot ".env"
+if (-not $NoCamera -and (Test-Path -LiteralPath $envFile)) {
+    $uvicornArgs += @("--env-file", $envFile)
+}
+
+& $python @uvicornArgs
 exit $LASTEXITCODE

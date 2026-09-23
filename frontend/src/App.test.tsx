@@ -14,6 +14,8 @@ vi.mock("./settings/useSensorSettings", () => ({
   useSensorSettings: useSensorSettingsMock,
 }));
 
+vi.mock("leaflet", () => ({ default: {} }));
+
 import App from "./App";
 
 describe("App role boundary", () => {

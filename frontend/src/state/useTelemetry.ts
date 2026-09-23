@@ -67,6 +67,7 @@ export function useTelemetry(): {
     let retryMs = 1200;
     let mapKey = "";
     let referenceMap = defaultWorldState.reference_map;
+    let lastDataMs = 0;
 
     const disconnect = () => {
       clearTimeout(retryTimer);
@@ -76,9 +77,32 @@ export function useTelemetry(): {
       previous?.close();
     };
 
+    const applyWorld = (nextWorld: WorldState) => {
+      const nextRefMap = nextWorld.reference_map;
+      const nextMapKey = nextRefMap ? `${nextRefMap.map_id}:${nextRefMap.created_at_ms}:${nextRefMap.features?.length}` : "";
+      if (nextMapKey !== mapKey) {
+        referenceMap = nextRefMap;
+        mapKey = nextMapKey;
+      }
+      nextWorld.reference_map = referenceMap;
+      lastDataMs = Date.now();
+      setWorld(nextWorld);
+      setConnection("CONNECTED");
+    };
+
+    // Immediately fetch the current world snapshot over HTTP so initial state renders instantly
+    fetch("/api/world")
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!disposed && data && isWorldStateSnapshot(data)) {
+          applyWorld(data as WorldState);
+        }
+      })
+      .catch(() => undefined);
+
     const connect = () => {
       if (disposed || socket) return;
-      setConnection("CONNECTING");
+      if (lastDataMs === 0) setConnection("CONNECTING");
       const current = new WebSocket(websocketUrl());
       socket = current;
       const armStaleTimer = (delayMs = TELEMETRY_STALE_MS) => {
@@ -86,7 +110,8 @@ export function useTelemetry(): {
         staleTimer = setTimeout(() => {
           if (socket !== current) return;
           setConnection("DISCONNECTED");
-          // A quiet stream is stale, but this socket can still deliver the next hardware revision.
+          // Keep a quiet socket open. The next backend revision restores the UI
+          // without requiring a page refresh when hardware telemetry resumes.
         }, delayMs);
       };
       armStaleTimer(FIRST_TELEMETRY_TIMEOUT_MS);
@@ -98,16 +123,7 @@ export function useTelemetry(): {
         try {
           const nextWorld: unknown = JSON.parse(event.data);
           if (!isWorldStateSnapshot(nextWorld)) throw new Error("Invalid world-state snapshot");
-          // Deduplicate map reference by ID and timestamp to avoid stringifying 120KB map on every 10Hz frame!
-          const nextRefMap = nextWorld.reference_map;
-          const nextMapKey = nextRefMap ? `${nextRefMap.map_id}:${nextRefMap.created_at_ms}:${nextRefMap.features?.length}` : "";
-          if (nextMapKey !== mapKey) {
-            referenceMap = nextRefMap;
-            mapKey = nextMapKey;
-          }
-          nextWorld.reference_map = referenceMap;
-          setWorld(nextWorld);
-          setConnection("CONNECTED");
+          applyWorld(nextWorld as WorldState);
           retryMs = 1200;
           armStaleTimer();
         } catch {
@@ -120,16 +136,21 @@ export function useTelemetry(): {
         if (socket !== current || disposed) return;
         socket = null;
         clearTimeout(staleTimer);
-        setConnection("DISCONNECTED");
+        const msSinceData = Date.now() - lastDataMs;
+        if (lastDataMs > 0 && msSinceData < TELEMETRY_STALE_MS) {
+          staleTimer = setTimeout(() => {
+            if (!socket && !disposed) setConnection("DISCONNECTED");
+          }, TELEMETRY_STALE_MS - msSinceData);
+        } else {
+          setConnection("DISCONNECTED");
+        }
         retryTimer = setTimeout(connect, retryMs);
-        retryMs = Math.min(retryMs * 2, 30000);
+        retryMs = Math.min(retryMs * 1.25, 2000);
       };
     };
 
     const visibilityChanged = () => {
-      // Reconnect if the socket was lost or closed while inactive.
-      // Never tear down an already connected healthy socket on visibility change.
-      if (!socket && !disposed) {
+      if (!disposed && !document.hidden && !socket) {
         connect();
       }
     };

@@ -216,10 +216,10 @@ export function createMineRenderer(
   document.addEventListener("visibilitychange", syncVisibility);
   const projected = new THREE.Vector3();
   const followOffset = new THREE.Vector3();
+  let lastShadowRefresh = -Infinity;
   function update(frame: MineFrame) {
     if (disposed) return;
     requestRender();
-    renderer.shadowMap.needsUpdate = true;
     current = frame;
     const ids = new Set(frame.vehicles.map((v) => v.vehicleId));
     for (const [id, item] of trucks)
@@ -414,6 +414,10 @@ export function createMineRenderer(
     if (now - last < 1000 / 30) {
       requestRender();
       return;
+    }
+    if (now - lastShadowRefresh >= 750) {
+      renderer.shadowMap.needsUpdate = true;
+      lastShadowRefresh = now;
     }
     // Resuming from suspension or idle gets one normal step, not elapsed wall time.
     const dt =

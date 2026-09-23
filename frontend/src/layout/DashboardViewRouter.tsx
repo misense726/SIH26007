@@ -1,4 +1,6 @@
 import { lazy, Suspense, type ReactNode } from "react";
+import { DriverDashboard } from "../driver/DriverDashboard";
+import { SpatialDashboard } from "../spatial/SpatialDashboard";
 import type { AwarenessMode } from "../driver/driverAwareness";
 import {
   type SensorDisplaySetting,
@@ -10,25 +12,12 @@ import type { ConnectionState } from "../state/useTelemetry";
 import type { WorldState } from "../types";
 import type { DashboardView } from "./dashboardViews";
 
-const DriverDashboard = lazy(async () => {
-  const module = await import("../driver/DriverDashboard");
-  return { default: module.DriverDashboard };
-});
-
-const SpatialDashboard = lazy(async () => {
-  const module = await import("../spatial/SpatialDashboard");
-  return { default: module.SpatialDashboard };
-});
-
-const SupervisorDashboard = lazy(async () => {
-  const module = await import("../supervisor/SupervisorDashboard");
-  return { default: module.SupervisorDashboard };
-});
-
-const SensorSettingsPage = lazy(async () => {
-  const module = await import("../settings/SensorSettingsPage");
-  return { default: module.SensorSettingsPage };
-});
+const SupervisorDashboard = lazy(async () => ({
+  default: (await import("../supervisor/SupervisorDashboard")).SupervisorDashboard,
+}));
+const SensorSettingsPage = lazy(async () => ({
+  default: (await import("../settings/SensorSettingsPage")).SensorSettingsPage,
+}));
 
 interface DashboardViewRouterProps {
   view: DashboardView;
@@ -94,9 +83,7 @@ export function DashboardViewRouter({
     );
   }
 
-  return (
-    <Suspense fallback={<div className="dashboard-loading" role="status">Loading console…</div>}>
-      {dashboard}
-    </Suspense>
-  );
+  return <Suspense fallback={<section className="demo-loading" role="status">
+    <h2>Opening {view === "SUPERVISOR" ? "supervisor" : "calibration"} view</h2>
+  </section>}>{dashboard}</Suspense>;
 }

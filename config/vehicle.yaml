@@ -6,7 +6,7 @@ vehicle:
   wheel_circumference_m: 0.22
   magnets_per_wheel: 2
   wheel_spacing_m: 0.56
-  max_demo_speed_mps: 2.5
+  max_demo_speed_mps: 2.8
 
 frames:
   vehicle:
@@ -18,4 +18,3 @@ frames:
   heading:
     zero_axis: world_positive_y
     positive_direction: clockwise
-

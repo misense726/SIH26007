@@ -8,8 +8,9 @@ export interface LidarRenderer {
   dispose: () => void;
 }
 
-const MAX_ROAD_POINTS = 28_000;
+const MAX_ROAD_POINTS = 40_000;
 const MAX_RETURN_POINTS = 36_000;
+const SCAN_REVEAL_MS = 1700;
 
 const POINT_VERTEX = `
   varying vec3 vColor;
@@ -18,7 +19,7 @@ const POINT_VERTEX = `
 
   void main() {
     float band = max(0.0, 1.0 - abs(-position.z - uScan) / 1.8);
-    vColor = color * (0.82 + band * 0.35);
+    vColor = color * (0.96 + band * 0.2);
     vec4 mv = modelViewMatrix * vec4(position, 1.0);
     gl_PointSize = clamp(uSize * (110.0 / -mv.z), 1.0, 3.0);
     gl_Position = projectionMatrix * mv;
@@ -39,6 +40,8 @@ interface EntityItem {
   group: THREE.Group;
   box: THREE.LineSegments;
   vehicleMesh: THREE.Mesh | null;
+  scanMaterial: THREE.MeshStandardMaterial | null;
+  scanStartedAt: number;
   volume: THREE.Mesh;
   target: THREE.Vector3;
   yawTarget: number;
@@ -90,7 +93,7 @@ export function createLidarRenderer(container: HTMLElement): LidarRenderer {
     alpha: false,
     powerPreference: "high-performance",
   });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.5));
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
   renderer.setClearColor(0x050509, 1);
   renderer.domElement.setAttribute(
     "aria-label",
@@ -187,7 +190,6 @@ export function createLidarRenderer(container: HTMLElement): LidarRenderer {
     side: THREE.DoubleSide,
   });
   const vehicleBounds = vehicleGeometry.boundingBox!.getSize(new THREE.Vector3());
-  let renderedTruckSize: LidarFrame["egoSize"] = [3.2, 3.1, 6.2];
   const volumeMaterial = new THREE.MeshBasicMaterial({ color: 0x55ff55, transparent: true,
     opacity: 0.045, depthWrite: false });
   const volumeGeometry = new THREE.BoxGeometry(1, 1, 1);
@@ -206,11 +208,18 @@ export function createLidarRenderer(container: HTMLElement): LidarRenderer {
   let source: LidarFrame["source"] | null = null;
   let animateUntil = 0;
   let previousRenderAt = 0;
+  let previousRoadPositions: Float32Array | null = null;
+  let previousRoadColors: Float32Array | undefined;
+  let previousRoadCount = -1;
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
 
   const render = (time: number) => {
     animationFrame = 0;
     if (disposed || contextLost || !visible || document.hidden) return;
+    if (time - previousRenderAt < 32 && !reducedMotion.matches) {
+      requestRender();
+      return;
+    }
     const alpha = reducedMotion.matches || time >= animateUntil ? 1
       : 1 - Math.exp(-Math.min(100, time - previousRenderAt) / 30);
     previousRenderAt = time;
@@ -219,6 +228,11 @@ export function createLidarRenderer(container: HTMLElement): LidarRenderer {
       const yawDelta = Math.atan2(Math.sin(item.yawTarget - item.group.rotation.y),
         Math.cos(item.yawTarget - item.group.rotation.y));
       item.group.rotation.y += yawDelta * alpha;
+      if (item.scanMaterial) {
+        const progress = Math.min(1, Math.max(0, (time - item.scanStartedAt) / SCAN_REVEAL_MS));
+        const smooth = progress * progress * (3 - 2 * progress);
+        item.scanMaterial.opacity = (reducedMotion.matches ? 1 : smooth) * 0.86;
+      }
     }
     const scan = previewActive && !reducedMotion.matches ? (time / 160) % 55 - 10 : -100;
     roadMaterial.uniforms.uScan.value = scan;
@@ -237,8 +251,8 @@ export function createLidarRenderer(container: HTMLElement): LidarRenderer {
   const frameCamera = () => {
     const close = source === "MEASURED" || source === "WAITING";
     const fit = close ? Math.max(1, 1.05 / camera.aspect) : 1;
-    camera.position.set(close ? 3.5 * fit : 0, close ? 5 * fit : 7, close ? 5.5 * fit : 16);
-    camera.lookAt(0, 0, close ? 0 : -12);
+    camera.position.set(close ? 3.5 * fit : 0, close ? 5 * fit : 4.4, close ? 5.5 * fit : 9.5);
+    camera.lookAt(0, 0, close ? 0 : -14);
   };
 
   const resize = () => {
@@ -341,24 +355,32 @@ export function createLidarRenderer(container: HTMLElement): LidarRenderer {
     const group = new THREE.Group();
     const box = new THREE.LineSegments(unitBoxGeometry, boxMaterial);
     box.scale.set(...entity.size);
-    box.visible = entity.kind !== "vehicle";
+    box.visible = entity.kind !== "vehicle" && entity.kind !== "scanned_vehicle";
     group.add(box);
     const volume = new THREE.Mesh(volumeGeometry, volumeMaterial);
     volume.scale.set(...entity.size);
-    volume.visible = entity.kind !== "vehicle";
+    volume.visible = entity.kind !== "vehicle" && entity.kind !== "scanned_vehicle";
     group.add(volume);
     let vehicleMesh: THREE.Mesh | null = null;
-    if (entity.kind === "vehicle") {
-      vehicleMesh = new THREE.Mesh(vehicleGeometry, vehicleMaterial);
-      vehicleMesh.scale.set(renderedTruckSize[0] / vehicleBounds.x, renderedTruckSize[1] / vehicleBounds.y,
-        renderedTruckSize[2] / vehicleBounds.z);
+    let scanMaterial: THREE.MeshStandardMaterial | null = null;
+    if (entity.kind === "vehicle" || entity.kind === "scanned_vehicle") {
+      if (entity.kind === "scanned_vehicle") {
+        scanMaterial = vehicleMaterial.clone();
+        scanMaterial.transparent = true;
+        scanMaterial.depthWrite = false;
+        scanMaterial.opacity = reducedMotion.matches ? 0.86 : 0;
+      }
+      vehicleMesh = new THREE.Mesh(vehicleGeometry, scanMaterial ?? vehicleMaterial);
+      vehicleMesh.scale.set(entity.size[0] / vehicleBounds.x, entity.size[1] / vehicleBounds.y,
+        entity.size[2] / vehicleBounds.z);
       vehicleMesh.position.y = -entity.size[1] / 2;
       group.add(vehicleMesh);
     }
     scene.add(group);
     group.position.set(...entity.position);
     group.rotation.y = -entity.yawRad;
-    return { group, box, vehicleMesh, volume, target: group.position.clone(), yawTarget: -entity.yawRad };
+    return { group, box, vehicleMesh, scanMaterial, scanStartedAt: performance.now(),
+      volume, target: group.position.clone(), yawTarget: -entity.yawRad };
   };
 
   const reconcileEntities = (nextEntities: LidarEntity[]) => {
@@ -366,6 +388,7 @@ export function createLidarRenderer(container: HTMLElement): LidarRenderer {
     for (const [id, item] of entities) {
       if (nextIds.has(id)) continue;
       scene.remove(item.group);
+      item.scanMaterial?.dispose();
       entities.delete(id);
     }
 
@@ -380,12 +403,13 @@ export function createLidarRenderer(container: HTMLElement): LidarRenderer {
       item.box.scale.set(...entity.size);
       item.volume.scale.set(...entity.size);
       if (item.vehicleMesh) {
-        item.vehicleMesh.scale.set(renderedTruckSize[0] / vehicleBounds.x, renderedTruckSize[1] / vehicleBounds.y,
-          renderedTruckSize[2] / vehicleBounds.z);
+        item.vehicleMesh.scale.set(entity.size[0] / vehicleBounds.x, entity.size[1] / vehicleBounds.y,
+          entity.size[2] / vehicleBounds.z);
         item.vehicleMesh.position.y = -entity.size[1] / 2;
       }
     }
-    animateUntil = performance.now() + 120;
+    animateUntil = Math.max(performance.now() + 120,
+      ...Array.from(entities.values(), item => item.scanMaterial ? item.scanStartedAt + SCAN_REVEAL_MS : 0));
   };
 
   resize();
@@ -393,32 +417,38 @@ export function createLidarRenderer(container: HTMLElement): LidarRenderer {
   return {
     update(frame) {
       if (disposed) return;
-      renderedTruckSize = frame.egoSize;
       previewActive = frame.source === "SIMULATED_PREVIEW";
       if (source !== frame.source) {
         source = frame.source;
         const close = source === "MEASURED" || source === "WAITING";
         frameCamera();
+        gridHelper.visible = source !== "REFERENCE_SIMULATION";
         gridHelper.scale.setScalar(close ? 0.1 : 1);
         gridHelper.position.z = close ? 0 : -10;
-        returnMaterial.uniforms.uSize.value = close ? 0.42 : 0.7;
+        returnMaterial.uniforms.uSize.value = close ? 0.42 : 1.0;
+        roadMaterial.uniforms.uSize.value = close ? 0.7 : 1.0;
       }
       ego.scale.set(frame.egoSize[0] / vehicleBounds.x, frame.egoSize[1] / vehicleBounds.y,
         frame.egoSize[2] / vehicleBounds.z);
+      roadPoints.position.set(...(frame.roadTransform?.position ?? [0, 0, 0]));
+      roadPoints.rotation.y = frame.roadTransform?.yawRad ?? 0;
 
       const roadCount = Math.min(frame.roadPointCount, MAX_ROAD_POINTS);
-      const roadPosAttr = roadGeometry.attributes.position as THREE.BufferAttribute;
-      (roadPosAttr.array as Float32Array).set(
-        frame.roadPositions.subarray(0, roadCount * 3),
-      );
-      roadPosAttr.needsUpdate = true;
-
-      const roadColAttr = roadGeometry.attributes.color as THREE.BufferAttribute;
-      fillRoadColors(roadColAttr.array as Float32Array, frame.roadPositions, roadCount);
-      roadColAttr.needsUpdate = true;
-
+      if (previousRoadPositions !== frame.roadPositions || previousRoadColors !== frame.roadColors ||
+        previousRoadCount !== roadCount) {
+        const roadPosAttr = roadGeometry.attributes.position as THREE.BufferAttribute;
+        (roadPosAttr.array as Float32Array).set(frame.roadPositions.subarray(0, roadCount * 3));
+        roadPosAttr.needsUpdate = true;
+        const roadColAttr = roadGeometry.attributes.color as THREE.BufferAttribute;
+        if (frame.roadColors) (roadColAttr.array as Float32Array).set(frame.roadColors.subarray(0, roadCount * 3));
+        else fillRoadColors(roadColAttr.array as Float32Array, frame.roadPositions, roadCount);
+        roadColAttr.needsUpdate = true;
+        roadGeometry.computeBoundingSphere();
+        previousRoadPositions = frame.roadPositions;
+        previousRoadColors = frame.roadColors;
+        previousRoadCount = roadCount;
+      }
       roadGeometry.setDrawRange(0, roadCount);
-      roadGeometry.computeBoundingSphere();
 
       const returnCount = Math.min(frame.returnCount, MAX_RETURN_POINTS);
       const retPosAttr = returnGeometry.attributes.position as THREE.BufferAttribute;
@@ -461,7 +491,10 @@ export function createLidarRenderer(container: HTMLElement): LidarRenderer {
         line.geometry.dispose();
       }
       paths.clear();
-      for (const item of entities.values()) scene.remove(item.group);
+      for (const item of entities.values()) {
+        scene.remove(item.group);
+        item.scanMaterial?.dispose();
+      }
       entities.clear();
 
       roadGeometry.dispose();

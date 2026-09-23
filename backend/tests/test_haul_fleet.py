@@ -14,7 +14,7 @@ def test_every_truck_loads_tips_returns_empty_and_repeats():
     fleet = haul.production
     phases = [set() for _ in fleet.trucks]
     completed = []
-    for _ in range(8500):
+    for _ in range(10_000):
         completed.extend(fleet.advance(0.1, True, 2.5))
         for i, truck in enumerate(fleet.trucks):
             phases[i].add(truck.phase)
@@ -40,11 +40,97 @@ def test_every_truck_loads_tips_returns_empty_and_repeats():
     assert [fleet.pose(i, 1).model_dump(exclude={"speed_mps"}) for i in range(8)] == before
 
 
+def test_crossing_traffic_keeps_moving_through_repeated_cycles():
+    fleet = HaulRun(deepcopy(project_config()["demo"]["demo"]["haul"])).production
+    stopped_for = 0.0
+    for _ in range(18_000):
+        fleet.advance(0.2, True, 2.5)
+        mobile = [truck for truck in fleet.trucks if truck.phase in {"HAULING", "RETURNING", "QUEUED"}]
+        servicing = any(truck.phase in {"LOADING", "REVERSING", "DUMPING", "LOWERING", "EXITING"}
+                        for truck in fleet.trucks)
+        stopped_for = stopped_for + 0.2 if mobile and not servicing and all(truck.speed == 0 for truck in mobile) else 0.0
+        assert stopped_for < 5, [(truck.phase, round(truck.distance, 1)) for truck in fleet.trucks]
+    assert all(truck.cycle >= 5 for truck in fleet.trucks)
+
+
 def test_road_height_has_no_cliff_jumps():
     haul = HaulRun(deepcopy(project_config()["demo"]["demo"]["haul"]))
     heights = [haul.production.height(i / 2) for i in range(math.ceil(haul.route.total_length_m * 2))]
     assert min(heights) == pytest.approx(-16, abs=0.1)
     assert max(abs(a - b) for a, b in zip(heights, heights[1:])) < 0.11
+
+
+def test_fleet_detours_around_the_floor_rock_and_rejoins_the_graded_road():
+    haul = HaulRun(deepcopy(project_config()["demo"]["demo"]["haul"]))
+    fleet = haul.production
+    distance = haul.config["production_rock_distance_m"]
+    span = haul.config["production_rock_detour_span_m"]
+    rock = haul.route.sample(distance)
+    truck = fleet.trucks[0]
+    truck.phase = "HAULING"
+    truck.distance = distance
+    beside = fleet.pose(0, 0)
+    assert math.hypot(beside.x_m - rock.x_m, beside.y_m - rock.y_m) > (
+        haul.config["production_rock_radius_m"] + 0.8)
+    for route_distance in (distance - span, distance + span):
+        truck.distance = route_distance
+        pose = fleet.pose(0, 0)
+        expected = haul.route.sample(route_distance)
+        assert (pose.x_m, pose.y_m) == pytest.approx((expected.x_m, expected.y_m), abs=0.02)
+    truck.distance = distance - 5
+    snapshot = fleet.snapshot()
+    assert snapshot.obstacle is not None
+    assert snapshot.obstacle_detected
+    assert snapshot.distance_m == distance - 5
+
+
+def test_later_rock_encounters_follow_the_primary_truck_on_both_legs():
+    haul = HaulRun(deepcopy(project_config()["demo"]["demo"]["haul"]))
+    fleet = haul.production
+    truck = fleet.trucks[0]
+    for distance in fleet.rock_distances:
+        truck.phase = "HAULING" if distance < fleet.dump_distance else "RETURNING"
+        truck.distance = distance - 5
+        snapshot = fleet.snapshot()
+        rock = fleet.rock_point(distance)
+        assert (snapshot.obstacle.x_m, snapshot.obstacle.y_m) == pytest.approx((rock.x_m, rock.y_m))
+        assert snapshot.obstacle_detected
+        if distance != haul.config["production_rock_distance_m"]:
+            road = haul.route.sample(distance)
+            assert math.hypot(road.x_m - rock.x_m, road.y_m - rock.y_m) > (
+                haul.config["production_rock_radius_m"] + 0.8)
+    assert max(b - a for a, b in zip(fleet.rock_distances, fleet.rock_distances[1:])) <= 211
+
+
+@pytest.mark.parametrize("cruise", [1.8, 2.5, 2.8])
+def test_simulated_truck_footprints_do_not_cross_during_a_full_cycle(cruise):
+    fleet = HaulRun(deepcopy(project_config()["demo"]["demo"]["haul"])).production
+
+    def overlaps(a, b):
+        def axes(pose):
+            angle = math.radians(pose.heading_deg)
+            return ((math.cos(angle), -math.sin(angle)),
+                    (math.sin(angle), math.cos(angle)))
+
+        right_a, forward_a = axes(a)
+        right_b, forward_b = axes(b)
+        dx, dy = b.x_m - a.x_m, b.y_m - a.y_m
+        for axis in (right_a, forward_a, right_b, forward_b):
+            distance = abs(dx * axis[0] + dy * axis[1])
+            radius_a = 0.8 * abs(sum(x * y for x, y in zip(right_a, axis))) + \
+                1.6 * abs(sum(x * y for x, y in zip(forward_a, axis)))
+            radius_b = 0.8 * abs(sum(x * y for x, y in zip(right_b, axis))) + \
+                1.6 * abs(sum(x * y for x, y in zip(forward_b, axis)))
+            if distance >= radius_a + radius_b:
+                return False
+        return True
+
+    for tick in range(4250):
+        fleet.advance(0.2, True, cruise)
+        poses = [fleet.pose(i, tick * 200) for i in range(len(fleet.trucks))]
+        for i, first in enumerate(poses):
+            for second in poses[i + 1:]:
+                assert not overlaps(first, second), (tick * 0.2, first.vehicle_id, second.vehicle_id)
 
 
 def test_docking_curve_matches_the_bay_and_returns_to_the_road_without_a_heading_jump():

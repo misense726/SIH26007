@@ -5,6 +5,28 @@ import { buildLidarFrame, type SpatialPreview } from "./mappingFrame";
 import { createLidarRenderer, type LidarRenderer } from "./mappingRenderer";
 
 let previewRequest: Promise<SpatialPreview> | null = null;
+const haulPhaseLabels: Record<string, string> = {
+  QUEUED: "Waiting to load",
+  LOADING: "Loading iron ore",
+  HAULING: "Hauling to crusher",
+  REVERSING: "Reversing into tipping bay",
+  DUMPING: "Tipping iron ore",
+  LOWERING: "Lowering empty bed",
+  EXITING: "Leaving tipping bay",
+  RETURNING: "Returning to pit floor",
+};
+const progressPhases = new Set(["LOADING", "REVERSING", "DUMPING", "LOWERING", "EXITING"]);
+
+function haulActivity(world: WorldState, vehicle: VehiclePose, connected: boolean) {
+  if (!connected || world.mode !== "SIMULATED" || vehicle.position_confidence < 0.5 || !vehicle.haul) return null;
+  const phase = vehicle.haul.phase;
+  const label = world.emergency.state === "EMERGENCY_STOP" ? "Emergency stop active"
+    : !world.simulation.running ? "Fleet paused"
+    : haulPhaseLabels[phase] ?? "Haul in progress";
+  const progress = progressPhases.has(phase) && world.simulation.running
+    ? Math.round(Math.max(0, Math.min(1, vehicle.haul.phase_progress)) * 100) : null;
+  return { label, phase, speedKmh: Math.round(Math.max(0, vehicle.speed_mps) * 3.6), progress };
+}
 function loadPreview() {
   return previewRequest ??= fetch("/spatial-preview.json")
     .then(async response => {
@@ -45,6 +67,7 @@ export function PointCloudMapping({ world, vehicle, sensors, connected }: {
 
   const simulatedPreview = frame.source === "SIMULATED_PREVIEW";
   const waiting = frame.source === "WAITING";
+  const activity = haulActivity(world, vehicle, connected);
   return <div className="point-cloud-stage">
     <div ref={container} className="point-cloud-canvas" role="img"
       aria-label={`Spatial point cloud: ${frame.measuredCount} measured returns${simulatedPreview ? ", simulated preview" : ""}`} />
@@ -56,12 +79,18 @@ export function PointCloudMapping({ world, vehicle, sensors, connected }: {
       <span>{vehicle.vehicle_id}</span>
     </div>
     <div className="point-cloud-footer">
-      <div><strong>{simulatedPreview ? "Preview surroundings" : "Surroundings"}</strong>
+      <div className="point-cloud-summary"><strong>{simulatedPreview ? "Preview surroundings" : "Surroundings"}</strong>
         <span>{simulatedPreview ? "No recent sensor returns. Showing a simulated scene."
           : waiting ? world.mode === "REPLAY" ? "No spatial returns in this recording." : error ?? previewError ?? "Loading simulated preview…"
-          : frame.source === "REFERENCE_SIMULATION" ? `${frame.roadPointCount.toLocaleString()} map points · ${frame.measuredCount} ToF returns`
+          : frame.source === "REFERENCE_SIMULATION" ? `${frame.roadPointCount.toLocaleString()} scene points · Relative elevation ${vehicle.haul?.road_elevation_m.toFixed(1) ?? "—"} m · Grade ${vehicle.haul?.road_pitch_deg.toFixed(1) ?? "—"}° · ${frame.measuredCount} ToF returns`
           : `${frame.measuredCount} measured returns · 2.5D ToF`}</span></div>
-      {!waiting && <span className="point-cloud-key"><i />{simulatedPreview ? "Simulated objects" : "Tracked objects"}</span>}
+      {activity ? <div className="point-cloud-activity" data-phase={activity.phase}>
+        <span className="point-cloud-activity-label">{activity.label}</span>
+        <strong>{activity.speedKmh} km/h</strong>
+        {activity.progress !== null && <div className="point-cloud-progress" role="progressbar"
+          aria-label={`${activity.label} progress`} aria-valuemin={0} aria-valuemax={100}
+          aria-valuenow={activity.progress}><span style={{ width: `${activity.progress}%` }} /></div>}
+      </div> : !waiting && <span className="point-cloud-key"><i />{simulatedPreview || frame.source === "REFERENCE_SIMULATION" ? "Simulated surroundings" : "Tracked objects"}</span>}
     </div>
     {error && !waiting && <p role="status" className="point-cloud-error">{error}</p>}
   </div>;

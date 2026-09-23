@@ -7,7 +7,7 @@ from itertools import accumulate
 
 from backend.app.analytics.simulated_haul import HaulCyclePlan, cycle_plan, estimate_fuel_litres
 from backend.app.fleet.models import TripRecord
-from backend.app.models import VehiclePose
+from backend.app.models import Point2D, VehiclePose
 from backend.app.models.operations import HaulCycleState, VehicleOperationalMetadata
 from backend.app.models.telemetry import HaulVehicleState, HaulRouteState
 
@@ -41,6 +41,9 @@ class HaulFleet:
         self.route, self.dump_distance, self.config = route, dump_distance, config
         self.elevations = elevations
         self.distances = [0.0, *accumulate(route.segment_lengths)]
+        self.rock_distances = sorted({float(distance) for distance in
+            [config.get("production_rock_distance_m"), *config.get("production_rock_encounters_m", [])]
+            if distance is not None and 0 < float(distance) < route.total_length_m})
         self.trucks = [Truck(route.total_length_m - i * config["queue_spacing_m"], cycle_plan(i, 1))
                        for i in range(config["fleet_size"])]
         self.elapsed = 0.0
@@ -62,6 +65,46 @@ class HaulFleet:
         xy = [u**3 * a[i] + 3*u*u*t*b[i] + 3*u*t*t*c[i] + t**3*d[i] for i in (0, 1)]
         tangent = [3*u*u*(b[i]-a[i]) + 6*u*t*(c[i]-b[i]) + 3*t*t*(d[i]-c[i]) for i in (0, 1)]
         return (*xy, math.degrees(math.atan2(-tangent[0], -tangent[1])) % 360)
+
+    def rock_offset(self, distance: float) -> float:
+        rock = self.config.get("production_rock_distance_m")
+        if rock is None:
+            return 0.0
+        span = float(self.config["production_rock_detour_span_m"])
+        gap = abs(distance - float(rock))
+        if gap >= span:
+            return 0.0
+        return float(self.config["production_rock_detour_offset_m"]) * (1 + math.cos(math.pi * gap / span)) / 2
+
+    def rock_point(self, distance: float) -> Point2D:
+        point = self.route.sample(distance)
+        if distance == float(self.config.get("production_rock_distance_m", -1)):
+            return Point2D(x_m=point.x_m, y_m=point.y_m)
+        heading = math.radians(point.heading_deg)
+        shoulder = float(self.config.get("production_rock_shoulder_offset_m", 2.2))
+        return Point2D(x_m=point.x_m + math.cos(heading) * shoulder,
+                       y_m=point.y_m - math.sin(heading) * shoulder)
+
+    def staging_offset(self, truck: Truck) -> float:
+        if truck.phase not in {"QUEUED", "RETURNING"}:
+            return 0.0
+        start = self.route.total_length_m - self.config.get("production_staging_offset_start_m", 80)
+        ramp = self.config.get("production_staging_offset_ramp_m", 20)
+        progress = min(1.0, max(0.0, (truck.distance - start) / ramp))
+        return self.config.get("production_staging_lane_offset_m", 0.0) * progress
+
+    def conflict_limit(self, truck: Truck, limit: float) -> float:
+        # Paired intervals share a crossing. Trucks following in the same
+        # interval already keep their configured spacing; opposing traffic
+        # waits until that interval is clear.
+        for group in self.config.get("production_conflict_zones_m", []):
+            approaching = next(((start, end) for start, end in group if truck.distance < start), None)
+            if approaching and any(other is not truck and any(
+                    interval != approaching and start - 0.5 <= other.distance <= end + 2
+                    for interval in group for start, end in [interval])
+                    for other in self.trucks):
+                limit = min(limit, approaching[0] - 2)
+        return limit
 
     def set_trip_numbers(self, numbers: dict[str, int]) -> None:
         """Resume the deterministic load sequence when HAUL is selected again."""
@@ -162,6 +205,7 @@ class HaulFleet:
         return completed
 
     def _move(self, truck, limit, cruise, dt):
+        limit = self.conflict_limit(truck, limit)
         cruise *= truck.plan.speed_scale
         before = self.route.sample(max(0, truck.distance - 0.5))
         after = self.route.sample(min(self.route.total_length_m, truck.distance + 0.5))
@@ -238,6 +282,15 @@ class HaulFleet:
                else 58 * (1 - progress) if truck.phase == "LOWERING" else 0.0)
         docking = truck.phase in {"REVERSING", "DUMPING", "LOWERING", "EXITING"}
         x, y, heading_deg = self.dock_pose(dock) if docking else (point.x_m, point.y_m, point.heading_deg)
+        if not docking:
+            offset = self.rock_offset(truck.distance) + self.staging_offset(truck)
+            if offset:
+                heading = math.radians(point.heading_deg)
+                x += math.cos(heading) * offset
+                y -= math.sin(heading) * offset
+                slope = (self.rock_offset(truck.distance + 0.05) -
+                         self.rock_offset(truck.distance - 0.05)) / 0.1
+                heading_deg = (heading_deg + math.degrees(math.atan(slope))) % 360
         return VehiclePose(vehicle_id=f"DUMPER_{index + 1:02d}", timestamp_ms=timestamp,
             x_m=x, y_m=y,
             heading_deg=heading_deg, speed_mps=truck.speed, position_confidence=1.0,
@@ -264,8 +317,19 @@ class HaulFleet:
                        "HAULING": "Climbing to the crusher", "REVERSING": "Reversing into tipping bay",
                        "DUMPING": "Tipping iron ore into crusher", "LOWERING": "Lowering empty bed",
                        "EXITING": "Leaving tipping bay", "RETURNING": "Returning empty to pit floor"}[truck.phase]
+        rock_distance = next((distance for distance in self.rock_distances
+                              if distance >= truck.distance - 1.5), None)
+        rock = self.rock_point(rock_distance) if rock_distance is not None and rock_distance - truck.distance <= 45 else None
+        approaching_rock = rock is not None and truck.phase in {"HAULING", "RETURNING"} and (
+            rock_distance - 10 <= truck.distance <= rock_distance + 1.5)
+        detour = rock_distance == float(self.config.get("production_rock_distance_m", -1))
         return HaulRouteState(origin="Crusher" if returning else "Pit loading bay",
             destination="Mine loading bay" if returning else "Dump point", cycle=truck.cycle,
-            phase="HAULING" if truck.speed else "ARRIVED", distance_m=truck.distance,
+            phase="OBSTACLE" if approaching_rock else "HAULING" if truck.speed else "ARRIVED",
+            distance_m=truck.distance,
             total_distance_m=self.route.total_length_m, remaining_m=max(0.0, end - truck.distance),
-            elapsed_s=self.elapsed, next_instruction=instruction)
+            elapsed_s=self.elapsed, next_instruction=("Rock ahead. Follow the detour" if detour
+                else "Rock at road edge. Keep clear") if approaching_rock else instruction,
+            obstacle=rock,
+            obstacle_radius_m=float(self.config.get("production_rock_radius_m", 0.42)),
+            obstacle_detected=approaching_rock)

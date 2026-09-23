@@ -77,7 +77,7 @@ export function DriverGuidanceHUD({
     <section className="driver-guidance-hud" aria-label="Driver tactical guidance and collision warning">
       {/* 1. Tactical Collision Warning Card (High Visibility) */}
       <article
-        className={`tactical-collision-card threat-${threatClass} ${threatLevel === "CRITICAL" ? "threat-pulse-critical" : threatLevel === "WARNING" ? "threat-pulse-warning" : ""}`}
+        className={`tactical-collision-card threat-${threatClass} ${world.mode === "SIMULATED" && threatLevel === "WARNING" ? "simulated-threat-warning" : threatLevel === "CRITICAL" ? "threat-pulse-critical" : ""}`}
         role={threatLevel !== "SAFE" ? "alert" : "status"}
         aria-live={threatLevel !== "SAFE" ? "assertive" : "polite"}
       >

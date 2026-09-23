@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { CameraAwareness } from "./CameraAwareness";
 import { CampusExtendedMapModal } from "./CampusExtendedMapModal";
 import { DriverGuidanceHUD } from "./DriverGuidanceHUD";
-import { ProximityWidget } from "./ProximityWidget";
+import { activeProximityAlerts, ProximityWidget } from "./ProximityWidget";
 import type { AwarenessMode } from "./driverAwareness";
 import { availableRangeReadings } from "../state/rangeReadings";
 import { availableSpatialPoints } from "../state/spatialPoints";
@@ -16,6 +16,7 @@ import {
 import type { ConnectionState } from "../state/useTelemetry";
 import type { SensorDisplaySetting } from "../settings/sensorSettingsApi";
 import type { WorldState } from "../types";
+import { selectSimulatedForwardHazard, type ForwardHazard } from "../spatial/forwardHazard";
 
 interface DriverDashboardProps {
   world: WorldState;
@@ -33,6 +34,7 @@ export function DriverDashboard({
   sensorSettings,
 }: DriverDashboardProps) {
   const [isMapExtended, setIsMapExtended] = useState(false);
+  const forwardRef = useRef<ForwardHazard | null>(null);
   const telemetryConnected = connection === "CONNECTED";
   const reportedVehicle = primaryVehicleOrNull(world);
   const vehicle = reportedVehicle ?? primaryVehicle(world);
@@ -52,17 +54,29 @@ export function DriverDashboard({
     vehicleTelemetryAvailable,
     world.generated_at_ms,
     vehicle,
+    undefined,
+    sensorSettings,
   );
-  const emergencyClass = world.emergency.state.toLowerCase().replace("_", "-");
+  const nearestProximityAlert = world.mode === "LIVE"
+    ? activeProximityAlerts(ranges, sensorSettings)[0] : null;
+  const forward = vehicleTelemetryAvailable
+    ? selectSimulatedForwardHazard(world, vehicle, forwardRef.current) : null;
+  forwardRef.current = forward;
+  const displayEmergencyState = world.mode === "SIMULATED" && world.emergency.state !== "EMERGENCY_STOP"
+    ? forward ? forward.distance_m < 1.5 ? "CRITICAL" : "WARNING" : "SAFE"
+    : world.emergency.state;
+  const displayEmergencyReason = world.mode === "SIMULATED" && forward && displayEmergencyState !== "EMERGENCY_STOP"
+    ? forward.detail : world.emergency.reason;
+  const emergencyClass = displayEmergencyState.toLowerCase().replace("_", "-");
   const emergencyControlState = !vehicleTelemetryAvailable
     ? "UNVERIFIED"
     : world.emergency.motor_cut
       ? "MOTOR CUT"
-      : world.emergency.state === "EMERGENCY_STOP"
+      : displayEmergencyState === "EMERGENCY_STOP"
         ? "STOP REQUEST"
-        : world.emergency.state === "SAFE"
+        : displayEmergencyState === "SAFE"
           ? "NO STOP REQUEST"
-          : world.emergency.state;
+          : displayEmergencyState;
   const trustedSensorIds = new Set(ranges.map((reading) => reading.sensor_id));
   const hasCompleteRangeCoverage = TOF_SENSOR_IDS.every((sensorId) => trustedSensorIds.has(sensorId));
   const corridorState = vehicleTelemetryAvailable && hasCompleteRangeCoverage
@@ -100,10 +114,16 @@ export function DriverDashboard({
                 : "Live vehicle and sensor data are unavailable."}
           </span>
         </div>
-      ) : world.emergency.state !== "SAFE" && (
-        <div className={`emergency-banner emergency-banner-${emergencyClass}`} role="alert">
-          <strong>{world.emergency.state.replaceAll("_", " ")}</strong>
-          <span>{world.emergency.reason ?? "Reduce speed and check the safe corridor."}</span>
+      ) : displayEmergencyState !== "SAFE" ? (
+        <div className={`emergency-banner emergency-banner-${emergencyClass} ${world.mode === "SIMULATED" && displayEmergencyState === "WARNING" ? "simulated-warning-banner" : ""}`} role="alert">
+          <strong>{displayEmergencyState === "EMERGENCY_STOP" ? "EMERGENCY STOP"
+            : forward?.title ?? displayEmergencyState.replaceAll("_", " ")}</strong>
+          <span>{displayEmergencyReason ?? "Reduce speed and check the safe corridor."}</span>
+        </div>
+      ) : nearestProximityAlert && (
+        <div className="emergency-banner emergency-banner-critical" role="alert" aria-live="assertive">
+          <strong>PROXIMITY ALERT</strong>
+          <span>{nearestProximityAlert.sensor.label}: {nearestProximityAlert.reading.range_m.toFixed(2)} m</span>
         </div>
       )}
 

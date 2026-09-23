@@ -97,6 +97,61 @@ describe("Point-cloud sources and alignment", () => {
     }
   });
 
+  it("places graded terrain below the truck and draws nearby traffic as simulated scan points", () => {
+    const world = worldWithReturn("SIMULATED");
+    world.spatial_points = [];
+    world.vehicles[0] = { ...world.vehicles[0], x_m: 0, y_m: 0, position_confidence: 1 };
+    const peer = { ...world.vehicles[0], vehicle_id: "PEER", y_m: 18,
+      haul: { phase: "HAULING", payload_fraction: 0, bed_angle_deg: 0,
+        phase_progress: 0, cycle: 1, road_elevation_m: -5, road_pitch_deg: -3 } };
+    world.vehicles.push(peer);
+    world.reference_map = { map_id: "grade", name: "Grade", version: 1, created_at_ms: 0,
+      coordinate_frame: "LOCAL_CARTESIAN_METRES", source: "test", features: [{
+        feature_id: "haul-grade", feature_type: "ROAD", geometry_type: "POLYLINE",
+        points: [{ x_m: 0, y_m: 0 }, { x_m: 0, y_m: 30 }], label: "Haul grade",
+        properties: { cartography: "haul-grade", elevations_m: "[0,-8]", width_m: 6 },
+      }] };
+    const withoutPeer = frame({ ...world, vehicles: [world.vehicles[0]] });
+    const withPeer = frame(world);
+    expect(withPeer.source).toBe("REFERENCE_SIMULATION");
+    expect(withPeer.measuredCount).toBe(0);
+    expect(withPeer.roadPointCount).toBeGreaterThan(withoutPeer.roadPointCount + 100);
+    expect(withPeer.entities.some(entity => entity.id === "vehicle:PEER" && entity.kind === "scanned_vehicle")).toBe(true);
+    expect(Math.min(...Array.from(withPeer.roadPositions).filter((_, i) => i % 3 === 1))).toBeLessThan(-5);
+    expect(withPeer.roadColors?.length).toBe(withPeer.roadPositions.length);
+    const cloud = withoutPeer;
+    const colors = cloud.roadColors!;
+    const near = Array.from({ length: cloud.roadPointCount }, (_, i) => i).find(i =>
+      Math.hypot(cloud.roadPositions[i * 3], cloud.roadPositions[i * 3 + 2]) < 1);
+    const far = Array.from({ length: cloud.roadPointCount }, (_, i) => i).find(i =>
+      Math.hypot(cloud.roadPositions[i * 3], cloud.roadPositions[i * 3 + 2]) > 30);
+    expect(near).toBeDefined();
+    expect(far).toBeDefined();
+    expect(colors[near! * 3]).toBeGreaterThan(colors[near! * 3 + 2]);
+    expect(colors[far! * 3 + 2]).toBeGreaterThan(colors[far! * 3]);
+    expect(frame({ ...world, mode: "LIVE" }).roadPointCount).toBe(0);
+  });
+
+  it("moves a cached graded cloud with the current backend pose", () => {
+    const world = worldWithReturn("SIMULATED");
+    world.spatial_points = [];
+    world.vehicles[0] = { ...world.vehicles[0], position_confidence: 1 };
+    world.reference_map = { map_id: "moving-grade", name: "Grade", version: 1, created_at_ms: 1,
+      coordinate_frame: "LOCAL_CARTESIAN_METRES", source: "test", features: [{
+        feature_id: "grade", feature_type: "ROAD", geometry_type: "POLYLINE", label: "Grade",
+        points: [{ x_m: 0, y_m: 0 }, { x_m: 0, y_m: 30 }],
+        properties: { cartography: "haul-grade", elevations_m: "[0,2]", width_m: 6 },
+      }] };
+    const first = frame(world);
+    const moved = frame({ ...world, generated_at_ms: 1100,
+      vehicles: [{ ...world.vehicles[0], y_m: 0.4 }] });
+    expect(moved.roadPositions).toBe(first.roadPositions);
+    expect(moved.roadTransform?.position[2]).toBeCloseTo(0.4);
+    const later = frame({ ...world, generated_at_ms: 1400,
+      vehicles: [{ ...world.vehicles[0], y_m: 1.4 }] });
+    expect(later.roadPositions).not.toBe(first.roadPositions);
+  });
+
   it("produces a deterministic frame without random points", () => {
     const random = vi.spyOn(Math, "random").mockImplementation(() => { throw new Error("Unexpected randomness"); });
     try {

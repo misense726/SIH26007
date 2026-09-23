@@ -45,7 +45,7 @@ async function fetchChecked(url: string, signal: AbortSignal) {
 export function createChunkLoader() {
   const cache = new Map<string, ArrayBuffer>();
   let bytes = 0;
-  const maxBytes = 8 * 1024 * 1024;
+  const maxBytes = 20 * 1024 * 1024;
   return async (url: string, signal: AbortSignal): Promise<unknown> => {
     let compressed = cache.get(url);
     if (!compressed) {

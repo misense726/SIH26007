@@ -178,7 +178,7 @@ export function buildVegetation(field: TerrainField): THREE.Group {
   const root = new THREE.Group(), placements: { x: number; y: number; h: number; r: number; seed: number }[] = [];
   root.name = "bailadila-broadleaf-forest";
   let seed = 0;
-  for (let y = -108; y < 182; y += 3.4) for (let x = -153; x < 168; x += 3.4) {
+  for (let y = -108; y < 182; y += 5) for (let x = -153; x < 168; x += 5) {
     seed++;
     const px = x + (grain(seed, 13) - 0.5) * 3, py = y + (grain(seed, 19) - 0.5) * 3;
     const s = field(px, py), r = 1.1 + grain(seed, 37) * 1.45;
@@ -222,9 +222,9 @@ export function buildVegetation(field: TerrainField): THREE.Group {
       canopy.setColorAt(i * 3 + j, tint);
     }
   });
-  canopy.castShadow = true; canopy.receiveShadow = true;
+  canopy.castShadow = false; canopy.receiveShadow = true;
   canopy.name = "dense-broadleaf-canopy";
-  trunks.castShadow = true;
+  trunks.castShadow = false;
   root.add(canopy, trunks);
   root.userData.treeCount = placements.length;
 

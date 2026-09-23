@@ -40,12 +40,13 @@ export function CameraAwareness({
     world.mode === "LIVE" &&
     world.camera.mode === "LIVE" &&
     world.camera.raw_available;
+  const liveIrAvailable = liveCameraAvailable && world.camera.ir_available;
   const simulatedCameraAvailable =
     world.mode === "SIMULATED" && world.camera.mode === "SIMULATED";
   const cameraAvailable = liveCameraAvailable || simulatedCameraAvailable;
   const lidarAvailable = telemetryConnected;
   const cameraSource = liveCameraAvailable
-    ? `/api/camera/stream?view=raw&retry=${cameraRetry}`
+    ? `/api/camera/stream?view=${liveIrAvailable ? "ir" : "raw"}&retry=${cameraRetry}`
     : "/camera/haul_truck_ir.png";
   const showCamera = mode === "CAMERA";
   const showLidar = mode === "LIDAR";
@@ -59,7 +60,7 @@ export function CameraAwareness({
     : cameraStreamFailed
       ? "CAMERA STREAM ERROR"
       : liveCameraAvailable
-        ? "MONO CAMERA LIVE"
+        ? liveIrAvailable ? "IR CAMERA LIVE" : "MONO CAMERA LIVE"
         : simulatedCameraAvailable
           ? "MONO CAMERA SIMULATED"
           : telemetryConnected && world.camera.mode === "REPLAY"
@@ -75,7 +76,9 @@ export function CameraAwareness({
     liveCameraAvailable &&
     world.camera.width_px &&
     world.camera.height_px
-      ? `${world.camera.width_px}×${world.camera.height_px} · ${(world.camera.measured_fps ?? 0).toFixed(1)} FPS`
+      ? liveIrAvailable
+        ? `IR CAMERA OUTPUT · ${(world.camera.ir_fps ?? 0).toFixed(1)} FPS · ${Math.round(world.camera.ir_latency_ms ?? 0)} ms`
+        : `${world.camera.width_px}×${world.camera.height_px} · ${(world.camera.measured_fps ?? 0).toFixed(1)} FPS`
       : null;
 
   useEffect(() => {
@@ -137,7 +140,7 @@ export function CameraAwareness({
         ) : showCamera && cameraAvailable && !cameraStreamFailed ? (
           <IRCameraCanvas
             src={cameraSource}
-            alt="Monochrome forward camera feed"
+            alt={liveIrAvailable ? "IR camera output from the forward camera" : "Monochrome forward camera feed"}
             continuous={liveCameraAvailable}
             onError={() => setCameraStreamFailed(true)}
           />

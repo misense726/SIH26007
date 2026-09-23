@@ -212,6 +212,10 @@ def test_live_serial_packet_reaches_api_websocket_and_then_fails_stale() -> None
         ]
         assert live["safe_corridor"]["state"] == "GREY"
         assert live["vehicles"][0]["position_confidence"] == 0.0
+        # Local surrounding returns remain available without absolute localization.
+        assert {point["source_sensor_id"] for point in live["spatial_points"]} == {
+            reading["sensor_id"] for reading in live["ranges"]
+        }
         live_sequence = live["sequence"]
         live_motion_timestamp = live["motion"]["timestamp_ms"]
         live_pose_timestamp = live["vehicles"][0]["timestamp_ms"]
